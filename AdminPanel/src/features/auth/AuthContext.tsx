@@ -31,3 +31,4 @@ export function useAuth() {
   }
   return context;
 }
+export const resolveMockRole = (phone: string) => phone === 'admin' ? 'admin' : 'agent';

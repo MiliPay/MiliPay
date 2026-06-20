@@ -1,7 +1,7 @@
 import React from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { useAuth } from '../AuthContext';
-import { LayoutDashboard, UserPlus, Settings, LogOut } from 'lucide-react';
+import { useAuth } from '../../features/auth/AuthContext';
+import { LayoutDashboard, UserPlus, Settings, LogOut, Fingerprint } from 'lucide-react';
 
 export default function DashboardLayout() {
   const { userRole, logout } = useAuth();
@@ -14,23 +14,23 @@ export default function DashboardLayout() {
 
   const navItemClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-      isActive 
-        ? 'bg-biopay-teal/20 text-biopay-teal border border-biopay-teal/30' 
-        : 'text-biopay-light/60 hover:bg-white/5 hover:text-white'
+      isActive
+        ? 'bg-teal/15 text-teal-bright border border-teal-bright/25'
+        : 'text-fog hover:bg-white/[0.04] hover:text-white'
     }`;
 
   return (
-    <div className="min-h-screen bg-[#0B1120] flex flex-col md:flex-row">
+    <div className="min-h-screen bg-ink flex flex-col md:flex-row">
       {/* Sidebar */}
-      <aside className="w-full md:w-64 glass-panel border-r border-white/5 flex flex-col justify-between hidden md:flex">
+      <aside className="w-full md:w-64 glass-panel border-r border-ink-line flex-col justify-between hidden md:flex">
         <div className="p-6">
           <div className="flex items-center gap-3 mb-10">
-            <div className="w-10 h-10 rounded-lg bg-biopay-teal flex items-center justify-center">
-              <span className="font-bold text-white text-xl">B</span>
+            <div className="w-10 h-10 rounded-lg bg-teal flex items-center justify-center">
+              <Fingerprint className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="font-bold text-white text-lg leading-tight">BioPay</h2>
-              <p className="text-xs text-biopay-teal font-medium uppercase tracking-wider">{userRole} Portal</p>
+              <h2 className="font-display font-bold text-white text-lg leading-tight">BioPay</h2>
+              <p className="text-xs text-teal-bright font-medium uppercase tracking-wider">{userRole} portal</p>
             </div>
           </div>
 
@@ -39,11 +39,11 @@ export default function DashboardLayout() {
               <LayoutDashboard className="w-5 h-5" />
               <span className="font-medium">Overview</span>
             </NavLink>
-            
+
             {(userRole === 'agent' || userRole === 'admin' || userRole === 'super_admin') && (
               <NavLink to="/dashboard/register" className={navItemClass}>
                 <UserPlus className="w-5 h-5" />
-                <span className="font-medium">Register User</span>
+                <span className="font-medium">Register customer</span>
               </NavLink>
             )}
 
@@ -57,9 +57,9 @@ export default function DashboardLayout() {
         </div>
 
         <div className="p-6">
-          <button 
+          <button
             onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-red-400 hover:bg-red-400/10 transition-colors"
+            className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-fail hover:bg-fail/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-fail focus-visible:outline-offset-2"
           >
             <LogOut className="w-5 h-5" />
             <span className="font-medium">Log out</span>
@@ -73,18 +73,18 @@ export default function DashboardLayout() {
       </main>
 
       {/* Mobile Bottom Nav */}
-      <div className="md:hidden glass-panel border-t border-white/5 fixed bottom-0 left-0 right-0 p-4 flex justify-around z-50">
-        <NavLink to="/dashboard" end className={({ isActive }) => `flex flex-col items-center gap-1 ${isActive ? 'text-biopay-teal' : 'text-white/50'}`}>
+      <div className="md:hidden glass-panel border-t border-ink-line fixed bottom-0 left-0 right-0 p-4 flex justify-around z-50">
+        <NavLink to="/dashboard" end className={({ isActive }) => `flex flex-col items-center gap-1 ${isActive ? 'text-teal-bright' : 'text-white/50'}`}>
           <LayoutDashboard className="w-6 h-6" />
           <span className="text-[10px] font-medium">Home</span>
         </NavLink>
         {(userRole === 'agent' || userRole === 'admin' || userRole === 'super_admin') && (
-          <NavLink to="/dashboard/register" className={({ isActive }) => `flex flex-col items-center gap-1 ${isActive ? 'text-biopay-teal' : 'text-white/50'}`}>
+          <NavLink to="/dashboard/register" className={({ isActive }) => `flex flex-col items-center gap-1 ${isActive ? 'text-teal-bright' : 'text-white/50'}`}>
             <UserPlus className="w-6 h-6" />
             <span className="text-[10px] font-medium">Register</span>
           </NavLink>
         )}
-        <button onClick={handleLogout} className="flex flex-col items-center gap-1 text-red-400">
+        <button onClick={handleLogout} className="flex flex-col items-center gap-1 text-fail">
           <LogOut className="w-6 h-6" />
           <span className="text-[10px] font-medium">Logout</span>
         </button>
