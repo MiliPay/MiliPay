@@ -4,27 +4,23 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Ledger — the near-black ink base, green-black undertone
         ledger: {
           DEFAULT: "#080C0A",
           raised: "#0A1F1A",
           line: "#1A3A30",
           line2: "#234539",
         },
-        // Signal — the one accent color, reserved for live/active states
         signal: {
           DEFAULT: "#00C896",
           bright: "#33E0B5",
           dim: "#0A6650",
           ink: "#04120E",
         },
-        // Text on dark surfaces
         ink: {
           DEFAULT: "#E8FFF6",
           muted: "#86B3A4",
           faint: "#4F7568",
         },
-        // Status — always paired with a word, never color alone
         status: {
           ok: "#33E0B5",
           warn: "#FFB454",

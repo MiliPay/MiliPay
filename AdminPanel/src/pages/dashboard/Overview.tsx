@@ -40,7 +40,7 @@ export default function Overview() {
         Recent activity
       </h2>
       {isLoading ? (
-        <Card className="h-48 animate-pulse" />
+        <Card className="h-48 animate-pulse"><div /></Card>
       ) : (
         <LiveLedgerStrip transactions={transactions} />
       )}

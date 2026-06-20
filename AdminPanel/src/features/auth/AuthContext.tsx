@@ -1,34 +1,56 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import type { Role, StaffUser } from "@/types";
 
-export type Role = 'agent' | 'admin' | 'super_admin' | 'support' | null;
-
-interface AuthContextType {
-  userRole: Role;
-  login: (role: Role) => void;
-  logout: () => void;
+interface AuthContextValue {
+  user: StaffUser | null;
   isAuthenticated: boolean;
+  login: (user: StaffUser) => void;
+  logout: () => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+const SESSION_KEY = "biopay.session";
+
+function readStoredUser(): StaffUser | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    return raw ? (JSON.parse(raw) as StaffUser) : null;
+  } catch {
+    return null;
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [userRole, setUserRole] = useState<Role>(null);
+  const [user, setUser] = useState<StaffUser | null>(readStoredUser);
 
-  const login = (role: Role) => setUserRole(role);
-  const logout = () => setUserRole(null);
+  const login = useCallback((nextUser: StaffUser) => {
+    setUser(nextUser);
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(nextUser));
+  }, []);
 
-  return (
-    <AuthContext.Provider value={{ userRole, login, logout, isAuthenticated: !!userRole }}>
-      {children}
-    </AuthContext.Provider>
+  const logout = useCallback(() => {
+    setUser(null);
+    sessionStorage.removeItem(SESSION_KEY);
+  }, []);
+
+  const value = useMemo<AuthContextValue>(
+    () => ({ user, isAuthenticated: user !== null, login, logout }),
+    [user, login, logout]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within an AuthProvider");
+  return ctx;
 }
-export const resolveMockRole = (phone: string) => phone === 'admin' ? 'admin' : 'agent';
+
+/** Resolves a mock role from login input. Replace with real auth call. */
+export function resolveMockRole(phoneInput: string): Role {
+  if (phoneInput === "admin") return "admin";
+  if (phoneInput === "super") return "super_admin";
+  return "agent";
+}

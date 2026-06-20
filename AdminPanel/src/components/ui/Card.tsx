@@ -1,5 +1,21 @@
-import React from 'react';
+import type { HTMLAttributes, ReactNode } from "react";
 
-export function Card({ children, className = '' }: { children: React.ReactNode, className?: string }) {
-  return <div className={`glass-panel p-6 rounded-2xl ${className}`}>{children}</div>;
+interface CardProps extends HTMLAttributes<HTMLDivElement> {
+  children: ReactNode;
+  raised?: boolean;
+}
+
+export function Card({ children, raised, className = "", ...props }: CardProps) {
+  return (
+    <div
+      className={`
+        rounded-lg border border-ledger-line
+        ${raised ? "bg-ledger-raised" : "bg-white/[0.02]"}
+        ${className}
+      `}
+      {...props}
+    >
+      {children}
+    </div>
+  );
 }

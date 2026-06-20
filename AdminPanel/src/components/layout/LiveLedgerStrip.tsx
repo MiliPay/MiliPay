@@ -6,12 +6,6 @@ interface LiveLedgerStripProps {
   transactions: Transaction[];
 }
 
-/**
- * A thin ticking strip of live transaction activity — the one bold
- * visual idea on the dashboard. Modeled on a payments-rail ledger feed
- * rather than a generic "recent activity" card: it conveys throughput,
- * which matters more than any single transaction at this scale.
- */
 export function LiveLedgerStrip({ transactions }: LiveLedgerStripProps) {
   const [visibleCount, setVisibleCount] = useState(0);
 

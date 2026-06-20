@@ -1,89 +1,22 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
-@theme {
-  /* Ink — the dark base, teal-tinted rather than flat navy */
-  --color-ink: #042F2E;
-  --color-ink-raised: #0A3D3A;
-  --color-ink-line: #134E4A;
-
-  /* Teal — primary action color, deeper than stock #14B8A6 */
-  --color-teal: #0D9488;
-  --color-teal-bright: #2DD4BF;
-  --color-teal-dim: #134E4A;
-
-  /* Steel — secondary accent for data/links, distinct from teal */
-  --color-steel: #0B2A4A;
-  --color-steel-bright: #3B82C4;
-
-  /* Signature amber — reserved for biometric moments only */
-  --color-signal: #FBBF24;
-  --color-signal-dim: #92400E;
-
-  /* Surfaces */
-  --color-mint: #F0FDFA;
-  --color-paper: #FFFFFF;
-
-  /* Status */
-  --color-ok: #2DD4BF;
-  --color-fail: #F87171;
-
-  /* Text on dark */
-  --color-fog: #9DBFB8;
-  --color-mist: #5C8A82;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 @layer base {
   body {
-    background-color: var(--color-ink);
-    color: #FFFFFF;
-    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
   }
 
   h1, h2, h3, .font-display {
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: "Space Grotesk", sans-serif;
   }
 
   .font-data {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: "IBM Plex Mono", monospace;
     letter-spacing: 0.04em;
   }
-}
-
-/* Glass panel — hairline border, no heavy blur tricks */
-@layer utilities {
-  .glass-panel {
-    background: rgba(13, 148, 136, 0.06);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(45, 212, 191, 0.12);
-  }
-
-  .glass-panel-raised {
-    background: rgba(10, 61, 58, 0.7);
-    border: 1px solid var(--color-ink-line);
-  }
-}
-
-@keyframes ring-pulse {
-  0% { transform: scale(0.85); opacity: 0.7; }
-  100% { transform: scale(2.1); opacity: 0; }
-}
-
-@keyframes scan-sweep {
-  0% { top: 6px; }
-  50% { top: calc(100% - 6px); }
-  100% { top: 6px; }
-}
-
-@keyframes rise-in {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes check-draw {
-  from { stroke-dashoffset: 40; }
-  to { stroke-dashoffset: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
