@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@theme {
+  --color-biopay-teal: #14B8A6;
+  --color-biopay-dark: #0F766E;
+  --color-biopay-light: #CCFBF1;
+  --color-biopay-navy: #1E3A8A;
+}
+
+@layer base {
+  body {
+    background-color: #0B1120; /* Deep dark blue background */
+    color: #FFFFFF;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+  }
+}
+
+/* Glassmorphism utilities */
+@layer utilities {
+  .glass-panel {
+    background: rgba(30, 58, 138, 0.1);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+}
