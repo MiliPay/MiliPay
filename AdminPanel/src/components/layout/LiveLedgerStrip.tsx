@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import type { Transaction } from "@/types";
-import { formatNaira } from "@/lib/utils/format";
+import { Link } from "react-router-dom";
+import type { Transaction } from "@biopay/shared/types";
+import { formatNaira } from "@biopay/shared/lib/utils/format";
 
 interface LiveLedgerStripProps {
   transactions: Transaction[];
@@ -31,9 +32,10 @@ export function LiveLedgerStrip({ transactions }: LiveLedgerStripProps) {
 
       <div className="divide-y divide-ledger-line">
         {transactions.slice(0, visibleCount).map((txn) => (
-          <div
+          <Link
             key={txn.id}
-            className="flex items-center justify-between px-4 py-3 animate-tick-in"
+            to={`/dashboard/transactions/${txn.id}`}
+            className="flex items-center justify-between px-4 py-3 animate-tick-in hover:bg-white/[0.02] transition-colors cursor-pointer"
           >
             <div className="flex items-center gap-3 min-w-0">
               <span
@@ -45,7 +47,7 @@ export function LiveLedgerStrip({ transactions }: LiveLedgerStripProps) {
                     : "bg-status-warn"
                 }`}
               />
-              <span className="text-sm text-ink truncate">{txn.customerName}</span>
+              <span className="text-sm text-ink truncate group-hover:text-signal-bright transition-colors">{txn.customerName}</span>
               <span className="text-xs text-ink-faint truncate hidden sm:inline">
                 → {txn.merchantName}
               </span>
@@ -53,7 +55,7 @@ export function LiveLedgerStrip({ transactions }: LiveLedgerStripProps) {
             <span className="font-data text-sm text-ink-muted shrink-0 ml-3">
               {formatNaira(txn.amountKobo)}
             </span>
-          </div>
+          </Link>
         ))}
       </div>
     </div>

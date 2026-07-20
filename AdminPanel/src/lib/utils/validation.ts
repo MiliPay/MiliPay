@@ -2,7 +2,7 @@ export function isValidNigerianPhone(value: string): boolean {
   return /^(\+234|0)[789][01]\d{8}$/.test(value.trim());
 }
 
-export function isValidBvnOrNin(value: string): boolean {
+export function isValidNin(value: string): boolean {
   return /^\d{11}$/.test(value.trim());
 }
 
@@ -22,23 +22,27 @@ export interface FieldError {
 
 export function validateCustomerDraft(draft: {
   fullName: string;
-  bvn: string;
+  dateOfBirth: string;
+  gender: string;
   nin: string;
   phone: string;
   email: string;
   address: string;
   state: string;
-  fingerprintCaptured: boolean;
+  capturedFingers: string[];
 }): FieldError[] {
   const errors: FieldError[] = [];
 
   if (!isNotBlank(draft.fullName)) {
     errors.push({ field: "fullName", message: "Enter the customer's full name." });
   }
-  if (!isValidBvnOrNin(draft.bvn)) {
-    errors.push({ field: "bvn", message: "BVN must be exactly 11 digits." });
+  if (!isNotBlank(draft.dateOfBirth)) {
+    errors.push({ field: "dateOfBirth", message: "Enter a date of birth." });
   }
-  if (draft.nin && !isValidBvnOrNin(draft.nin)) {
+  if (!isNotBlank(draft.gender)) {
+    errors.push({ field: "gender", message: "Select a gender." });
+  }
+  if (!isValidNin(draft.nin)) {
     errors.push({ field: "nin", message: "NIN must be exactly 11 digits." });
   }
   if (!isValidNigerianPhone(draft.phone)) {
@@ -53,8 +57,13 @@ export function validateCustomerDraft(draft: {
   if (!isNotBlank(draft.state)) {
     errors.push({ field: "state", message: "Select a state." });
   }
-  if (!draft.fingerprintCaptured) {
-    errors.push({ field: "fingerprint", message: "Capture a fingerprint before submitting." });
+  if (draft.capturedFingers.length !== 4) {
+    errors.push({ field: "fingerprint", message: "Exactly 4 fingers must be captured." });
+  } else {
+    const leftCount = draft.capturedFingers.filter((f) => f.startsWith("Left ")).length;
+    if (leftCount < 2) {
+      errors.push({ field: "fingerprint", message: "At least 2 fingers must be from the left hand." });
+    }
   }
 
   return errors;

@@ -3,6 +3,7 @@ export type Role = "agent" | "admin" | "super_admin" | "support";
 export interface StaffUser {
   id: string;
   fullName: string;
+  email: string;
   phone: string;
   role: Role;
 }
@@ -14,11 +15,10 @@ export interface Customer {
   fullName: string;
   phone: string;
   email?: string;
-  bvnLast4: string;
   ninLast4: string;
   state: string;
   status: CustomerStatus;
-  fingerprintCapturedAt: string | null;
+  capturedFingers: string[];
   linkedAccountCount: number;
   createdAt: string;
 }
@@ -47,24 +47,22 @@ export interface CustomerDraft {
   fullName: string;
   dateOfBirth: string;
   gender: "male" | "female" | "";
-  bvn: string;
   nin: string;
   phone: string;
   email: string;
   address: string;
   state: string;
-  fingerprintCaptured: boolean;
+  capturedFingers: string[];
 }
 
 export const EMPTY_CUSTOMER_DRAFT: CustomerDraft = {
   fullName: "",
   dateOfBirth: "",
   gender: "",
-  bvn: "",
   nin: "",
   phone: "",
   email: "",
   address: "",
   state: "",
-  fingerprintCaptured: false,
+  capturedFingers: [],
 };

@@ -1,0 +1,14 @@
+{
+  "name": "biopay-workspace",
+  "private": true,
+  "workspaces": [
+    "AdminPanel",
+    "agent-portal",
+    "service-portal",
+    "website",
+    "packages/*"
+  ],
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  }
+}

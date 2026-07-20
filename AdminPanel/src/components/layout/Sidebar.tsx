@@ -1,12 +1,12 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Fingerprint, LayoutGrid, LogOut, Settings, UserPlus } from "lucide-react";
-import { useAuth } from "@/features/auth/AuthContext";
-import { ROUTES } from "@/lib/constants";
+import { LayoutGrid, LogOut, Settings, UserPlus, Users, TrendingUp } from "lucide-react";
+import { useAuth } from "@biopay/shared/features/auth/AuthContext";
+import { ROUTES } from "@biopay/shared/lib/constants";
 
 const navLinkClasses = ({ isActive }: { isActive: boolean }) =>
-  `flex items-center gap-3 px-3.5 py-2.5 rounded text-sm font-medium transition-colors ${
+  `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
     isActive
-      ? "bg-signal/10 text-signal-bright border border-signal/25"
+      ? "bg-signal/10 text-signal border border-signal/20"
       : "text-ink-muted border border-transparent hover:bg-white/[0.03] hover:text-ink"
   }`;
 
@@ -23,17 +23,14 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="hidden md:flex w-64 flex-col justify-between border-r border-ledger-line bg-ledger-raised shrink-0">
-      <div className="p-5">
-        <div className="flex items-center gap-3 mb-9 px-1">
-          <div className="w-9 h-9 rounded bg-signal flex items-center justify-center shrink-0">
-            <Fingerprint className="w-5 h-5 text-signal-ink" />
+    <aside className="hidden md:flex w-64 flex-col justify-between border-r border-white/[0.05] bg-ledger-line shrink-0">
+      <div className="p-6">
+        <div className="flex items-center gap-3 mb-9">
+          <div className="w-8 h-8 rounded bg-signal flex items-center justify-center font-display font-bold text-white shadow-[0_0_15px_rgba(var(--color-signal),0.4)] shrink-0">
+            A
           </div>
           <div className="min-w-0">
-            <p className="font-display font-bold text-ink text-[15px] leading-tight truncate">BioPay</p>
-            <p className="text-[11px] text-signal-bright font-medium uppercase tracking-wider truncate">
-              {user?.role.replace("_", " ")} console
-            </p>
+            <span className="font-display font-medium text-xl tracking-tight truncate">BioPay Admin</span>
           </div>
         </div>
 
@@ -41,6 +38,14 @@ export function Sidebar() {
           <NavLink to={ROUTES.dashboard} end className={navLinkClasses}>
             <LayoutGrid className="w-[18px] h-[18px]" />
             Overview
+          </NavLink>
+          <NavLink to={ROUTES.customers} className={navLinkClasses}>
+            <Users className="w-[18px] h-[18px]" />
+            Customers
+          </NavLink>
+          <NavLink to={ROUTES.transactions} className={navLinkClasses}>
+            <TrendingUp className="w-[18px] h-[18px]" />
+            Transactions
           </NavLink>
           {canRegister && (
             <NavLink to={ROUTES.registerCustomer} className={navLinkClasses}>
@@ -57,13 +62,13 @@ export function Sidebar() {
         </nav>
       </div>
 
-      <div className="p-5">
+      <div className="p-4 border-t border-white/[0.05]">
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 w-full px-3.5 py-2.5 rounded text-sm font-medium text-status-fail hover:bg-status-fail/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-status-fail focus-visible:outline-offset-2"
+          className="flex items-center w-full gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:text-status-warning hover:bg-status-warning/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-status-warning focus-visible:outline-offset-2"
         >
-          <LogOut className="w-[18px] h-[18px]" />
-          Log out
+          <LogOut className="w-5 h-5" />
+          <span className="font-medium text-sm">Log out</span>
         </button>
       </div>
     </aside>

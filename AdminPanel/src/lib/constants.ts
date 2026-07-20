@@ -7,9 +7,13 @@ export const NIGERIAN_STATES = [
 ] as const;
 
 export const ROUTES = {
-  onboarding: "/onboarding",
+
   login: "/login",
   dashboard: "/dashboard",
+  customers: "/dashboard/customers",
+  customerDetails: "/dashboard/customers/:id",
+  transactions: "/dashboard/transactions",
+  transactionDetails: "/dashboard/transactions/:id",
   registerCustomer: "/dashboard/register",
   settings: "/dashboard/settings",
 } as const;

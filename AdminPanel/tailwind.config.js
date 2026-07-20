@@ -1,6 +1,10 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: ["./index.html", "./src/**/*.{ts,tsx}"],
+  content: [
+    "./index.html",
+    "./src/**/*.{ts,tsx}",
+    "../packages/shared/src/**/*.{js,ts,jsx,tsx}"
+  ],
   theme: {
     extend: {
       colors: {
@@ -23,6 +27,7 @@ export default {
         },
         status: {
           ok: "#33E0B5",
+          info: "#3B82F6",
           warn: "#FFB454",
           fail: "#FF5C5C",
         },

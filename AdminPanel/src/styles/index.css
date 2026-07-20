@@ -17,11 +17,10 @@
     font-family: "IBM Plex Mono", monospace;
     letter-spacing: 0.04em;
   }
-}
 
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+  /* Custom scrollbar matching dark theme */
+  * {
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+    scrollbar-width: thin;
   }
 }

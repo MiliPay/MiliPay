@@ -1,0 +1,23 @@
+{
+  "projects": {
+    "default": "biopay-production"
+  },
+  "targets": {
+    "biopay-production": {
+      "hosting": {
+        "website": [
+          "biopay-ng"
+        ],
+        "admin": [
+          "admin-biopay-ng"
+        ],
+        "agent": [
+          "agent-biopay-ng"
+        ],
+        "service": [
+          "service-biopay-ng"
+        ]
+      }
+    }
+  }
+}
