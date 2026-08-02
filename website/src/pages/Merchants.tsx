@@ -12,10 +12,10 @@ export function Merchants() {
               <Store className="w-8 h-8 text-primary" />
             </div>
             <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-6">
-              The Checkout Experience, Redefined.
+              Accept Payments with Absolute Certainty.
             </h1>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-10">
-              Perfect for supermarkets, restaurants, and retail stores. We integrate our biometric payment scanners directly into your existing checkout system. Customers pay with their fingerprint and a 4-digit PIN. No physical cards required.
+            <p className="text-lg text-gray-600 max-w-3xl mx-auto mb-10 leading-relaxed">
+              Built for high-volume retail, supermarkets, and enterprise merchants. MiliPay integrates certified biometric point-of-sale terminals directly into your checkout flow. Customers authenticate via fingerprint, routing funds directly from their bank to yours—eliminating card networks entirely. Our state-of-the-art hardware guarantees faster checkout times, zero network downtime during peak hours, and absolute cryptographic certainty for every transaction processed in your store.
             </p>
             <button className="bg-gray-900 hover:bg-gray-800 text-white font-bold px-8 py-4 rounded-xl transition-all">
               Request Retail Integration
@@ -30,17 +30,17 @@ export function Merchants() {
           <div className="grid md:grid-cols-3 gap-8">
             <FadeIn delay={100} className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
               <ShieldAlert className="w-8 h-8 text-red-500 mb-4" />
-              <h3 className="text-xl font-bold text-gray-900 mb-3">Zero Fraud Liability</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-3">Zero Chargeback Liability</h3>
               <p className="text-gray-600 text-sm leading-relaxed">
-                Because every transaction is authorized by a live fingerprint and PIN at your physical store, "I didn't make this purchase" chargebacks are mathematically eliminated.
+                Every transaction is cryptographically signed by a live fingerprint match at your physical location. Fraudulent "card-not-present" or "stolen card" chargebacks are mathematically eliminated.
               </p>
             </FadeIn>
             
             <FadeIn delay={200} className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
               <Banknote className="w-8 h-8 text-green-500 mb-4" />
-              <h3 className="text-xl font-bold text-gray-900 mb-3">Seamless Integration</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-3">Hardware-Secured Checkout</h3>
               <p className="text-gray-600 text-sm leading-relaxed">
-                We provide the biometric scanner hardware. It plugs seamlessly into your existing supermarket or restaurant payment ecosystem.
+                We provide certified biometric POS hardware that plugs seamlessly into your existing retail ecosystem, ensuring end-to-end encryption from finger to bank.
               </p>
             </FadeIn>
 
@@ -48,7 +48,7 @@ export function Merchants() {
               <Zap className="w-8 h-8 text-amber-500 mb-4" />
               <h3 className="text-xl font-bold text-gray-900 mb-3">Instant Settlement</h3>
               <p className="text-gray-600 text-sm leading-relaxed">
-                No more waiting T+1 or T+2 for your funds. BioPay settles directly into your designated corporate account instantly.
+                No more waiting T+1 or T+2 for your funds. MiliPay settles directly into your designated corporate account instantly.
               </p>
             </FadeIn>
           </div>
@@ -60,11 +60,11 @@ export function Merchants() {
         <div className="max-w-5xl mx-auto px-4 text-center">
           <FadeIn>
             <h2 className="text-3xl font-bold text-gray-900 mb-6">Designed for High-Volume Retail</h2>
-            <p className="text-gray-600 max-w-2xl mx-auto mb-10">
-              Our hardware scanners are built for speed. Process queues at your supermarket faster than traditional chip-and-pin card insertions.
+            <p className="text-gray-600 max-w-3xl mx-auto mb-10 leading-relaxed">
+              Our hardware scanners are built for speed and durability. Process queues at your supermarket faster than traditional chip-and-pin card insertions. With a sub-second matching algorithm, the MiliPay terminal securely hashes the fingerprint and encrypts the payload before it ever leaves your network. Say goodbye to 'Insufficient Funds' delays and network timeouts—our intelligent routing ensures immediate settlement directly to your corporate account.
             </p>
-            <div className="bg-gray-100 aspect-video max-w-3xl mx-auto rounded-3xl flex items-center justify-center border border-gray-200">
-              <span className="text-gray-400 font-medium">[ Retail Scanner Render ]</span>
+            <div className="max-w-3xl mx-auto rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.15)] overflow-hidden border border-gray-200">
+              <img src="/images/pos_scanner.png" alt="MiliPay POS Scanner" className="w-full h-auto object-cover hover:scale-105 transition-transform duration-700" />
             </div>
           </FadeIn>
         </div>

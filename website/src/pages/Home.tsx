@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Fingerprint, CreditCard, ShieldCheck, ArrowRight, Wallet, CheckCircle2 } from 'lucide-react';
+import { Fingerprint, CreditCard, ShieldCheck, ArrowRight, CheckCircle2, Shield, Activity, Users, Lock } from 'lucide-react';
 import { FadeIn } from '../components/ui/FadeIn';
 
 import { Customers } from './Customers';
@@ -21,19 +21,19 @@ export function Home() {
             <FadeIn>
               <div className="mb-5 inline-flex items-center gap-2 bg-primary/10 border border-primary/25 text-primary-dark text-xs font-semibold px-3.5 py-1.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse-dot"></span>
-                The Next Generation Payment Network
+                Seed Stage Infrastructure
               </div>
               
               <h1 className="text-[clamp(2.2rem,5vw,3.5rem)] font-extrabold leading-[1.15] tracking-tight text-gray-900 mb-6">
-                Your Finger is<br />
+                Authenticate the Person,<br />
                 <span className="relative inline-block text-primary">
-                  Your New Debit Card
+                  Not the Card
                   <span className="absolute bottom-0.5 left-0 right-0 h-1 bg-gradient-to-r from-primary to-accent rounded-sm opacity-30"></span>
                 </span>
               </h1>
               
               <p className="text-lg text-gray-600 mb-8 max-w-lg leading-relaxed">
-                BioPay replaces Verve and Mastercard. We don't hold your money—we simply link up to 3 of your existing bank accounts to your fingerprint. Pay at supermarkets and restaurants with just a touch and your 4-digit PIN.
+                MiliPay is a secure, non-custodial biometric gateway built for scale. We integrate directly with partner banks to authorize point-of-sale transactions via fingerprint and palm print, entirely eliminating card fraud, chargebacks, and checkout friction. Welcome to the future of financial identity.
               </p>
 
               <div className="flex flex-wrap gap-4">
@@ -47,52 +47,9 @@ export function Home() {
             </FadeIn>
 
             <FadeIn delay={200} className="relative hidden lg:block">
-              {/* Abstract Illustration of the Gateway */}
-              <div className="bg-white rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.08)] p-8 border border-gray-100">
-                <div className="flex justify-between items-center mb-8 border-b border-gray-100 pb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Fingerprint className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-gray-900">BioPay Gateway</h3>
-                      <p className="text-xs text-green-600 font-medium tracking-wide">FINGERPRINT + PIN VERIFIED</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-display font-bold text-gray-900">₦12,500</p>
-                    <p className="text-xs text-gray-400">Total at Shoprite</p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Debit Source (Up to 3 Banks)</p>
-                  
-                  <div className="border-2 border-primary bg-primary/5 rounded-xl p-4 flex items-center justify-between cursor-pointer">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
-                        <CreditCard className="w-5 h-5 text-orange-600" />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-900 text-sm">Guaranty Trust Bank</p>
-                        <p className="text-xs text-gray-500">Savings •••• 0293</p>
-                      </div>
-                    </div>
-                    <CheckCircle2 className="w-5 h-5 text-primary" />
-                  </div>
-
-                  <div className="border border-gray-100 rounded-xl p-4 flex items-center justify-between opacity-60">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
-                        <Wallet className="w-5 h-5 text-red-600" />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-900 text-sm">Zenith Bank</p>
-                        <p className="text-xs text-gray-500">Current •••• 5510</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              <div className="relative rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.15)] overflow-hidden border border-gray-100 group">
+                <img src="/images/hero_infrastructure.png" alt="MiliPay Secure Infrastructure" className="w-full h-auto object-cover scale-100 group-hover:scale-110 transition-transform duration-[1.5s]" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none"></div>
               </div>
 
               {/* Floating elements */}
@@ -115,7 +72,7 @@ export function Home() {
       <section className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <FadeIn className="text-center max-w-2xl mx-auto mb-16">
-            <h2 className="text-3xl font-extrabold text-gray-900 mb-4">How BioPay Works</h2>
+            <h2 className="text-3xl font-extrabold text-gray-900 mb-4">How MiliPay Works</h2>
             <p className="text-gray-500">A seamless integration between your unique fingerprint and your existing bank accounts.</p>
           </FadeIn>
 
@@ -124,9 +81,9 @@ export function Home() {
               <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mb-6">
                 <Fingerprint className="w-6 h-6 text-primary" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-3">1. Register with an Agent</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-3">1. Agent-Mediated Enrollment</h3>
               <p className="text-gray-600 text-sm leading-relaxed">
-                Visit any verified BioPay agent with your NIN. They will capture your fingerprints and register your phone number into our secure network.
+                Users are enrolled in-person by certified agents. We capture multi-modal biometrics and verify identity against national databases (NIMC) to eliminate synthetic fraud.
               </p>
             </FadeIn>
 
@@ -134,9 +91,9 @@ export function Home() {
               <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center mb-6">
                 <CreditCard className="w-6 h-6 text-accent" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-3">2. Setup & Link Banks</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-3">2. Direct Bank Integration</h3>
               <p className="text-gray-600 text-sm leading-relaxed">
-                Receive your login password via SMS within 24 hours. Log into the app, set a custom 4-digit PIN, and securely link up to 3 of your bank accounts.
+                MiliPay acts solely as an authentication layer. Users link their existing accounts, and all funds custody remains with regulated deposit-taking banks.
               </p>
             </FadeIn>
 
@@ -144,10 +101,70 @@ export function Home() {
               <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-6">
                 <CheckCircle2 className="w-6 h-6 text-green-600" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-3">3. Pay at Supermarkets</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-3">3. Frictionless Settlement</h3>
               <p className="text-gray-600 text-sm leading-relaxed">
-                At checkout, scan your fingerprint on the merchant's BioPay scanner, input your 4-digit PIN, and the funds are instantly debited from your selected bank.
+                At checkout, the merchant's MiliPay POS captures a live fingerprint and instantly routes a secure debit instruction to the partner bank for rapid settlement.
               </p>
+            </FadeIn>
+          </div>
+        </div>
+      </section>
+
+      {/* The MiliPay Advantage Section (From Project Document) */}
+      <section className="py-24 bg-gray-50 border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <FadeIn className="text-center max-w-3xl mx-auto mb-16">
+            <h2 className="text-3xl font-extrabold text-gray-900 mb-4">The MiliPay Advantage</h2>
+            <p className="text-gray-500">Built for trust, designed for speed. We are redefining the payment infrastructure of Nigeria without holding a single naira of your money.</p>
+          </FadeIn>
+
+          <div className="grid md:grid-cols-2 gap-8 lg:gap-12">
+            <FadeIn delay={100} className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex gap-6 hover:shadow-md transition-shadow">
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex-shrink-0 flex items-center justify-center">
+                <Shield className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Zero-Custody (Not a Wallet)</h3>
+                <p className="text-gray-600 leading-relaxed text-sm">
+                  We are an authentication layer, not a bank. MiliPay never holds your funds. We route payment instructions directly to your existing bank account, eliminating the friction of topping up a wallet or risking your deposits.
+                </p>
+              </div>
+            </FadeIn>
+
+            <FadeIn delay={200} className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex gap-6 hover:shadow-md transition-shadow">
+              <div className="w-12 h-12 bg-primary/10 rounded-full flex-shrink-0 flex items-center justify-center">
+                <Activity className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Multi-Modal Biometrics</h3>
+                <p className="text-gray-600 leading-relaxed text-sm">
+                  Your fingerprint is the primary key. If that fails, our system seamlessly falls back to a palm print or a secure passcode. This multi-layered approach guarantees you can always complete your transaction.
+                </p>
+              </div>
+            </FadeIn>
+
+            <FadeIn delay={300} className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex gap-6 hover:shadow-md transition-shadow">
+              <div className="w-12 h-12 bg-orange-100 rounded-full flex-shrink-0 flex items-center justify-center">
+                <Users className="w-6 h-6 text-orange-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Agent-Mediated Trust</h3>
+                <p className="text-gray-600 leading-relaxed text-sm">
+                  Identity assurance is critical. Every user is verified in person by a certified MiliPay agent who captures your National Identification Number (NIN) under controlled conditions, eliminating synthetic fraud.
+                </p>
+              </div>
+            </FadeIn>
+
+            <FadeIn delay={400} className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex gap-6 hover:shadow-md transition-shadow">
+              <div className="w-12 h-12 bg-purple-100 rounded-full flex-shrink-0 flex items-center justify-center">
+                <Lock className="w-6 h-6 text-purple-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Bank-Grade Data Privacy</h3>
+                <p className="text-gray-600 leading-relaxed text-sm">
+                  We never store raw fingerprint images. Your biometrics are mathematically hashed into irreversible templates and heavily encrypted at rest, ensuring absolute privacy and security for all users.
+                </p>
+              </div>
             </FadeIn>
           </div>
         </div>

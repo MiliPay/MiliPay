@@ -1,5 +1,5 @@
 import { FadeIn } from '../components/ui/FadeIn';
-import { Fingerprint, Landmark, ArrowRight, ShieldCheck, Lock, Smartphone } from 'lucide-react';
+import { Landmark, ArrowRight, ShieldCheck, Lock, Smartphone } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export function Customers() {
@@ -13,7 +13,7 @@ export function Customers() {
               Your Banks, United.
             </h1>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-10">
-              Link up to 3 of your bank accounts to your unique fingerprint. Never worry about forgotten cards or carrying cash to the supermarket again.
+              Link up to 3 of your bank accounts securely to your biometric identity. MiliPay ensures you can always pay via fingerprint, with palm print and secure passcode fallbacks.
             </p>
           </FadeIn>
         </div>
@@ -30,7 +30,7 @@ export function Customers() {
                 <div className="flex-1 space-y-6">
                   <h2 className="text-2xl font-bold text-gray-900">Your Unified Financial App</h2>
                   <p className="text-gray-600">
-                    After registering at an agent, you'll receive a password via SMS. Log in, secure your app with FaceID, and choose your 4-digit payment PIN. Then, link up to 3 bank accounts.
+                    After strict identity verification by a certified agent, you'll gain access to the MiliPay app. Secure it with FaceID, set your payment PIN, and link your existing bank accounts directly—no wallet top-ups required.
                   </p>
                   <ul className="space-y-3">
                     <li className="flex items-center gap-3 text-sm text-gray-700">
@@ -40,7 +40,7 @@ export function Customers() {
                       <Lock className="w-5 h-5 text-primary" /> Bank-grade encryption ensures safety
                     </li>
                     <li className="flex items-center gap-3 text-sm text-gray-700">
-                      <ShieldCheck className="w-5 h-5 text-primary" /> BioPay never holds your money
+                      <ShieldCheck className="w-5 h-5 text-primary" /> MiliPay never holds your money
                     </li>
                   </ul>
                 </div>
@@ -89,7 +89,7 @@ export function Customers() {
         <div className="max-w-3xl mx-auto px-4">
           <FadeIn>
             <h2 className="text-3xl font-bold text-white mb-6">Ready to go cardless?</h2>
-            <p className="text-gray-400 mb-10">Visit any registered BioPay agent to securely enroll your fingerprint, drop your phone number, and receive your login password.</p>
+            <p className="text-gray-400 mb-10">Visit any registered MiliPay agent to securely enroll your fingerprint, drop your phone number, and receive your login password.</p>
             <Link to="/agents" className="inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark text-white font-bold px-8 py-4 rounded-xl transition-all shadow-[0_4px_20px_rgba(14,173,105,0.3)]">
               Find an Agent Near You <ArrowRight className="w-5 h-5" />
             </Link>

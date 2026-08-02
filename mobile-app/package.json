@@ -33,10 +33,13 @@
     "typescript": "~5.3.3"
   },
   "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "start": "EXPO_OFFLINE=1 EXPO_NO_TELEMETRY=1 expo start",
+    "android": "EXPO_OFFLINE=1 EXPO_NO_TELEMETRY=1 expo start --android",
+    "ios": "EXPO_OFFLINE=1 EXPO_NO_TELEMETRY=1 expo start --ios",
+    "web": "EXPO_OFFLINE=1 EXPO_NO_TELEMETRY=1 expo start --web"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "undici": "^6.20.0"
+  }
 }

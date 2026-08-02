@@ -18,6 +18,23 @@
           "service-biopay-ng"
         ]
       }
+    },
+    "aniyu-b841b": {
+      "hosting": {
+        "admin": [
+          "milipay-adminportal"
+        ],
+        "agent": [
+          "milipay-agentportal"
+        ],
+        "service": [
+          "milipay-serviceportal"
+        ],
+        "website": [
+          "milipay-website"
+        ]
+      }
     }
-  }
+  },
+  "etags": {}
 }

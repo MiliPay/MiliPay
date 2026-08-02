@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Fingerprint, ChevronDown } from 'lucide-react';
+import { Menu, X, ChevronDown } from 'lucide-react';
 import { cn } from '../ui/FadeIn';
 
 export function Navbar() {
@@ -23,10 +23,10 @@ export function Navbar() {
 
   const navItems = [
     { name: 'Home', path: '/' },
-    { name: 'For Customers', path: '/customers' },
+    { name: 'Technology', path: '/customers' },
     { name: 'For Merchants', path: '/merchants' },
-    { name: 'For Agents', path: '/agents' },
-    { name: 'About', path: '/about' },
+    { name: 'Trust & Identity', path: '/agents' },
+    { name: 'Company', path: '/about' },
   ];
 
   return (
@@ -41,13 +41,8 @@ export function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
         
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 group">
-          <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-            <Fingerprint className="w-6 h-6 text-primary" />
-          </div>
-          <span className="font-display font-bold text-2xl tracking-tight text-gray-900">
-            BioPay
-          </span>
+        <Link to="/" className="flex items-center group relative h-12 w-32 -ml-2">
+          <img src="/main.png" alt="MiliPay Logo" className="absolute top-1/2 -translate-y-1/2 left-0 h-28 w-auto object-contain scale-125 origin-left" />
         </Link>
 
         {/* Desktop Nav */}
@@ -71,12 +66,6 @@ export function Navbar() {
 
         {/* Desktop CTA */}
         <div className="hidden lg:flex items-center gap-4">
-          <a
-            href="http://localhost:5175/login"
-            className="text-sm font-semibold text-gray-600 hover:text-primary transition-colors px-4 py-2"
-          >
-            Sign In
-          </a>
           <div className="relative group">
             <button className="flex items-center gap-2 text-sm font-semibold bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-xl transition-colors shadow-[0_4px_14px_rgba(14,173,105,0.25)]">
               Get Started
@@ -90,8 +79,8 @@ export function Navbar() {
                 As a Merchant
               </Link>
               <hr className="my-1 border-gray-100" />
-              <Link to="/agents" className="block px-5 py-2.5 text-sm text-gray-600 hover:text-primary hover:bg-primary-light">
-                Become an Agent
+              <Link to="/about" className="block px-5 py-2.5 text-sm text-gray-600 hover:text-primary hover:bg-primary-light">
+                Partner with Us
               </Link>
             </div>
           </div>
@@ -124,17 +113,11 @@ export function Navbar() {
             </Link>
           ))}
           <div className="h-px bg-gray-100 my-2" />
-          <a
-            href="http://localhost:5175/login"
-            className="px-4 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-xl"
-          >
-            Sign In
-          </a>
           <Link
-            to="/customers"
+            to="/about"
             className="px-4 py-3 text-sm font-semibold bg-primary text-white text-center rounded-xl"
           >
-            Get Started
+            Partner with Us
           </Link>
         </div>
       )}

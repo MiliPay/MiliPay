@@ -41,7 +41,7 @@ const mockTransactions = {
   ]
 };
 
-const BankNode = ({ item, index, scrollX, isBalanceHidden, toggleBalance }: any) => {
+const BankNode = ({ item, index, scrollX, isBalanceHidden, toggleBalance, isActive }: any) => {
   const [isCopied, setIsCopied] = useState(false);
   
   const inputRange = [
@@ -73,9 +73,16 @@ const BankNode = ({ item, index, scrollX, isBalanceHidden, toggleBalance }: any)
         <View className="p-6 flex-1">
           <View className="flex-row justify-between items-start mb-4">
             <View className="flex-1 pr-4">
-              <Text className="text-white/60 font-inter-semibold uppercase tracking-widest text-xs mb-1">
-                {item.bankName}
-              </Text>
+              <View className="flex-row items-center mb-1">
+                <Text className="text-white/60 font-inter-semibold uppercase tracking-widest text-xs mr-3">
+                  {item.bankName}
+                </Text>
+                {isActive && (
+                  <View className="px-2 py-0.5 bg-emerald-500/20 border border-emerald-500/40 rounded-full">
+                    <Text className="text-emerald-400 font-inter-bold text-[8px] uppercase tracking-widest">Active Link</Text>
+                  </View>
+                )}
+              </View>
               <Text className="text-white font-inter-bold text-lg">
                 {item.accountName}
               </Text>
@@ -211,9 +218,39 @@ export default function HomeScreen({ navigation }: any) {
                 scrollX={scrollX}
                 isBalanceHidden={isBalanceHidden}
                 toggleBalance={toggleBalance}
+                isActive={index === activeBankIndex}
               />
             ))}
           </Animated.ScrollView>
+        </View>
+
+        {/* Recent Merchants (Send Again) */}
+        <View className="px-6 mt-8 mb-4">
+          <Text className="text-white/90 font-inter-bold uppercase tracking-widest text-xs">
+            Send Again
+          </Text>
+        </View>
+        <View className="px-6 flex-row gap-5">
+          <Pressable className="items-center" onPress={() => Haptics.selectionAsync()}>
+            <View className="w-14 h-14 rounded-full bg-orange-500/20 border border-orange-500/40 items-center justify-center mb-2 shadow-lg shadow-orange-500/20">
+              <Text className="text-orange-400 font-inter-bold text-lg">CR</Text>
+            </View>
+            <Text className="text-white/70 font-inter text-xs">Chicken Rep.</Text>
+          </Pressable>
+          
+          <Pressable className="items-center" onPress={() => Haptics.selectionAsync()}>
+            <View className="w-14 h-14 rounded-full bg-blue-500/20 border border-blue-500/40 items-center justify-center mb-2 shadow-lg shadow-blue-500/20">
+              <Text className="text-blue-400 font-inter-bold text-lg">MT</Text>
+            </View>
+            <Text className="text-white/70 font-inter text-xs">MTN Bill</Text>
+          </Pressable>
+
+          <Pressable className="items-center" onPress={() => Haptics.selectionAsync()}>
+            <View className="w-14 h-14 rounded-full bg-purple-500/20 border border-purple-500/40 items-center justify-center mb-2 shadow-lg shadow-purple-500/20">
+              <Text className="text-purple-400 font-inter-bold text-lg">UB</Text>
+            </View>
+            <Text className="text-white/70 font-inter text-xs">Uber</Text>
+          </Pressable>
         </View>
 
         {/* Quick Services Shortcuts */}

@@ -1,0 +1,272 @@
+MiliPay
+A Biometric Payment Ecosystem for Nigeria and Africa
+Project Planning Document
+Prepared for Investors, Engineering Partners, Financial Institutions, and Regulators
+Seed Stage — Draft for Internal & Partner Review
+July 2026
+1. Executive Summary
+MiliPay is a biometric payment ecosystem, currently at seed stage, designed to let customers in Nigeria make secure, cardless payments directly from their linked bank accounts using fingerprint (with palm print and passcode fallback) authentication at the point of sale. MiliPay is explicitly not a digital wallet or a custodian of customer funds — it is an authentication and payment-initiation layer that sits between the customer, the merchant's POS terminal, and the customer's existing bank account.
+The venture's long-term ambition is to become Nigeria's leading biometric payment network, with a planned Phase 2 expansion across Africa. The current prototype consists of a React Native customer mobile application backed by Supabase, with a connected database, and is under active development by a small founding team covering product vision, frontend, backend, and cybersecurity/operations.
+This document consolidates the company overview, product design, technical architecture, regulatory posture, business model, risks, and roadmap into a single reference suitable for investor conversations, engineering onboarding, and early discussions with prospective banking partners and regulators. Where information has not yet been finalized by the founding team, this is explicitly flagged as an assumption or an open question rather than invented.
+2. Company Overview
+MiliPay is a Nigeria-focused fintech company building biometric payment infrastructure. The name is derived from 'Milliseconds Payment,' reflecting the intended speed of biometric authentication at checkout.
+2.1 Snapshot
+Attribute
+Detail
+Stage
+Seed
+Sector
+Fintech — Payments Infrastructure
+Core product
+Biometric authentication layer for direct bank-account payments (not a wallet)
+Primary market
+Nigeria (Phase 1); Africa (Phase 2)
+Prototype status
+React Native mobile app + Supabase backend, in development
+Team size
+Small founding team (4 functional roles — see Section 12)
+3. Problem Statement
+Physical payment cards remain the dominant non-cash payment method for point-of-sale transactions in Nigeria, but they carry well-documented weaknesses: cards can be forgotten, lost, stolen, cloned via skimming, or physically damaged, and each of these failure modes creates friction, fraud exposure, or a failed transaction at the point of sale. Customers without their card on hand cannot pay, and card-present fraud (skimming, cloning) remains a persistent issue across card-based payment networks.
+For merchants, card failures and fraud disputes create operational friction and chargeback risk. For banks, card issuance, replacement, and fraud monitoring are recurring costs. A payment method that authenticates the person rather than a physical token addresses the root cause of these problems rather than mitigating symptoms.
+4. Proposed Solution
+MiliPay proposes a biometric payment network in which a customer's fingerprint (primary), palm print (secondary/backup), or secure passcode (fallback) authenticates a payment instruction that is sent directly to the customer's linked bank account — with MiliPay never custodying customer funds. Customers register once, in person, through authorized MiliPay agents who capture identity documents (NIN) and biometric data under controlled conditions. At the point of sale, the merchant's biometric POS device captures a live fingerprint, matches it against the enrolled template, and — on a successful match — the customer's bank is instructed to debit the selected linked account.
+This removes the physical card from the transaction entirely while keeping funds custody with regulated deposit-taking banks, which is likely to be a materially easier regulatory conversation than a wallet or stored-value model.
+5. Vision Statement
+To become Africa's most trusted biometric payment infrastructure — the invisible layer that lets people pay with nothing but themselves.
+6. Mission Statement
+To build a secure, fast, and trusted cardless payment ecosystem that removes physical payment cards as a point of failure for everyday transactions.
+7. Core Values
+Security first — biometric and financial data are held to the highest achievable standard, not the minimum legal bar.
+Trust through transparency — customers, merchants, banks, and regulators should always be able to understand what MiliPay does and does not do with their data and funds.
+Speed without shortcuts — 'milliseconds' refers to the authentication experience, not to skipped verification or compliance steps.
+Inclusion — biometric payment should be accessible to customers who are unbanked-by-card but banked-by-account, and to merchants of varying sizes.
+Partnership over disintermediation — MiliPay positions itself as a layer that strengthens banks' existing relationships with customers, not one that competes with or replaces them.
+8. SMART Objectives
+The following objectives are illustrative placeholders structured to be Specific, Measurable, Achievable, Relevant, and Time-bound. Actual targets require the founding team's input — figures below are examples of the right shape of a SMART objective, not commitments.
+Complete a working end-to-end prototype (registration, agent enrollment, biometric authentication, and a simulated bank-debit call) within an agreed development window, to be defined by the team.
+Secure formal engagement (not necessarily a signed agreement) with at least one licensed Nigerian deposit money bank or payment switch (e.g., for account-linking and debit-instruction integration) within a defined period after prototype completion.
+Enroll a defined number of pilot customers and merchants in a single geographic area (e.g., one city or district) as a controlled pilot before wider rollout.
+Achieve a defined biometric authentication success rate (fingerprint match on first attempt) during pilot, with palm print and passcode fallback usage tracked as a quality signal.
+Obtain preliminary regulatory guidance from the Central Bank of Nigeria (CBN) and the Nigeria Data Protection Commission (NDPC) on the intended operating model before any commercial launch.
+9. Business Goals
+Establish MiliPay as a recognized, regulator-engaged biometric payment brand in Nigeria before expanding elsewhere in Africa.
+Build durable trust with banking partners such that MiliPay is viewed as a compliance-forward integration partner rather than a fintech risk.
+Reach sustainable unit economics on a transaction-fee and/or infrastructure-services model (final model pending — see Section 19).
+Build a defensible data and device moat: enrolled biometric templates, certified POS hardware in the field, and agent network coverage.
+10. Project Scope
+10.1 In Scope
+Customer-facing mobile application (React Native) for account linking, default-account selection, transaction history, and biometric enrollment status.
+Agent registration application/dashboard for in-person customer enrollment (identity capture, biometric capture).
+Biometric POS device integration for merchant-side authentication at checkout.
+Backend services for enrollment storage, authentication/matching orchestration, and payment-instruction routing to linked bank accounts.
+Fallback authentication paths: palm print, secure passcode.
+Initial compliance groundwork: data protection (NDPA 2023), KYC/AML alignment, and engagement with CBN on the operating model.
+10.2 Out of Scope (for current phase)
+Holding, storing, or custodying customer funds in any form (explicitly excluded — MiliPay is not a wallet).
+Cross-border payments or Phase 2 (pan-African) rollout — deferred until Nigeria operations are validated.
+Issuing physical or virtual cards.
+Consumer lending, savings, or investment products.
+Full agent-network nationwide scale-up — pilot is geographically constrained (see Section 8).
+11. Stakeholders
+Stakeholder
+Interest / Role
+Customers
+End users authenticating payments biometrically; primary concern is security, speed, and control over which account is debited.
+Merchants
+Accept MiliPay at POS; care about transaction reliability, settlement speed, and dispute handling.
+Partner banks
+Hold and move customer funds; care about fraud liability, API/security standards, and regulatory alignment.
+Authorized agents
+MiliPay employees who enroll customers in the field; care about training, device reliability, and clear enrollment procedures.
+Investors
+Seed and future-round funders; care about traction, regulatory risk, defensibility, and path to revenue.
+Regulators (CBN, NDPC, NIMC)
+Oversee payments licensing, data protection, and identity verification respectively; care about consumer protection and systemic risk.
+Founding team
+Product vision, engineering, security, and operations.
+12. Team Structure and Responsibilities
+Role
+Core Responsibilities
+Founder / Product Vision
+Overall strategy, fundraising, regulatory and bank partnership discussions, product direction.
+Frontend Engineer
+Customer mobile app (React Native), agent dashboard UI, UX implementation.
+Backend Engineer
+Supabase backend, database schema, authentication/matching orchestration, bank/payment integration.
+Cybersecurity, Documentation & Operations
+Biometric data security, compliance documentation, agent operations, incident response readiness.
+13. Product Overview
+MiliPay consists of four principal components:
+Customer mobile application (React Native) — account linking, default account selection, enrollment status, transaction history.
+Agent registration application/dashboard — full enrollment workflow including identity capture and biometric capture.
+Certified biometric POS devices — merchant-facing hardware for live fingerprint/palm capture and match-based transaction authorization.
+Backend platform (currently Supabase) — enrollment data storage, biometric template matching orchestration, and payment-instruction routing to partner banks.
+MiliPay explicitly does not hold customer funds; every successful authentication results in an instruction routed to the customer's own linked bank account, not a MiliPay-held balance.
+14. Customer Journey
+Discovery — customer learns about MiliPay (merchant signage, agent outreach, or referral).
+Enrollment — customer visits or is visited by an authorized MiliPay agent and completes registration (Section 15).
+Linking — customer links one or more bank accounts to their MiliPay profile and sets a default account.
+Everyday use — customer shops at a MiliPay-enabled merchant and pays via fingerprint at checkout (Section 16).
+Support — customer can review transaction history in the app and raise disputes through a defined support channel.
+Follow-up question for the founding team
+No dispute-resolution or customer-support channel was described in the brief. Given that failed or disputed biometric authentications will inevitably occur, please define: who receives disputes first (MiliPay, the merchant, or the bank), and what the target resolution time is. This will also matter to banking partners during due diligence.
+15. Registration Workflow
+Registration is agent-mediated rather than fully self-service, which is a deliberate control point for identity assurance.
+Customer approaches or is approached by an authorized MiliPay agent (a MiliPay employee, not a third-party contractor under the current brief).
+Agent captures: full name, email address, phone number, NIN (National Identification Number).
+Agent captures biometric data: two left-hand fingerprints, two right-hand fingerprints, and a palm print (held as backup authentication).
+Agent submits enrollment through the agent registration application/dashboard.
+Backend stores enrollment data and biometric templates, and the customer's profile becomes active for account linking.
+Customer links one or more bank accounts, designating a default account for payments.
+Panel Note — Cybersecurity Consultant & Banking/Payment Infrastructure Expert perspective
+NIN capture should be verified against NIMC's records (not merely recorded as entered) to prevent enrollment fraud — please confirm whether NIN verification via NIMC's API is part of the current or planned build.
+Biometric templates should never be stored as raw images if avoidable; store irreversible templates/hashes where the matching algorithm supports it, encrypted at rest, with strict access controls and audit logging on every read.
+Recommend a documented agent vetting and background-check process, since agents are the single most sensitive trust point in the entire system — they have access to customers' identity and biometric data.
+Open question: what happens if a customer needs to re-enroll (e.g., fingerprint damage, disputed enrollment, or agent misconduct)? A revocation/re-enrollment procedure should be defined before pilot.
+16. Payment Workflow
+Customer shops at a MiliPay-enabled merchant.
+Merchant selects MiliPay as the payment method on the POS device.
+Customer selects which linked bank account to debit, or uses their default account.
+Customer authenticates via fingerprint.
+If fingerprint authentication fails: palm print is attempted; if that fails, a secure passcode is used as final fallback.
+On successful authentication, a payment instruction is sent to debit the selected account at the customer's bank.
+MiliPay does not custody funds at any point in this flow — funds move from the customer's bank account toward settlement with the merchant.
+17. System Overview
+At a high level, the system consists of four cooperating surfaces around a central backend:
+Customer mobile app (React Native) ↔ Backend (Supabase) — enrollment status, account linking, transaction history.
+Agent app/dashboard ↔ Backend — enrollment submission, biometric capture upload.
+Merchant biometric POS device ↔ Backend — live authentication requests and match results.
+Backend ↔ Partner bank(s) / payment switch — payment-instruction routing after successful authentication.
+The prototype currently implements the first two surfaces; the POS-device integration and the bank/switch integration are the two components with the largest remaining technical and partnership uncertainty.
+18. Technology Stack
+Layer
+Current / Planned
+Status
+Customer mobile app
+React Native
+In development
+Agent app/dashboard
+Not specified 
+Open — please confirm (web dashboard vs. mobile app vs. both)
+Backend / database
+Supabase (Postgres-based)
+In development
+Biometric matching engine
+Not specified 
+Open — in-house vs. licensed SDK (e.g., a certified fingerprint SDK/algorithm vendor) needs a decision
+POS hardware
+Certified biometric POS devices (vendor not specified)
+Open — vendor selection and certification pending
+Bank / payment-switch integration
+Not specified
+Open — see Section 16 panel note
+Panel Note — Systems Architect perspective
+Supabase is a reasonable choice for early-stage velocity, but for a system handling biometric templates and payment instructions, plan an explicit migration or hardening path before scale: dedicated encryption-at-rest key management, network isolation for the matching engine, and a clear boundary so that a Supabase misconfiguration cannot expose biometric data (this is a common real-world failure mode for early fintech backends). Recommend a security architecture review before any pilot goes live with real customer biometrics.
+19. Business Model
+The brief describes the business model as provisional. The founding team is evaluating several potential revenue streams:
+Merchant transaction fees — a per-transaction or percentage fee charged to merchants, similar to card-scheme interchange models.
+Strategic bank partnerships — potential revenue-share or integration-fee arrangements with partner banks.
+Biometric POS distribution — selling or leasing certified devices to merchants.
+Enterprise services — potential B2B offerings (e.g., biometric authentication as a service for other platforms).
+Panel Note — VC Investor & FinTech Consultant perspective
+Investors will want to see at least a working hypothesis with rough magnitudes even at seed stage — e.g., 'we believe a X% merchant fee is viable based on comparable card-present interchange rates in Nigeria' — rather than four options with no lean. Recommend the team pick a primary hypothesis to lead with, while keeping the others as backup options, before the next investor conversation.
+Also recommend clarifying who bears the cost of POS hardware initially (MiliPay capex, merchant purchase, or bank-subsidized) since this materially affects both the balance sheet and the merchant-acquisition sales motion.
+20. Market Analysis
+Nigeria has a large and growing digital payments market, with strong existing rails (NIBSS Instant Payment, bank transfer apps, and USSD) alongside continued heavy reliance on physical cards at POS. A biometric authentication layer competes less with existing payment rails and more with the physical card as the authentication/authorization mechanism at the point of sale — a narrower and more specific wedge than 'payments' broadly.
+21. Competitive Advantage
+Not a wallet — by routing directly to existing bank accounts rather than holding stored value, MiliPay avoids competing with banks for deposits and likely faces a lighter regulatory burden than an e-money/wallet license would require (to be confirmed with counsel and CBN).
+Agent-mediated enrollment — a controlled, in-person identity-assurance step that is harder for pure app-based competitors to replicate quickly at the same trust level.
+Multi-factor biometric fallback (fingerprint → palm print → passcode) — reduces failed-transaction rate relative to single-modality biometric systems.
+First-mover potential in a biometric-specific POS category in Nigeria, if no direct competitor currently operates at this stage (this should be verified with current competitive research before being asserted to investors).
+22. SWOT Analysis
+Strengths
+Weaknesses
+Clear non-wallet positioning; multi-modal biometric fallback; agent-mediated identity assurance; direct bank settlement avoids funds-custody risk.
+Small team; unresolved settlement-rail decision; no finalized business model; no dedicated compliance/legal function; hardware distribution logistics unproven.
+Opportunities
+Threats
+Large underserved cardless-payment wedge in Nigeria; potential bank partnerships (banks may prefer this to competing wallets); pan-African expansion.
+Regulatory uncertainty (CBN classification of the model); incumbent card schemes and bank apps; biometric data breach reputational risk; merchant hardware adoption friction; agent-fraud risk.
+23. Risk Assessment
+Risk
+Category
+Mitigation (recommended)
+Biometric data breach
+Security / Reputational
+Encrypt templates at rest, avoid raw image storage, strict access controls, third-party security audit before launch.
+Regulatory reclassification as e-money/wallet issuer
+Regulatory
+Engage CBN early and in writing; keep architecture strictly non-custodial.
+Failed/disputed authentication at POS
+Operational
+Clear fallback UX; defined dispute-resolution SLA with merchants and banks.
+Agent enrollment fraud or misconduct
+Operational / Fraud
+Agent background checks, enrollment audit trails, NIN verification via NIMC.
+Bank integration delays
+Partnership / Technical
+Start conversations with at least one bank or licensed switch as early as possible; design backend to be rail-agnostic where feasible.
+POS hardware cost and distribution
+Financial / Operational
+Clarify capex ownership (Section 19); consider phased/leased distribution.
+Key-person dependency (4-person team)
+Organizational
+Documented runbooks, cross-training, and near-term hiring plan for compliance/QA.
+24. Assumptions
+MiliPay will operate strictly as a non-custodial biometric authentication and payment-initiation layer, never holding customer funds (explicitly stated in the brief).
+Agents referenced throughout are direct MiliPay employees, not third-party contractors (as stated).
+Fingerprint is the primary modality, palm print secondary, secure passcode the final fallback (as stated).
+The current prototype (React Native + Supabase) is a starting point and not necessarily the final production architecture.
+Phase 1 geography is Nigeria; Phase 2 is broader Africa, with no specific countries yet named.
+25. Constraints
+Small founding team with four functional roles and no dedicated legal/compliance or QA function at present.
+No finalized business model or revenue figures (Section 19).
+No confirmed banking or payment-switch partner at the time of this document.
+No confirmed biometric POS hardware vendor or matching-engine vendor.
+Regulatory posture (CBN classification, data protection obligations under NDPA 2023) not yet formally confirmed with regulators.
+26. Success Criteria
+A completed, demonstrable end-to-end prototype covering enrollment, authentication, and a simulated (or real) bank-debit instruction.
+At least one documented, substantive conversation with a licensed Nigerian bank or payment switch about integration.
+A defined, geographically-bounded pilot with real customers and merchants completed with an acceptable authentication success rate (target to be set by the team).
+No unresolved critical security findings from an independent security review prior to handling real biometric data.
+27. Key Performance Indicators (KPIs)
+KPI
+What it measures
+Fingerprint first-attempt match rate
+Primary-modality reliability at POS
+Fallback usage rate (palm print / passcode)
+How often the primary modality is insufficient
+Enrollment-to-active-user conversion
+Whether enrolled customers actually transact
+Average authentication-to-settlement time
+End-to-end transaction speed
+Transaction dispute rate
+Trust and reliability signal for banks and merchants
+Active merchants with working POS hardware
+Real-world distribution and uptime
+Security incidents / audit findings
+Security posture over time
+28. Roadmap
+Presented as sequential phases rather than fixed calendar dates, since no dates were provided in the brief. Please supply target dates to convert this into a dated roadmap.
+Phase 0 — Prototype hardening: complete registration and authentication flows; resolve settlement-rail decision; initial security review.
+Phase 1 — Pilot: single-city pilot with a defined number of agents, customers, and merchants; at least one bank/switch integration live (even if limited).
+Phase 2 — Controlled expansion: broaden within Nigeria based on pilot learnings; formalize business model based on real transaction data.
+Phase 3 — Scale (Nigeria): broader merchant and agent network; additional bank partnerships.
+Phase 4 — Africa expansion: market selection and regulatory groundwork for target countries (not yet named).
+29. Estimated Budget Categories
+No cost figures are invented here, consistent with the instruction not to fabricate unrealistic numbers. The categories below are the areas a seed-stage biometric payments company typically needs to budget for; actual figures should be filled in by the founding team based on real vendor quotes and hiring plans.
+Engineering — frontend, backend, and any additional hires (e.g., dedicated security).
+Biometric matching engine / SDK licensing (if not built in-house).
+POS hardware — unit cost, certification, and distribution logistics.
+Compliance & legal — regulatory engagement (CBN, NDPC), data protection compliance, contracts with banks and merchants.
+Security — audits, penetration testing, encryption/key-management infrastructure.
+Agent operations — recruitment, training, background checks, field support.
+Cloud/infrastructure — backend hosting, scaling costs as Supabase usage grows.
+Sales & merchant acquisition.
+General & administrative.
+30. Future Expansion Strategy
+Deepen Nigerian penetration before expanding, using pilot-city learnings to refine agent operations, hardware reliability, and bank integration patterns.
+Select Phase 2 African markets based on: existing national ID/biometric infrastructure maturity, mobile money/banking penetration, and regulatory openness to non-custodial payment-authentication models.
+Consider enterprise/B2B licensing of the biometric authentication layer as a separate expansion vector, independent of geographic expansion (per Section 19).
+31. Conclusion
+MiliPay's core insight — authenticate the person, not a physical card, while leaving funds custody with regulated banks — is a defensible and regulator-legible position for a Nigerian fintech at seed stage. The most urgent open items are: finalizing the settlement-rail decision with a banking or switch partner, resolving the business model to a single leading hypothesis, hardening the security architecture around biometric data before any real customer enrollment, and closing the small but real gaps in team coverage (compliance). None of these are unusual for a seed-stage company, but they are the items most likely to come up in the first substantive investor and bank conversations, and addressing them proactively — rather than reactively — will materially strengthen MiliPay's position.

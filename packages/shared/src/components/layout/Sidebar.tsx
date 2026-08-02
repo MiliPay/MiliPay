@@ -25,13 +25,8 @@ export function Sidebar() {
   return (
     <aside className="hidden md:flex w-64 flex-col justify-between border-r border-white/[0.05] bg-ledger-line shrink-0">
       <div className="p-6">
-        <div className="flex items-center gap-3 mb-9">
-          <div className="w-8 h-8 rounded bg-signal flex items-center justify-center font-display font-bold text-white shadow-[0_0_15px_rgba(var(--color-signal),0.4)] shrink-0">
-            A
-          </div>
-          <div className="min-w-0">
-            <span className="font-display font-medium text-xl tracking-tight truncate">BioPay Admin</span>
-          </div>
+        <div className="flex items-center gap-3 mb-9 mt-4 relative h-10 w-32 -ml-2">
+          <img src="/main.png" alt="MiliPay" className="absolute top-1/2 -translate-y-1/2 left-0 h-28 w-auto object-contain scale-125 origin-left" />
         </div>
 
         <nav className="flex flex-col gap-1">
