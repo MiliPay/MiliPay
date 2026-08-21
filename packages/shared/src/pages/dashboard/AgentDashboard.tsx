@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Plus, Clock, CheckCircle2, Search } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Button } from "@biopay/shared/components/ui/Button";
-import { Input } from "@biopay/shared/components/ui/Input";
-import { fetchCustomers } from "@biopay/shared/features/customers/api";
-import type { Customer } from "@biopay/shared/types";
+import { Button } from "@milipay/shared/components/ui/Button";
+import { Input } from "@milipay/shared/components/ui/Input";
+import { fetchCustomers } from "@milipay/shared/features/customers/api";
+import type { Customer } from "@milipay/shared/types";
 
 export function AgentDashboard() {
   const [customers, setCustomers] = useState<Customer[]>([]);

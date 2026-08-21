@@ -1,6 +1,6 @@
 import { useState, useCallback, type ReactNode } from "react";
 import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@biopay/shared/components/ui/Button";
+import { Button } from "@milipay/shared/components/ui/Button";
 
 export interface Column<T> {
   key: string;

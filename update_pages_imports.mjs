@@ -17,11 +17,11 @@ function rewriteImports(dir) {
       let changed = false;
 
       if (content.includes('@/pages/')) {
-        content = content.replace(/@\/pages\//g, '@biopay/shared/pages/');
+        content = content.replace(/@\/pages\//g, '@milipay/shared/pages/');
         changed = true;
       }
       if (content.includes('@/features/')) {
-        content = content.replace(/@\/features\//g, '@biopay/shared/features/');
+        content = content.replace(/@\/features\//g, '@milipay/shared/features/');
         changed = true;
       }
 

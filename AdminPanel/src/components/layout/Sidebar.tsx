@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { LayoutGrid, LogOut, Settings, UserPlus, Users, TrendingUp } from "lucide-react";
-import { useAuth } from "@biopay/shared/features/auth/AuthContext";
-import { ROUTES } from "@biopay/shared/lib/constants";
+import { useAuth } from "@milipay/shared/features/auth/AuthContext";
+import { ROUTES } from "@milipay/shared/lib/constants";
 
 const navLinkClasses = ({ isActive }: { isActive: boolean }) =>
   `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${

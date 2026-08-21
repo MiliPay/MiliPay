@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Search, AlertCircle, Clock, ShieldCheck, Activity } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@biopay/shared/components/ui/Button";
+import { Button } from "@milipay/shared/components/ui/Button";
 
 export function SupportDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -26,7 +26,7 @@ export function SupportDashboard() {
           </div>
           <h1 className="text-4xl font-display text-ink tracking-tight">Global Customer Lookup</h1>
           <p className="text-ink-muted text-lg max-w-xl mx-auto">
-            Search across the BioPay network by NIN, Phone Number, or full name to assist customers.
+            Search across the MiliPay network by NIN, Phone Number, or full name to assist customers.
           </p>
         </div>
 

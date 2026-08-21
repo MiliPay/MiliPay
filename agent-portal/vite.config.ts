@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      "@biopay/shared": path.resolve(__dirname, "../packages/shared/src"),
+      "@milipay/shared": path.resolve(__dirname, "../packages/shared/src"),
       "@": path.resolve(__dirname, "./src"),
     },
   },

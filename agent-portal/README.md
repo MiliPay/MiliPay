@@ -1,4 +1,4 @@
-# BioPay Admin Console
+# MiliPay Admin Console
 
 A from-scratch rebuild of the agent/admin console, structured for a team
 and a userbase that are both going to get a lot bigger.

@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { KeyRound, Mail, ShieldCheck, AlertTriangle } from "lucide-react";
-import { Input } from "@biopay/shared/components/ui/Input";
-import { Button } from "@biopay/shared/components/ui/Button";
-import { Card } from "@biopay/shared/components/ui/Card";
-import { useAuth } from "@biopay/shared/features/auth/AuthContext";
-import { ROUTES } from "@biopay/shared/lib/constants";
-import { loginSchema } from "@biopay/shared/features/auth/authSchema";
+import { Input } from "@milipay/shared/components/ui/Input";
+import { Button } from "@milipay/shared/components/ui/Button";
+import { Card } from "@milipay/shared/components/ui/Card";
+import { useAuth } from "@milipay/shared/features/auth/AuthContext";
+import { ROUTES } from "@milipay/shared/lib/constants";
+import { loginSchema } from "@milipay/shared/features/auth/authSchema";
 import { z } from "zod";
 
 export default function LoginPage() {
@@ -113,7 +113,7 @@ export default function LoginPage() {
             <Input
               label="Email Address"
               type="email"
-              placeholder="admin@biopay.app"
+              placeholder="admin@milipay.app"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="pl-11"

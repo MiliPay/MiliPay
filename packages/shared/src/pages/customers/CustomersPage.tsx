@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { DataTable, type Column } from "@biopay/shared/components/ui/DataTable";
-import { SearchInput } from "@biopay/shared/components/ui/SearchInput";
-import { FilterChips } from "@biopay/shared/components/ui/FilterChips";
-import { StatusBadge } from "@biopay/shared/components/ui/StatusBadge";
-import { fetchCustomers } from "@biopay/shared/features/customers/api";
-import { formatDate } from "@biopay/shared/lib/utils/format";
-import type { Customer, CustomerStatus, PaginatedResult } from "@biopay/shared/types";
+import { DataTable, type Column } from "@milipay/shared/components/ui/DataTable";
+import { SearchInput } from "@milipay/shared/components/ui/SearchInput";
+import { FilterChips } from "@milipay/shared/components/ui/FilterChips";
+import { StatusBadge } from "@milipay/shared/components/ui/StatusBadge";
+import { fetchCustomers } from "@milipay/shared/features/customers/api";
+import { formatDate } from "@milipay/shared/lib/utils/format";
+import type { Customer, CustomerStatus, PaginatedResult } from "@milipay/shared/types";
 
 export default function CustomersPage() {
   const [data, setData] = useState<PaginatedResult<Customer> | null>(null);

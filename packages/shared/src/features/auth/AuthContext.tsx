@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { Role, StaffUser } from "@biopay/shared/types";
-import { supabase } from "@biopay/shared/lib/supabase";
+import type { Role, StaffUser } from "@milipay/shared/types";
+import { supabase } from "@milipay/shared/lib/supabase";
 
 interface AuthContextValue {
   user: StaffUser | null;

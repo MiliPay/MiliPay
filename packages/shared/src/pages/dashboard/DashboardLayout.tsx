@@ -1,6 +1,6 @@
 import { Outlet } from "react-router-dom";
-import { Sidebar } from "@biopay/shared/components/layout/Sidebar";
-import { MobileNav } from "@biopay/shared/components/layout/MobileNav";
+import { Sidebar } from "@milipay/shared/components/layout/Sidebar";
+import { MobileNav } from "@milipay/shared/components/layout/MobileNav";
 
 export default function DashboardLayout() {
   return (

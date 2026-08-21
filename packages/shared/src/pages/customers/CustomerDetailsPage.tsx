@@ -1,16 +1,16 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, User, Mail, Phone, MapPin, Fingerprint, Ban, CheckCircle, Activity, Smartphone, ShieldCheck, Clock } from "lucide-react";
-import { Card } from "@biopay/shared/components/ui/Card";
-import { StatusBadge } from "@biopay/shared/components/ui/StatusBadge";
-import { DataTable, type Column } from "@biopay/shared/components/ui/DataTable";
-import { Button } from "@biopay/shared/components/ui/Button";
-import { fetchCustomerById, updateCustomerStatus, deleteCustomer } from "@biopay/shared/features/customers/api";
-import { fetchTransactionsByCustomerId } from "@biopay/shared/features/transactions/api";
-import { ROUTES } from "@biopay/shared/lib/constants";
-import { formatDate, formatNaira, formatTimestamp } from "@biopay/shared/lib/utils/format";
-import type { Customer, Transaction } from "@biopay/shared/types";
-import { useAuth } from "@biopay/shared/features/auth/AuthContext";
+import { Card } from "@milipay/shared/components/ui/Card";
+import { StatusBadge } from "@milipay/shared/components/ui/StatusBadge";
+import { DataTable, type Column } from "@milipay/shared/components/ui/DataTable";
+import { Button } from "@milipay/shared/components/ui/Button";
+import { fetchCustomerById, updateCustomerStatus, deleteCustomer } from "@milipay/shared/features/customers/api";
+import { fetchTransactionsByCustomerId } from "@milipay/shared/features/transactions/api";
+import { ROUTES } from "@milipay/shared/lib/constants";
+import { formatDate, formatNaira, formatTimestamp } from "@milipay/shared/lib/utils/format";
+import type { Customer, Transaction } from "@milipay/shared/types";
+import { useAuth } from "@milipay/shared/features/auth/AuthContext";
 
 export default function CustomerDetailsPage() {
   const { id } = useParams<{ id: string }>();

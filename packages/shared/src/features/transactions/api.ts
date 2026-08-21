@@ -1,5 +1,5 @@
-import { supabase } from "@biopay/shared/lib/supabase";
-import type { PaginatedResult, Transaction, TransactionStatus } from "@biopay/shared/types";
+import { supabase } from "@milipay/shared/lib/supabase";
+import type { PaginatedResult, Transaction, TransactionStatus } from "@milipay/shared/types";
 
 type DateRange = "today" | "7d" | "30d" | "all";
 

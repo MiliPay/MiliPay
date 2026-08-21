@@ -1,5 +1,5 @@
 {
-  "name": "biopay-workspace",
+  "name": "milipay-workspace",
   "private": true,
   "workspaces": [
     "AdminPanel",

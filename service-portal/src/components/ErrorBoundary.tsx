@@ -1,7 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
-import { Button } from "@biopay/shared/components/ui/Button";
-import { Card } from "@biopay/shared/components/ui/Card";
+import { Button } from "@milipay/shared/components/ui/Button";
+import { Card } from "@milipay/shared/components/ui/Card";
 
 interface ErrorBoundaryProps {
   children: ReactNode;

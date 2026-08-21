@@ -1,21 +1,21 @@
 {
   "projects": {
-    "default": "biopay-production"
+    "default": "milipay-production"
   },
   "targets": {
-    "biopay-production": {
+    "milipay-production": {
       "hosting": {
         "website": [
-          "biopay-ng"
+          "milipay-ng"
         ],
         "admin": [
-          "admin-biopay-ng"
+          "admin-milipay-ng"
         ],
         "agent": [
-          "agent-biopay-ng"
+          "agent-milipay-ng"
         ],
         "service": [
-          "service-biopay-ng"
+          "service-milipay-ng"
         ]
       }
     },

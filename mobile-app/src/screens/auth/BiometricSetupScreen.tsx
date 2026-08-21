@@ -88,7 +88,7 @@ export default function BiometricSetupScreen() {
           </Text>
           <Text className="text-white/50 text-base font-inter text-center max-w-[280px]">
             {isSuccess 
-              ? 'Your device is now securely linked to the BioPay network.' 
+              ? 'Your device is now securely linked to the MiliPay network.' 
               : 'Your fingerprint is now your wallet. Secure your account.'}
           </Text>
         </View>

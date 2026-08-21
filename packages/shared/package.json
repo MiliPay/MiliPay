@@ -1,5 +1,5 @@
 {
-  "name": "@biopay/shared",
+  "name": "@milipay/shared",
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {

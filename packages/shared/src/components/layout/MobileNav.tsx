@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { LayoutGrid, LogOut, UserPlus, Users, TrendingUp } from "lucide-react";
-import { useAuth } from "@biopay/shared/features/auth/AuthContext";
+import { useAuth } from "@milipay/shared/features/auth/AuthContext";
 import { ROUTES } from "@/lib/constants";
 
 const itemClasses = ({ isActive }: { isActive: boolean }) =>

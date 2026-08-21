@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, ArrowUpRight, Copy, Receipt, User, Store, ShieldCheck, MapPin, Network, Clock, CheckCircle2 } from "lucide-react";
-import { Card } from "@biopay/shared/components/ui/Card";
-import { StatusBadge } from "@biopay/shared/components/ui/StatusBadge";
-import { Button } from "@biopay/shared/components/ui/Button";
-import { fetchTransactionById } from "@biopay/shared/features/transactions/api";
-import { ROUTES } from "@biopay/shared/lib/constants";
-import { formatNaira, formatTimestamp } from "@biopay/shared/lib/utils/format";
-import type { Transaction } from "@biopay/shared/types";
+import { Card } from "@milipay/shared/components/ui/Card";
+import { StatusBadge } from "@milipay/shared/components/ui/StatusBadge";
+import { Button } from "@milipay/shared/components/ui/Button";
+import { fetchTransactionById } from "@milipay/shared/features/transactions/api";
+import { ROUTES } from "@milipay/shared/lib/constants";
+import { formatNaira, formatTimestamp } from "@milipay/shared/lib/utils/format";
+import type { Transaction } from "@milipay/shared/types";
 
 export default function TransactionDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -56,7 +56,7 @@ export default function TransactionDetailsPage() {
       ip,
       lat: lat.toFixed(4),
       lng: lng.toFixed(4),
-      method: charCodeSum % 2 === 0 ? "BioPay Wallet" : "Card Ending in 4242",
+      method: charCodeSum % 2 === 0 ? "MiliPay Wallet" : "Card Ending in 4242",
       processor: charCodeSum % 2 === 0 ? "Internal" : "NIBSS Interswitch",
       device: charCodeSum % 3 === 0 ? "iOS App" : (charCodeSum % 3 === 1 ? "Android App" : "Web Terminal")
     };

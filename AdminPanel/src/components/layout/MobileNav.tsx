@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { LayoutGrid, LogOut, UserPlus, Users, TrendingUp } from "lucide-react";
-import { useAuth } from "@biopay/shared/features/auth/AuthContext";
-import { ROUTES } from "@biopay/shared/lib/constants";
+import { useAuth } from "@milipay/shared/features/auth/AuthContext";
+import { ROUTES } from "@milipay/shared/lib/constants";
 
 const itemClasses = ({ isActive }: { isActive: boolean }) =>
   `flex flex-col items-center gap-1 ${isActive ? "text-signal" : "text-ink-faint"}`;

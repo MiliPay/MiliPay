@@ -1,5 +1,5 @@
 {
-  "name": "biopay-service-portal",
+  "name": "milipay-service-portal",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -11,7 +11,7 @@
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
-    "@biopay/shared": "*",
+    "@milipay/shared": "*",
     "@hookform/resolvers": "^3.3.4",
     "@supabase/supabase-js": "^2.109.0",
     "clsx": "^2.1.1",

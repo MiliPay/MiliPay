@@ -1,5 +1,5 @@
-import { supabase } from "@biopay/shared/lib/supabase";
-import type { StaffProfile, Role, PaginatedResult } from "@biopay/shared/types";
+import { supabase } from "@milipay/shared/lib/supabase";
+import type { StaffProfile, Role, PaginatedResult } from "@milipay/shared/types";
 
 export async function fetchStaffList(options: {
   page?: number;

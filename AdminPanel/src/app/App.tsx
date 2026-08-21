@@ -1,20 +1,20 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { AuthProvider } from "@biopay/shared/features/auth/AuthContext";
-import { ProtectedRoute } from "@biopay/shared/components/layout/ProtectedRoute";
-import { ROUTES } from "@biopay/shared/lib/constants";
+import { AuthProvider } from "@milipay/shared/features/auth/AuthContext";
+import { ProtectedRoute } from "@milipay/shared/components/layout/ProtectedRoute";
+import { ROUTES } from "@milipay/shared/lib/constants";
 
 
-import LoginPage from "@biopay/shared/pages/login/LoginPage";
-import DashboardLayout from "@biopay/shared/pages/dashboard/DashboardLayout";
-import Overview from "@biopay/shared/pages/dashboard/Overview";
-import RegisterCustomerPage from "@biopay/shared/pages/register-customer/RegisterCustomerPage";
-import CustomersPage from "@biopay/shared/pages/customers/CustomersPage";
-import CustomerDetailsPage from "@biopay/shared/pages/customers/CustomerDetailsPage";
-import TransactionsPage from "@biopay/shared/pages/transactions/TransactionsPage";
-import TransactionDetailsPage from "@biopay/shared/pages/transactions/TransactionDetailsPage";
-import SettingsPage from "@biopay/shared/pages/settings/SettingsPage";
-import StaffPage from "@biopay/shared/pages/staff/StaffPage";
-import NotFoundPage from "@biopay/shared/pages/not-found/NotFoundPage";
+import LoginPage from "@milipay/shared/pages/login/LoginPage";
+import DashboardLayout from "@milipay/shared/pages/dashboard/DashboardLayout";
+import Overview from "@milipay/shared/pages/dashboard/Overview";
+import RegisterCustomerPage from "@milipay/shared/pages/register-customer/RegisterCustomerPage";
+import CustomersPage from "@milipay/shared/pages/customers/CustomersPage";
+import CustomerDetailsPage from "@milipay/shared/pages/customers/CustomerDetailsPage";
+import TransactionsPage from "@milipay/shared/pages/transactions/TransactionsPage";
+import TransactionDetailsPage from "@milipay/shared/pages/transactions/TransactionDetailsPage";
+import SettingsPage from "@milipay/shared/pages/settings/SettingsPage";
+import StaffPage from "@milipay/shared/pages/staff/StaffPage";
+import NotFoundPage from "@milipay/shared/pages/not-found/NotFoundPage";
 
 export default function App() {
   return (

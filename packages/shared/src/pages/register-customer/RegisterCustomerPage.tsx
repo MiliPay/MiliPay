@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { Check, Lock, ShieldAlert } from "lucide-react";
-import { Input } from "@biopay/shared/components/ui/Input";
-import { Select } from "@biopay/shared/components/ui/Select";
-import { Button } from "@biopay/shared/components/ui/Button";
-import { Card } from "@biopay/shared/components/ui/Card";
-import { MultiFingerSelector, type FingerName } from "@biopay/shared/components/ui/MultiFingerSelector";
-import { StepProgress } from "@biopay/shared/components/ui/StepProgress";
-import { NIGERIAN_STATES } from "@biopay/shared/lib/constants";
-import { validateCustomerDraft, type FieldError } from "@biopay/shared/lib/utils/validation";
-import { registerCustomer } from "@biopay/shared/features/customers/api";
-import { EMPTY_CUSTOMER_DRAFT, type CustomerDraft } from "@biopay/shared/types";
+import { Input } from "@milipay/shared/components/ui/Input";
+import { Select } from "@milipay/shared/components/ui/Select";
+import { Button } from "@milipay/shared/components/ui/Button";
+import { Card } from "@milipay/shared/components/ui/Card";
+import { MultiFingerSelector, type FingerName } from "@milipay/shared/components/ui/MultiFingerSelector";
+import { StepProgress } from "@milipay/shared/components/ui/StepProgress";
+import { NIGERIAN_STATES } from "@milipay/shared/lib/constants";
+import { validateCustomerDraft, type FieldError } from "@milipay/shared/lib/utils/validation";
+import { registerCustomer } from "@milipay/shared/features/customers/api";
+import { EMPTY_CUSTOMER_DRAFT, type CustomerDraft } from "@milipay/shared/types";
 
 const STEPS = [
   { id: 1, label: "Personal" },

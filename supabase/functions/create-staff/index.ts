@@ -69,7 +69,7 @@ serve(async (req) => {
 
     // 3. Create the user in Auth
     console.log("Creating user in Auth...");
-    const tempPassword = 'BioPay123!';
+    const tempPassword = 'MiliPay123!';
     
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: email,

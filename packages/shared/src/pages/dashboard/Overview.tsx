@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { UserPlus, ArrowRight, TrendingUp } from "lucide-react";
-import { LiveLedgerStrip } from "@biopay/shared/components/layout/LiveLedgerStrip";
-import { Card } from "@biopay/shared/components/ui/Card";
-import { ROUTES } from "@biopay/shared/lib/constants";
-import { fetchDashboardStats, fetchRecentTransactions } from "@biopay/shared/features/transactions/api";
-import { formatNaira } from "@biopay/shared/lib/utils/format";
-import type { Transaction } from "@biopay/shared/types";
+import { LiveLedgerStrip } from "@milipay/shared/components/layout/LiveLedgerStrip";
+import { Card } from "@milipay/shared/components/ui/Card";
+import { ROUTES } from "@milipay/shared/lib/constants";
+import { fetchDashboardStats, fetchRecentTransactions } from "@milipay/shared/features/transactions/api";
+import { formatNaira } from "@milipay/shared/lib/utils/format";
+import type { Transaction } from "@milipay/shared/types";
 
 export default function Overview() {
   const [stats, setStats] = useState<{

@@ -8,7 +8,7 @@
     "skipLibCheck": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@biopay/shared/*": ["../packages/shared/src/*"]
+      "@milipay/shared/*": ["../packages/shared/src/*"]
     },
 
     /* Bundler mode */

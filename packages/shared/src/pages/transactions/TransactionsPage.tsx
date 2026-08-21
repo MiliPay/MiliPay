@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { DataTable, type Column } from "@biopay/shared/components/ui/DataTable";
-import { FilterChips } from "@biopay/shared/components/ui/FilterChips";
-import { StatusBadge } from "@biopay/shared/components/ui/StatusBadge";
-import { fetchTransactions } from "@biopay/shared/features/transactions/api";
-import { formatNaira, formatDate, formatTimestamp } from "@biopay/shared/lib/utils/format";
-import type { Transaction, TransactionStatus, PaginatedResult } from "@biopay/shared/types";
+import { DataTable, type Column } from "@milipay/shared/components/ui/DataTable";
+import { FilterChips } from "@milipay/shared/components/ui/FilterChips";
+import { StatusBadge } from "@milipay/shared/components/ui/StatusBadge";
+import { fetchTransactions } from "@milipay/shared/features/transactions/api";
+import { formatNaira, formatDate, formatTimestamp } from "@milipay/shared/lib/utils/format";
+import type { Transaction, TransactionStatus, PaginatedResult } from "@milipay/shared/types";
 
 type DateRange = "today" | "7d" | "30d" | "all";
 

@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
-import { DataTable } from "@biopay/shared/components/ui/DataTable";
-import { SearchInput } from "@biopay/shared/components/ui/SearchInput";
-import { FilterChips } from "@biopay/shared/components/ui/FilterChips";
-import { Button } from "@biopay/shared/components/ui/Button";
-import { fetchStaffList, toggleStaffStatus } from "@biopay/shared/features/staff/api";
-import type { StaffProfile, Role } from "@biopay/shared/types";
-import { formatDate } from "@biopay/shared/lib/utils/format";
+import { DataTable } from "@milipay/shared/components/ui/DataTable";
+import { SearchInput } from "@milipay/shared/components/ui/SearchInput";
+import { FilterChips } from "@milipay/shared/components/ui/FilterChips";
+import { Button } from "@milipay/shared/components/ui/Button";
+import { fetchStaffList, toggleStaffStatus } from "@milipay/shared/features/staff/api";
+import type { StaffProfile, Role } from "@milipay/shared/types";
+import { formatDate } from "@milipay/shared/lib/utils/format";
 import { Shield, Users, Headset, UserPlus, Ban, CheckCircle } from "lucide-react";
 import { CreateStaffModal } from "./CreateStaffModal";
 

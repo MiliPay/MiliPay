@@ -1,1 +1,1 @@
-# BioPay
+# MiliPay

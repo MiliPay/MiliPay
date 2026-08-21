@@ -1,4 +1,4 @@
-project_id = "biopay"
+project_id = "milipay"
 
 [api]
 port = 54321

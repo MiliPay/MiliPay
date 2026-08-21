@@ -22,7 +22,7 @@ export function AgentLayout() {
             <div className="w-8 h-8 rounded bg-signal flex items-center justify-center font-display font-bold text-white shadow-[0_0_15px_rgba(var(--color-signal),0.4)]">
               B
             </div>
-            <span className="font-display font-medium text-xl tracking-tight">BioPay Agent</span>
+            <span className="font-display font-medium text-xl tracking-tight">MiliPay Agent</span>
           </div>
         </div>
 

@@ -70,7 +70,7 @@ function randomDate(daysBack) {
 }
 
 async function seed() {
-  console.log('🌱 Seeding BioPay database...\n');
+  console.log('🌱 Seeding MiliPay database...\n');
 
   // Step 1: Fetch random user avatars/emails from randomuser.me
   let apiUsers = [];

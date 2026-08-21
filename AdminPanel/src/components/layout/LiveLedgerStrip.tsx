@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import type { Transaction } from "@biopay/shared/types";
-import { formatNaira } from "@biopay/shared/lib/utils/format";
+import type { Transaction } from "@milipay/shared/types";
+import { formatNaira } from "@milipay/shared/lib/utils/format";
 
 interface LiveLedgerStripProps {
   transactions: Transaction[];

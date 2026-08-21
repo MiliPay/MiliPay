@@ -95,7 +95,7 @@ export default function LoginScreen() {
             
             <View className="mt-8 flex-row justify-center">
               <Text className="text-white/40 font-inter text-sm">
-                Protected by BioPay Security Infrastructure
+                Protected by MiliPay Security Infrastructure
               </Text>
             </View>
           </View>

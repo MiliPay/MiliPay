@@ -1,7 +1,7 @@
-import { useAuth } from "@biopay/shared/features/auth/AuthContext";
-import { Card } from "@biopay/shared/components/ui/Card";
-import { Input } from "@biopay/shared/components/ui/Input";
-import { Button } from "@biopay/shared/components/ui/Button";
+import { useAuth } from "@milipay/shared/features/auth/AuthContext";
+import { Card } from "@milipay/shared/components/ui/Card";
+import { Input } from "@milipay/shared/components/ui/Input";
+import { Button } from "@milipay/shared/components/ui/Button";
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -76,7 +76,7 @@ export default function SettingsPage() {
           <div className="space-y-2 text-sm">
             <div className="flex justify-between py-2 border-b border-ledger-line">
               <span className="text-ink-muted">App Name</span>
-              <span className="text-ink font-medium">BioPay Agent Console</span>
+              <span className="text-ink font-medium">MiliPay Agent Console</span>
             </div>
             <div className="flex justify-between py-2 border-b border-ledger-line">
               <span className="text-ink-muted">Version</span>

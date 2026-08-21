@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
-import { Button } from "@biopay/shared/components/ui/Button";
-import { Card } from "@biopay/shared/components/ui/Card";
-import { ROUTES } from "@biopay/shared/lib/constants";
+import { Button } from "@milipay/shared/components/ui/Button";
+import { Card } from "@milipay/shared/components/ui/Card";
+import { ROUTES } from "@milipay/shared/lib/constants";
 
 export default function NotFoundPage() {
   const navigate = useNavigate();

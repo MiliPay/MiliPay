@@ -1,12 +1,12 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "@biopay/shared/features/auth/AuthContext";
-import { ProtectedRoute } from "@biopay/shared/components/layout/ProtectedRoute";
-import { ServiceLayout } from "@biopay/shared/components/layout/ServiceLayout";
-import LoginPage from "@biopay/shared/pages/login/LoginPage";
-import { SupportDashboard } from "@biopay/shared/pages/dashboard/SupportDashboard";
-import CustomersPage from "@biopay/shared/pages/customers/CustomersPage";
-import CustomerDetailsPage from "@biopay/shared/pages/customers/CustomerDetailsPage";
-import { ComplaintsDesk } from "@biopay/shared/pages/complaints/ComplaintsDesk";
+import { AuthProvider } from "@milipay/shared/features/auth/AuthContext";
+import { ProtectedRoute } from "@milipay/shared/components/layout/ProtectedRoute";
+import { ServiceLayout } from "@milipay/shared/components/layout/ServiceLayout";
+import LoginPage from "@milipay/shared/pages/login/LoginPage";
+import { SupportDashboard } from "@milipay/shared/pages/dashboard/SupportDashboard";
+import CustomersPage from "@milipay/shared/pages/customers/CustomersPage";
+import CustomerDetailsPage from "@milipay/shared/pages/customers/CustomerDetailsPage";
+import { ComplaintsDesk } from "@milipay/shared/pages/complaints/ComplaintsDesk";
 
 export default function App() {
   return (

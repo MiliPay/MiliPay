@@ -19,7 +19,7 @@ export function ComplaintsDesk() {
               <MessageSquareWarning className="w-8 h-8 text-status-warning" />
               Complaints Desk
             </h1>
-            <p className="text-ink-muted mt-1">Manage and resolve issues submitted from the BioPay app.</p>
+            <p className="text-ink-muted mt-1">Manage and resolve issues submitted from the MiliPay app.</p>
           </div>
           <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.05] border border-white/[0.1] text-ink hover:bg-white/[0.1] transition-colors">
             <Filter className="w-4 h-4" />

@@ -1,9 +1,9 @@
 import React, { useState } from "react";
-import { Modal } from "@biopay/shared/components/ui/Modal";
-import { Input } from "@biopay/shared/components/ui/Input";
-import { Button } from "@biopay/shared/components/ui/Button";
-import { createStaffMember } from "@biopay/shared/features/staff/api";
-import type { Role } from "@biopay/shared/types";
+import { Modal } from "@milipay/shared/components/ui/Modal";
+import { Input } from "@milipay/shared/components/ui/Input";
+import { Button } from "@milipay/shared/components/ui/Button";
+import { createStaffMember } from "@milipay/shared/features/staff/api";
+import type { Role } from "@milipay/shared/types";
 
 interface CreateStaffModalProps {
   isOpen: boolean;
@@ -70,7 +70,7 @@ export function CreateStaffModal({ isOpen, onClose, onSuccess }: CreateStaffModa
               label="Email Address" 
               name="email"
               type="email"
-              placeholder="name@biopay.ng"
+              placeholder="name@milipay.ng"
               value={formData.email}
               onChange={handleChange}
               required 
@@ -116,7 +116,7 @@ export function CreateStaffModal({ isOpen, onClose, onSuccess }: CreateStaffModa
           <div className="p-4 bg-signal/5 border border-signal/20 rounded-lg">
             <p className="text-sm text-signal-bright font-medium mb-1">Temporary Password</p>
             <p className="text-xs text-ink-muted">
-              The user will be created with the temporary password <code className="font-mono bg-ledger px-1 py-0.5 rounded text-white">BioPay123!</code>. 
+              The user will be created with the temporary password <code className="font-mono bg-ledger px-1 py-0.5 rounded text-white">MiliPay123!</code>. 
               They will be required to change it upon their first login.
             </p>
           </div>

@@ -1,4 +1,4 @@
-import type { CustomerStatus, TransactionStatus } from "@biopay/shared/types";
+import type { CustomerStatus, TransactionStatus } from "@milipay/shared/types";
 
 type Status = CustomerStatus | TransactionStatus;
 

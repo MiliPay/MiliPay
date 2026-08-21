@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
-import { useAuth } from "@biopay/shared/features/auth/AuthContext";
-import { ROUTES } from "@biopay/shared/lib/constants";
+import { useAuth } from "@milipay/shared/features/auth/AuthContext";
+import { ROUTES } from "@milipay/shared/lib/constants";
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();

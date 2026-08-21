@@ -1,5 +1,5 @@
-import { supabase } from "@biopay/shared/lib/supabase";
-import type { Customer, CustomerDraft, CustomerStatus, PaginatedResult } from "@biopay/shared/types";
+import { supabase } from "@milipay/shared/lib/supabase";
+import type { Customer, CustomerDraft, CustomerStatus, PaginatedResult } from "@milipay/shared/types";
 
 interface FetchCustomersOptions {
   page?: number;

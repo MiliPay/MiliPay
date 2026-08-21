@@ -20,7 +20,7 @@ export function ServiceLayout() {
             <div className="w-8 h-8 rounded bg-status-info flex items-center justify-center font-display font-bold text-white shadow-[0_0_15px_rgba(59,130,246,0.4)]">
               S
             </div>
-            <span className="font-display font-medium text-xl tracking-tight">BioPay Service</span>
+            <span className="font-display font-medium text-xl tracking-tight">MiliPay Service</span>
           </div>
         </div>
 
