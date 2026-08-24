@@ -53,7 +53,7 @@ export function ServiceLayout() {
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
+      <main className="flex-1 min-w-0 h-screen overflow-y-auto pb-20 md:pb-0">
         <Outlet />
       </main>
     </div>

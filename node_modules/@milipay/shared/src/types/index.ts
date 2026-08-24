@@ -6,6 +6,8 @@ export interface StaffUser {
   email: string;
   phone: string;
   role: Role;
+  nin?: string;
+  ninLast4?: string;
 }
 
 export type StaffStatus = "active" | "suspended";
@@ -17,7 +19,14 @@ export interface StaffProfile extends StaffUser {
   registrationsCount?: number;
 }
 
-export type CustomerStatus = "pending" | "active" | "suspended";
+export interface CreatedStaffResult {
+  profile: StaffProfile;
+  tempPassword: string;
+  portalUrl: string;
+  portalName: string;
+}
+
+export type CustomerStatus = "pending" | "active" | "suspended" | "rejected";
 
 export interface Customer {
   id: string;
@@ -30,6 +39,19 @@ export interface Customer {
   capturedFingers: string[];
   linkedAccountCount: number;
   createdAt: string;
+  authUserId?: string;
+  registeredBy?: string;
+  verifiedBy?: string;
+  verifiedAt?: string;
+  rejectionReason?: string;
+}
+
+export interface CustomerRegistrationResult {
+  customerId: string;
+  status: CustomerStatus;
+  tempPassword?: string;
+  smsDispatched: boolean;
+  requiresAdminVerification: boolean;
 }
 
 export type TransactionStatus = "success" | "failed" | "pending";

@@ -57,26 +57,37 @@ serve(async (req) => {
     console.log("Parsing body...");
     const body = await req.json();
     console.log("Body:", body);
-    const { fullName, email, phone, role, state } = body;
+    const { fullName, email, phone, nin, role, state, password } = body;
 
-    if (!email || !fullName || !phone || !role) {
+    if (!email || !fullName || !phone || !role || !nin) {
       console.log("Missing required fields");
-      return new Response(JSON.stringify({ error: 'Missing required fields' }), {
+      return new Response(JSON.stringify({ error: 'Missing required fields: fullName, email, phone, nin, and role are required.' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // 3. Create the user in Auth
+    if (nin.length !== 11) {
+      return new Response(JSON.stringify({ error: 'National Identification Number (NIN) must be exactly 11 digits.' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // 3. Create the user in Auth with default temporary password
     console.log("Creating user in Auth...");
-    const tempPassword = 'MiliPay123!';
+    const tempPassword = 'Password12$';
     
+    const ninLast4 = nin.slice(-4);
+
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: email,
       password: tempPassword,
       email_confirm: true,
       user_metadata: {
         full_name: fullName,
+        nin_last_4: ninLast4,
+        must_change_password: true,
       },
       app_metadata: {
         role: role,
@@ -97,6 +108,8 @@ serve(async (req) => {
         full_name: fullName,
         email: email,
         phone: phone,
+        nin: nin,
+        nin_last_4: ninLast4,
         role: role,
         state: state || null,
         status: 'active'
@@ -112,6 +125,7 @@ serve(async (req) => {
     console.log("Success!");
     return new Response(JSON.stringify({ 
       user: newUser.user, 
+      tempPassword: tempPassword,
       message: 'Staff created successfully' 
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

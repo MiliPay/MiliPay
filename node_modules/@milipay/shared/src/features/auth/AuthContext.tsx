@@ -40,12 +40,33 @@ export function AuthProvider({ children, allowedRoles }: { children: ReactNode, 
     return () => subscription.unsubscribe();
   }, []);
 
-  function mapSupabaseUser(supabaseUser: any) {
-    const role = supabaseUser.app_metadata?.role as Role;
+  async function mapSupabaseUser(supabaseUser: any) {
+    let role = supabaseUser.app_metadata?.role as Role;
+    let fullName = supabaseUser.user_metadata?.full_name;
+    let phone = supabaseUser.phone;
+
+    // Fallback: If role is not in app_metadata, query staff_profiles by id or email
+    if (!role) {
+      try {
+        const { data: profile } = await supabase
+          .from('staff_profiles')
+          .select('role, full_name, phone')
+          .or(`id.eq.${supabaseUser.id},email.ilike.${supabaseUser.email}`)
+          .maybeSingle();
+
+        if (profile) {
+          role = profile.role as Role;
+          fullName = fullName || profile.full_name;
+          phone = phone || profile.phone;
+        }
+      } catch (err) {
+        console.warn("Could not fetch staff profile role fallback:", err);
+      }
+    }
 
     // STRICT SECURITY CHECK
-    if (allowedRoles && !allowedRoles.includes(role)) {
-      supabase.auth.signOut(); // Force log them out immediately
+    if (allowedRoles && (!role || !allowedRoles.includes(role))) {
+      await supabase.auth.signOut(); // Force log them out immediately
       setUser(null);
       setIsLoading(false);
       return;
@@ -53,18 +74,19 @@ export function AuthProvider({ children, allowedRoles }: { children: ReactNode, 
 
     setUser({
       id: supabaseUser.id,
-      fullName: supabaseUser.user_metadata?.full_name || "System User",
+      fullName: fullName || "System User",
       email: supabaseUser.email || "",
-      phone: supabaseUser.phone || "",
+      phone: phone || "",
       role: role,
     });
     setIsLoading(false);
   }
 
   const login = useCallback(async (email: string, password: string) => {
+    const cleanEmail = email.trim().toLowerCase();
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+      email: cleanEmail,
+      password: password.trim(),
     });
 
     if (error) {
@@ -72,12 +94,7 @@ export function AuthProvider({ children, allowedRoles }: { children: ReactNode, 
     }
     
     if (data.user) {
-      const role = data.user.app_metadata?.role as Role;
-      if (allowedRoles && !allowedRoles.includes(role)) {
-        await supabase.auth.signOut();
-        throw new Error("Access denied. You do not have the required privileges for this portal.");
-      }
-      mapSupabaseUser(data.user);
+      await mapSupabaseUser(data.user);
     }
   }, [allowedRoles]);
 
