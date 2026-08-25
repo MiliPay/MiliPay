@@ -14,7 +14,9 @@ export const ROUTES = {
   customerDetails: "/dashboard/customers/:id",
   transactions: "/dashboard/transactions",
   transactionDetails: "/dashboard/transactions/:id",
-  registerCustomer: "/dashboard/register",
+  register: "/dashboard/register",
+  registerCustomer: "/dashboard/register/customer",
   settings: "/dashboard/settings",
   staff: "/dashboard/staff",
+  staffDetails: "/dashboard/staff/:id",
 } as const;

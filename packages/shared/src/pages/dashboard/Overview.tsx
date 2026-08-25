@@ -15,6 +15,8 @@ export default function Overview() {
     volumeMTD: number;
     systemHealth: number;
     dailyRegistrations: number[];
+    pendingKYC: number;
+    activeStaff: number;
   } | null>(null);
   
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
@@ -56,15 +58,26 @@ export default function Overview() {
   return (
     <div className="p-6 md:p-10 max-w-6xl mx-auto space-y-8 animate-rise-in">
       <div className="mb-8">
-        <h1 className="text-2xl font-display font-bold text-ink">Overview</h1>
+        <h1 className="text-2xl font-display font-bold text-ink">Dashboard</h1>
         <p className="text-ink-muted mt-1">Network status and recent activity.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <StatCard 
           label="Total Customers" 
           value={isLoading ? "-" : new Intl.NumberFormat().format(stats!.totalCustomers)} 
           href={ROUTES.customers}
+        />
+        <StatCard 
+          label="Pending KYC" 
+          value={isLoading ? "-" : new Intl.NumberFormat().format(stats!.pendingKYC)} 
+          href={ROUTES.customers}
+          highlightWarn={!isLoading && stats!.pendingKYC > 0}
+        />
+        <StatCard 
+          label="Active Staff" 
+          value={isLoading ? "-" : new Intl.NumberFormat().format(stats!.activeStaff)} 
+          href={ROUTES.staff}
         />
         <StatCard 
           label="Transactions Today" 
@@ -166,12 +179,12 @@ export default function Overview() {
   );
 }
 
-function StatCard({ label, value, highlight, href }: { label: string; value: string; highlight?: boolean; href?: string }) {
+function StatCard({ label, value, highlight, highlightWarn, href }: { label: string; value: string; highlight?: boolean; highlightWarn?: boolean; href?: string }) {
   const content = (
     <Card raised className={`p-5 h-full ${href ? "hover:border-signal/50 transition-colors" : ""}`}>
       <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-2">{label}</p>
-      <p className={`text-2xl font-display font-bold ${highlight ? "text-status-ok" : "text-ink"}`}>
-        <span className={highlight ? "" : "font-data tracking-tight"}>{value}</span>
+      <p className={`text-2xl font-display font-bold ${highlight ? "text-status-ok" : highlightWarn ? "text-status-warning" : "text-ink"}`}>
+        <span className={(highlight || highlightWarn) ? "" : "font-data tracking-tight"}>{value}</span>
       </p>
     </Card>
   );

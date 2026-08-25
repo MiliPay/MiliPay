@@ -12,17 +12,22 @@ interface FetchCustomersOptions {
   pageSize?: number;
   search?: string;
   status?: CustomerStatus | "";
+  registeredBy?: string;
 }
 
 export async function fetchCustomers(
   options: FetchCustomersOptions = {}
 ): Promise<PaginatedResult<Customer>> {
-  const { page = 1, pageSize = 10, search = "", status = "" } = options;
+  const { page = 1, pageSize = 10, search = "", status = "", registeredBy } = options;
   
   let query = supabase.from('customers').select('*', { count: 'exact' });
   
   if (status) {
     query = query.eq('status', status);
+  }
+
+  if (registeredBy) {
+    query = query.eq('registered_by', registeredBy);
   }
   
   if (search) {
@@ -38,33 +43,79 @@ export async function fetchCustomers(
     console.error("Error fetching customers:", error);
     return { items: [], page, pageSize, totalCount: 0 };
   }
+
+  // Batch resolve staff details for registered_by and verified_by
+  const staffIds = Array.from(new Set(
+    (data || [])
+      .flatMap((r: any) => [r.registered_by, r.verified_by])
+      .filter(Boolean)
+  ));
+
+  const staffMap = new Map<string, { fullName: string; email: string; role: string; state?: string }>();
+
+  if (staffIds.length > 0) {
+    try {
+      const { data: staffRows } = await supabase
+        .from('staff_profiles')
+        .select('id, full_name, email, role, state')
+        .in('id', staffIds);
+
+      (staffRows || []).forEach((s: any) => {
+        staffMap.set(s.id, {
+          fullName: s.full_name,
+          email: s.email,
+          role: s.role,
+          state: s.state,
+        });
+      });
+    } catch (err) {
+      console.warn("Could not batch load staff profiles for customers:", err);
+    }
+  }
   
-  const mappedItems: Customer[] = (data || []).map((row: any) => ({
-    id: row.id,
-    fullName: `${row.first_name} ${row.last_name}`.trim(),
-    phone: row.phone,
-    email: row.email || "",
-    ninLast4: row.nin_last_4,
-    state: row.state,
-    status: row.status as CustomerStatus,
-    capturedFingers: row.captured_fingers || [],
-    linkedAccountCount: 0, 
-    authUserId: row.auth_user_id,
-    registeredBy: row.registered_by,
-    verifiedBy: row.verified_by,
-    verifiedAt: row.verified_at,
-    rejectionReason: row.rejection_reason,
-    createdAt: row.created_at
-  }));
+  const mappedItems: Customer[] = (data || []).map((row: any) => {
+    const regStaff = row.registered_by ? staffMap.get(row.registered_by) : undefined;
+    const verStaff = row.verified_by ? staffMap.get(row.verified_by) : undefined;
+
+    return {
+      id: row.id,
+      fullName: `${row.first_name} ${row.last_name}`.trim(),
+      phone: row.phone,
+      email: row.email || "",
+      ninLast4: row.nin_last_4,
+      state: row.state,
+      status: row.status as CustomerStatus,
+      capturedFingers: row.captured_fingers || [],
+      linkedAccountCount: 0, 
+      authUserId: row.auth_user_id,
+      registeredBy: row.registered_by,
+      registeredByName: regStaff?.fullName,
+      registeredByEmail: regStaff?.email,
+      registeredByRole: regStaff?.role,
+      registeredByState: regStaff?.state,
+      verifiedBy: row.verified_by,
+      verifiedByName: verStaff?.fullName,
+      verifiedByEmail: verStaff?.email,
+      verifiedAt: row.verified_at,
+      rejectionReason: row.rejection_reason,
+      createdAt: row.created_at
+    };
+  });
 
   return { items: mappedItems, page, pageSize, totalCount: count || 0 };
 }
 
-export async function fetchPendingCustomerCount(): Promise<number> {
-  const { count, error } = await supabase
+export async function fetchPendingCustomerCount(registeredBy?: string): Promise<number> {
+  let query = supabase
     .from('customers')
     .select('*', { count: 'exact', head: true })
     .eq('status', 'pending');
+
+  if (registeredBy) {
+    query = query.eq('registered_by', registeredBy);
+  }
+
+  const { count, error } = await query;
 
   if (error) {
     console.error("Error fetching pending customer count:", error);
@@ -210,11 +261,12 @@ export async function rejectCustomer(
 ): Promise<boolean> {
   const { data: session } = await supabase.auth.getSession();
   const accessToken = session.session?.access_token;
+  const rejectionReason = reason.trim() || "Did not meet identity verification criteria.";
 
   if (accessToken) {
     try {
       const { data: responseData, error: funcError } = await supabase.functions.invoke('reject-customer', {
-        body: { customerId, reason },
+        body: { customerId, reason: rejectionReason },
         headers: {
           Authorization: `Bearer ${accessToken}`
         }
@@ -231,7 +283,7 @@ export async function rejectCustomer(
   // Fallback to database RPC function
   const { error: rpcError } = await supabase.rpc('reject_customer_kyc', {
     target_customer_id: customerId,
-    reason: reason || "Did not meet KYC verification requirements",
+    reason: rejectionReason,
   });
 
   if (rpcError) {
@@ -242,7 +294,7 @@ export async function rejectCustomer(
       .update({
         status: 'rejected',
         verified_at: new Date().toISOString(),
-        rejection_reason: reason,
+        rejection_reason: rejectionReason,
       })
       .eq('id', customerId);
 
@@ -250,6 +302,8 @@ export async function rejectCustomer(
       throw new Error(dbError.message || "Failed to reject customer");
     }
   }
+
+  console.log(`[SMS DISPATCH SIMULATOR - REJECTION] Customer ${customerId} notified of rejection: "${rejectionReason}"`);
 
   return true;
 }
@@ -261,9 +315,40 @@ export async function fetchCustomerById(id: string): Promise<Customer | null> {
     .eq('id', id)
     .single();
 
-  if (error) {
+  if (error || !data) {
     console.error("Error fetching customer by id:", error);
     return null;
+  }
+
+  let registeredByName: string | undefined;
+  let registeredByEmail: string | undefined;
+  let registeredByRole: string | undefined;
+  let registeredByState: string | undefined;
+  let verifiedByName: string | undefined;
+  let verifiedByEmail: string | undefined;
+
+  const staffIds = [data.registered_by, data.verified_by].filter(Boolean);
+  if (staffIds.length > 0) {
+    try {
+      const { data: staffRows } = await supabase
+        .from('staff_profiles')
+        .select('id, full_name, email, role, state')
+        .in('id', staffIds);
+
+      const reg = (staffRows || []).find((s: any) => s.id === data.registered_by);
+      if (reg) {
+        registeredByName = reg.full_name;
+        registeredByEmail = reg.email;
+        registeredByRole = reg.role;
+        registeredByState = reg.state;
+      }
+
+      const ver = (staffRows || []).find((s: any) => s.id === data.verified_by);
+      if (ver) {
+        verifiedByName = ver.full_name;
+        verifiedByEmail = ver.email;
+      }
+    } catch (_) {}
   }
 
   return {
@@ -278,7 +363,13 @@ export async function fetchCustomerById(id: string): Promise<Customer | null> {
     linkedAccountCount: 0,
     authUserId: data.auth_user_id,
     registeredBy: data.registered_by,
+    registeredByName,
+    registeredByEmail,
+    registeredByRole,
+    registeredByState,
     verifiedBy: data.verified_by,
+    verifiedByName,
+    verifiedByEmail,
     verifiedAt: data.verified_at,
     rejectionReason: data.rejection_reason,
     createdAt: data.created_at

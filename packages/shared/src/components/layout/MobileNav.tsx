@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { LayoutGrid, LogOut, UserPlus, Users, TrendingUp } from "lucide-react";
 import { useAuth } from "@milipay/shared/features/auth/AuthContext";
-import { ROUTES } from "@/lib/constants";
+import { ROUTES } from "@milipay/shared/lib/constants";
 
 const itemClasses = ({ isActive }: { isActive: boolean }) =>
   `flex flex-col items-center gap-1 ${isActive ? "text-signal" : "text-ink-faint"}`;
@@ -31,7 +31,7 @@ export function MobileNav() {
         <span className="text-[10px] font-medium mt-1">Txns</span>
       </NavLink>
       {canRegister && (
-        <NavLink to={ROUTES.registerCustomer} className={itemClasses}>
+        <NavLink to={ROUTES.register} className={itemClasses}>
           <UserPlus className="w-5 h-5" />
           <span className="text-[10px] font-medium mt-1">Register</span>
         </NavLink>

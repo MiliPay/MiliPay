@@ -1,4 +1,3 @@
-
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@milipay/shared/features/auth/AuthContext";
 import { ProtectedRoute } from "@milipay/shared/components/layout/ProtectedRoute";
@@ -27,6 +26,10 @@ export default function App() {
             <Route path="/register" element={<RegisterCustomerPage />} />
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/customers/:id" element={<CustomerDetailsPage />} />
+            {/* Compatibility Aliases for shared /dashboard prefixes */}
+            <Route path="/dashboard/customers" element={<CustomersPage />} />
+            <Route path="/dashboard/customers/:id" element={<CustomerDetailsPage />} />
+            <Route path="/dashboard/register" element={<RegisterCustomerPage />} />
             <Route path="*" element={<div className="p-8">Coming Soon</div>} />
           </Route>
         </Routes>

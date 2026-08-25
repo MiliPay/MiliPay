@@ -17,10 +17,10 @@ export function ServiceLayout() {
       <aside className="w-64 border-r border-white/[0.05] bg-ledger-line flex flex-col">
         <div className="p-6">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded bg-status-info flex items-center justify-center font-display font-bold text-white shadow-[0_0_15px_rgba(59,130,246,0.4)]">
+            <div className="w-8 h-8 rounded bg-signal flex items-center justify-center font-display font-bold text-ink shadow-[0_0_15px_rgba(0,200,150,0.4)]">
               S
             </div>
-            <span className="font-display font-medium text-xl tracking-tight">MiliPay Service</span>
+            <span className="font-display font-medium text-xl tracking-tight text-white">MiliPay Service</span>
           </div>
         </div>
 
@@ -34,7 +34,7 @@ export function ServiceLayout() {
                 className={clsx(
                   "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200",
                   isActive
-                    ? "bg-status-info/10 text-status-info border border-status-info/20"
+                    ? "bg-signal/10 text-signal-bright border border-signal/20"
                     : "text-ink-muted hover:text-ink hover:bg-white/[0.03]"
                 )}
               >

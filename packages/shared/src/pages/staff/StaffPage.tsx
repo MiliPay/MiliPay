@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { DataTable } from "@milipay/shared/components/ui/DataTable";
 import { SearchInput } from "@milipay/shared/components/ui/SearchInput";
 import { FilterChips } from "@milipay/shared/components/ui/FilterChips";
@@ -48,11 +49,13 @@ export default function StaffPage() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<Role | "all">("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const navigate = useNavigate();
   
   // Deletion state
   const [staffToDelete, setStaffToDelete] = useState<StaffProfile | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -78,7 +81,7 @@ export default function StaffPage() {
   const handleToggleStatus = async (staffMember: StaffProfile) => {
     try {
       await toggleStaffStatus(staffMember.id);
-      loadData(); // Refresh list to get updated status
+      loadData();
     } catch (err) {
       console.error("Failed to update status", err);
     }
@@ -243,6 +246,7 @@ export default function StaffPage() {
         pageSize={10}
         totalCount={totalCount}
         onPageChange={setPage}
+        onRowClick={(row) => navigate(`/dashboard/staff/${row.id}`)}
         emptyMessage="No staff members found matching your filters."
       />
 

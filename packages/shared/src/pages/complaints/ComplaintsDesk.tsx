@@ -1,13 +1,27 @@
+import { useEffect, useState } from "react";
 import { MessageSquareWarning, Filter, MoreVertical, CheckCircle2 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { fetchSupportTickets } from "@milipay/shared/features/support/api";
+import type { SupportTicket } from "@milipay/shared/types";
+import { formatDate } from "@milipay/shared/lib/utils/format";
 
 export function ComplaintsDesk() {
-  const complaints = [
-    { id: "TKT-1092", user: "Adeola Okafor", issue: "Transfer failed but money was debited", status: "Open", urgency: "High", time: "10 mins ago" },
-    { id: "TKT-1091", user: "Musa Ibrahim", issue: "Cannot reset PIN via SMS", status: "In Progress", urgency: "Medium", time: "1 hour ago" },
-    { id: "TKT-1090", user: "Chidinma Eze", issue: "App crashes on biometric scan", status: "Open", urgency: "High", time: "2 hours ago" },
-    { id: "TKT-1089", user: "Lana Adesanya", issue: "Card delivery delayed", status: "Resolved", urgency: "Low", time: "Yesterday" },
-  ];
+  const [complaints, setComplaints] = useState<SupportTicket[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchSupportTickets().then((res) => {
+      setComplaints(res.items);
+      setIsLoading(false);
+    });
+  }, []);
+
+  const getSLAColor = (createdAt: string) => {
+    const hoursOpen = (new Date().getTime() - new Date(createdAt).getTime()) / (1000 * 60 * 60);
+    if (hoursOpen >= 4) return "bg-status-fail/10 text-status-fail border-status-fail/20"; // Red (Critical)
+    if (hoursOpen >= 2) return "bg-status-warning/10 text-status-warning border-status-warning/20"; // Yellow (Warning)
+    return "bg-white/[0.05] text-ink border-white/[0.1]"; // Default (Normal)
+  };
 
   return (
     <div className="flex-1 overflow-auto bg-ledger min-h-screen">
@@ -35,34 +49,60 @@ export function ComplaintsDesk() {
                 <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Customer</th>
                 <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Issue Description</th>
                 <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Status</th>
+                <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Assigned To</th>
                 <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.05]">
-              {complaints.map((ticket) => (
-                <tr key={ticket.id} className="hover:bg-white/[0.02] transition-colors group">
-                  <td className="p-4 font-mono text-sm text-ink-muted">{ticket.id}</td>
-                  <td className="p-4">
-                    <Link to={`/customer/cus_1001`} className="font-medium text-status-info hover:underline">
-                      {ticket.user}
-                    </Link>
-                  </td>
-                  <td className="p-4">
-                    <div className="text-sm text-ink">{ticket.issue}</div>
-                    <div className="text-xs text-ink-muted mt-0.5">{ticket.time}</div>
-                  </td>
-                  <td className="p-4">
-                    {ticket.status === "Open" && <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-status-fail/10 text-status-fail border border-status-fail/20">{ticket.status}</span>}
-                    {ticket.status === "In Progress" && <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-status-warning/10 text-status-warning border border-status-warning/20">{ticket.status}</span>}
-                    {ticket.status === "Resolved" && <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-status-ok/10 text-status-ok border border-status-ok/20"><CheckCircle2 className="w-3 h-3 mr-1"/>{ticket.status}</span>}
-                  </td>
-                  <td className="p-4">
-                    <button className="text-ink-muted hover:text-ink transition-colors">
-                      <MoreVertical className="w-5 h-5" />
-                    </button>
-                  </td>
+              {isLoading ? (
+                <tr>
+                  <td colSpan={6} className="p-8 text-center text-ink-muted">Loading tickets...</td>
                 </tr>
-              ))}
+              ) : complaints.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="p-8 text-center text-ink-muted">No tickets found.</td>
+                </tr>
+              ) : (
+                complaints.map((ticket) => (
+                  <tr 
+                    key={ticket.id} 
+                    className="hover:bg-white/[0.02] transition-colors group cursor-pointer"
+                    onClick={() => { window.location.href = `/complaints/${ticket.id}` }}
+                  >
+                    <td className="p-4 font-mono text-sm text-ink-muted">{ticket.ticketId}</td>
+                    <td className="p-4">
+                      {ticket.customerId ? (
+                        <Link to={`/customers/${ticket.customerId}`} className="font-medium text-status-info hover:underline">
+                          {ticket.customerName}
+                        </Link>
+                      ) : (
+                        <span className="text-ink-muted">Unknown</span>
+                      )}
+                    </td>
+                    <td className="p-4">
+                      <div className="text-sm text-ink font-medium">{ticket.issueDescription}</div>
+                      <div className="text-xs text-ink-muted mt-0.5">{formatDate(ticket.createdAt)}</div>
+                    </td>
+                    <td className="p-4">
+                      {ticket.status === "open" && (
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getSLAColor(ticket.createdAt)}`}>
+                          Open
+                        </span>
+                      )}
+                      {ticket.status === "in_progress" && <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-status-info/10 text-status-info border border-status-info/20">In Progress</span>}
+                      {ticket.status === "resolved" && <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-status-ok/10 text-status-ok border border-status-ok/20"><CheckCircle2 className="w-3 h-3 mr-1"/>Resolved</span>}
+                    </td>
+                    <td className="p-4 text-sm text-ink-muted">
+                      {ticket.assignedToName || "Unassigned"}
+                    </td>
+                    <td className="p-4">
+                      <button className="text-ink-muted hover:text-ink transition-colors">
+                        <MoreVertical className="w-5 h-5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

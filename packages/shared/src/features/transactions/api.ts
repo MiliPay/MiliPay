@@ -122,6 +122,8 @@ export interface DashboardStats {
   volumeMTD: number; // kobo
   systemHealth: number; // 0–100
   dailyRegistrations: number[];
+  pendingKYC: number;
+  activeStaff: number;
 }
 
 export async function fetchDashboardStats(): Promise<DashboardStats> {
@@ -182,12 +184,26 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
     });
   }
 
+  // Pending KYC
+  const { count: pendingKYC } = await supabase
+    .from("customers")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "pending");
+
+  // Active Staff
+  const { count: activeStaff } = await supabase
+    .from("staff_profiles")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "active");
+
   return {
     totalCustomers: totalCustomers || 0,
     transactionsToday: transactionsToday || 0,
     volumeMTD,
     systemHealth: 99.98,
     dailyRegistrations,
+    pendingKYC: pendingKYC || 0,
+    activeStaff: activeStaff || 0,
   };
 }
 

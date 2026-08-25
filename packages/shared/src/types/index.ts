@@ -28,6 +28,15 @@ export interface CreatedStaffResult {
 
 export type CustomerStatus = "pending" | "active" | "suspended" | "rejected";
 
+export const DEFAULT_REJECTION_REASONS = [
+  "NIN Identity Mismatch: Name or Date of Birth does not match National Identity Database.",
+  "Unclear Biometric Capture: Fingerprint scan quality is below standard threshold.",
+  "Invalid Phone Number: Unable to reach customer via phone/SMS.",
+  "Incomplete Residential Address: Street number or local government area missing.",
+  "Duplicate Registration: Customer identity already exists in system.",
+  "Other Reason",
+] as const;
+
 export interface Customer {
   id: string;
   fullName: string;
@@ -41,7 +50,13 @@ export interface Customer {
   createdAt: string;
   authUserId?: string;
   registeredBy?: string;
+  registeredByName?: string;
+  registeredByEmail?: string;
+  registeredByRole?: string;
+  registeredByState?: string;
   verifiedBy?: string;
+  verifiedByName?: string;
+  verifiedByEmail?: string;
   verifiedAt?: string;
   rejectionReason?: string;
 }
@@ -97,3 +112,36 @@ export const EMPTY_CUSTOMER_DRAFT: CustomerDraft = {
   state: "",
   capturedFingers: [],
 };
+
+export type TicketStatus = "open" | "in_progress" | "resolved";
+export type TicketUrgency = "low" | "medium" | "high" | "critical";
+
+export interface SupportTicket {
+  id: string;
+  ticketId: string;
+  customerId?: string;
+  customerName?: string;
+  customerPhone?: string;
+  issueDescription: string;
+  status: TicketStatus;
+  urgency: TicketUrgency;
+  assignedTo?: string;
+  assignedToName?: string;
+  createdBy?: string;
+  startedAt?: string;
+  resolvedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type MessageSenderType = "customer" | "staff" | "system";
+
+export interface TicketMessage {
+  id: string;
+  ticketId: string;
+  senderId?: string;
+  senderName?: string;
+  senderType: MessageSenderType;
+  content: string;
+  createdAt: string;
+}

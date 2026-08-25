@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { DataTable, type Column } from "@milipay/shared/components/ui/DataTable";
 import { SearchInput } from "@milipay/shared/components/ui/SearchInput";
 import { FilterChips } from "@milipay/shared/components/ui/FilterChips";
@@ -15,9 +15,14 @@ import {
   fetchPendingCustomerCount 
 } from "@milipay/shared/features/customers/api";
 import { formatDate } from "@milipay/shared/lib/utils/format";
-import type { Customer, CustomerStatus, PaginatedResult } from "@milipay/shared/types";
+import { 
+  DEFAULT_REJECTION_REASONS,
+  type Customer, 
+  type CustomerStatus, 
+  type PaginatedResult 
+} from "@milipay/shared/types";
 import { useAuth } from "@milipay/shared/features/auth/AuthContext";
-import { Trash2, AlertTriangle, CheckCircle, XCircle, Smartphone, ShieldCheck } from "lucide-react";
+import { Trash2, AlertTriangle, CheckCircle, XCircle, Smartphone, ShieldCheck, UserCheck } from "lucide-react";
 
 export default function CustomersPage() {
   const [data, setData] = useState<PaginatedResult<Customer> | null>(null);
@@ -27,6 +32,7 @@ export default function CustomersPage() {
   const [statusFilter, setStatusFilter] = useState<CustomerStatus | "all">("all");
   const [pendingCount, setPendingCount] = useState(0);
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
 
   const isAdmin = user?.role === "admin" || user?.role === "super_admin";
@@ -43,9 +49,11 @@ export default function CustomersPage() {
 
   // Rejection state
   const [customerToReject, setCustomerToReject] = useState<Customer | null>(null);
-  const [rejectReason, setRejectReason] = useState("");
+  const [rejectReason, setRejectReason] = useState<string>(DEFAULT_REJECTION_REASONS[0]);
   const [isRejecting, setIsRejecting] = useState(false);
   const [rejectError, setRejectError] = useState<string | null>(null);
+
+  const agentId = user?.role === 'agent' ? user.id : undefined;
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -55,9 +63,10 @@ export default function CustomersPage() {
           page, 
           pageSize: 10, 
           search, 
-          status: statusFilter === "all" ? "" : statusFilter 
+          status: statusFilter === "all" ? "" : statusFilter,
+          registeredBy: agentId 
         }),
-        fetchPendingCustomerCount()
+        fetchPendingCustomerCount(agentId)
       ]);
       setData(result);
       setPendingCount(count);
@@ -66,7 +75,7 @@ export default function CustomersPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [page, search, statusFilter]);
+  }, [page, search, statusFilter, agentId]);
 
   useEffect(() => {
     loadData();
@@ -109,7 +118,7 @@ export default function CustomersPage() {
     try {
       await rejectCustomer(customerToReject.id, rejectReason);
       setCustomerToReject(null);
-      setRejectReason("");
+      setRejectReason(DEFAULT_REJECTION_REASONS[0]);
       loadData();
     } catch (err: any) {
       setRejectError(err.message || "Failed to reject customer");
@@ -135,6 +144,23 @@ export default function CustomersPage() {
       render: (row) => <span className="font-data text-sm text-ink-muted">{row.phone}</span>,
     },
     {
+      key: "enrolled_by",
+      header: "Enrolled By",
+      render: (row) => (
+        row.registeredByName ? (
+          <div>
+            <span className="text-xs font-medium text-white block">{row.registeredByName}</span>
+            <span className="text-[10px] text-signal-bright uppercase font-semibold flex items-center gap-1">
+              <UserCheck className="w-3 h-3" />
+              {row.registeredByRole || "Agent"} {row.registeredByState ? `• ${row.registeredByState}` : ""}
+            </span>
+          </div>
+        ) : (
+          <span className="text-xs text-ink-muted italic">Direct Admin</span>
+        )
+      ),
+    },
+    {
       key: "state",
       header: "Territory / State",
       render: (row) => <span className="text-sm text-ink-muted">{row.state}</span>,
@@ -142,21 +168,21 @@ export default function CustomersPage() {
     {
       key: "status",
       header: "KYC Status",
-      render: (row) => <StatusBadge status={row.status} />,
+      render: (row) => (
+        <div className="space-y-0.5">
+          <StatusBadge status={row.status} />
+          {row.status === "rejected" && row.rejectionReason && (
+            <p className="text-[10px] text-status-fail line-clamp-1 max-w-[160px]" title={row.rejectionReason}>
+              {row.rejectionReason}
+            </p>
+          )}
+        </div>
+      ),
     },
     {
       key: "registered",
       header: "Registered",
       render: (row) => <span className="text-sm text-ink-faint">{formatDate(row.createdAt)}</span>,
-    },
-    {
-      key: "accounts",
-      header: "Banks",
-      render: (row) => (
-        <span className="font-data text-sm text-ink-muted bg-white/[0.04] px-2 py-0.5 rounded">
-          {row.linkedAccountCount}
-        </span>
-      ),
     },
     {
       key: "actions",
@@ -179,7 +205,7 @@ export default function CustomersPage() {
                 <button
                   onClick={() => {
                     setCustomerToReject(row);
-                    setRejectReason("");
+                    setRejectReason(DEFAULT_REJECTION_REASONS[0]);
                     setRejectError(null);
                   }}
                   className="p-1.5 rounded-lg text-status-warn hover:bg-status-warn/10 transition-colors"
@@ -210,8 +236,14 @@ export default function CustomersPage() {
   return (
     <div className="p-6 md:p-10 max-w-6xl mx-auto animate-rise-in">
       <div className="mb-8">
-        <h1 className="text-2xl font-display font-bold text-ink">Customer KYC &amp; Verification</h1>
-        <p className="text-ink-muted mt-1">Manage biometric identity enrollments and customer verifications.</p>
+        <h1 className="text-2xl font-display font-bold text-ink">
+          {user?.role === "agent" ? "Your Enrolled Customers" : "Customer KYC & Verification"}
+        </h1>
+        <p className="text-ink-muted mt-1 text-sm">
+          {user?.role === "agent" 
+            ? "Track and manage identity verification for customers you have enrolled." 
+            : "Manage biometric identity enrollments and customer verifications."}
+        </p>
       </div>
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -245,7 +277,10 @@ export default function CustomersPage() {
         pageSize={10}
         totalCount={data?.totalCount}
         onPageChange={setPage}
-        onRowClick={(row) => navigate(`/dashboard/customers/${row.id}`)}
+        onRowClick={(row) => {
+          const basePath = location.pathname.startsWith('/dashboard') ? '/dashboard/customers' : '/customers';
+          navigate(`${basePath}/${row.id}`);
+        }}
         rowKey={(row) => row.id}
         emptyMessage="No customers found matching your criteria."
       />
@@ -274,6 +309,10 @@ export default function CustomersPage() {
               <div className="flex justify-between py-1 border-b border-white/[0.05]">
                 <span className="text-ink-muted">Customer Name</span>
                 <span className="text-white font-medium">{customerToApprove.fullName}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-white/[0.05]">
+                <span className="text-ink-muted">Enrolled By</span>
+                <span className="text-signal-bright font-medium">{customerToApprove.registeredByName || "Direct Admin Enrollment"}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-white/[0.05]">
                 <span className="text-ink-muted">Phone Number (SMS Recipient)</span>
@@ -317,7 +356,7 @@ export default function CustomersPage() {
         </Modal>
       )}
 
-      {/* Reject Customer Modal */}
+      {/* Reject Customer Modal with Standard Default Reasons */}
       {customerToReject && (
         <Modal
           isOpen={!!customerToReject}
@@ -328,16 +367,45 @@ export default function CustomersPage() {
         >
           <div className="space-y-4">
             <p className="text-xs text-ink-muted leading-relaxed">
-              Rejecting enrollment for <strong className="text-white">{customerToReject.fullName}</strong>. Please provide a reason for the rejection:
+              Rejecting enrollment for <strong className="text-white">{customerToReject.fullName}</strong>. Select a standard rejection reason or specify a custom reason below:
             </p>
 
+            <div>
+              <label className="block text-[11px] font-semibold text-ink-muted uppercase tracking-wider mb-2">
+                Standard Rejection Reason (Click to select)
+              </label>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                {DEFAULT_REJECTION_REASONS.map((r, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setRejectReason(r === "Other Reason" ? "" : r)}
+                    className={`w-full text-left p-2.5 rounded-lg text-xs transition-all border ${
+                      rejectReason === r 
+                        ? "bg-status-warn/20 border-status-warn text-white font-medium shadow-sm" 
+                        : "bg-white/[0.02] border-white/[0.06] text-ink-muted hover:text-ink hover:bg-white/[0.06]"
+                    }`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <Input
-              label="Rejection Reason"
+              label="Selected Reason / Additional Message"
               placeholder="e.g. NIN name mismatch, unclear fingerprint capture..."
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               required
             />
+
+            <div className="p-3 bg-ledger-line rounded-lg border border-white/[0.08] flex items-center gap-2 text-xs text-ink-muted">
+              <Smartphone className="w-4 h-4 text-signal-bright shrink-0" />
+              <span>
+                An SMS with this rejection explanation will be dispatched to <strong className="text-white">{customerToReject.phone}</strong>.
+              </span>
+            </div>
 
             {rejectError && (
               <div className="p-3 bg-status-fail/10 border border-status-fail/30 rounded-lg text-xs text-status-fail">
@@ -356,11 +424,11 @@ export default function CustomersPage() {
               <button
                 type="button"
                 onClick={handleConfirmReject}
-                disabled={isRejecting}
+                disabled={isRejecting || !rejectReason.trim()}
                 className="px-4 py-2 bg-status-warn hover:bg-status-warn/90 text-ledger font-semibold text-sm rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 <XCircle className="w-4 h-4" />
-                {isRejecting ? "Rejecting..." : "Confirm Rejection"}
+                {isRejecting ? "Rejecting & Sending SMS..." : "Confirm Rejection & Send SMS"}
               </button>
             </div>
           </div>
@@ -406,7 +474,6 @@ export default function CustomersPage() {
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={isDeleting}
-                className="px-4 py-2 bg-status-fail hover:bg-status-fail/90 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 <Trash2 className="w-4 h-4" />
                 {isDeleting ? "Deleting..." : "Permanently Delete"}

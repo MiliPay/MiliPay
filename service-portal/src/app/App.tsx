@@ -7,6 +7,8 @@ import { SupportDashboard } from "@milipay/shared/pages/dashboard/SupportDashboa
 import CustomersPage from "@milipay/shared/pages/customers/CustomersPage";
 import CustomerDetailsPage from "@milipay/shared/pages/customers/CustomerDetailsPage";
 import { ComplaintsDesk } from "@milipay/shared/pages/complaints/ComplaintsDesk";
+import { MyCasesPage } from "@milipay/shared/pages/complaints/MyCasesPage";
+import { TicketDetailsPage } from "@milipay/shared/pages/complaints/TicketDetailsPage";
 
 export default function App() {
   return (
@@ -25,7 +27,12 @@ export default function App() {
             <Route path="/dashboard" element={<SupportDashboard />} />
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/customers/:id" element={<CustomerDetailsPage />} />
+            {/* Compatibility Aliases for shared /dashboard prefixes */}
+            <Route path="/dashboard/customers" element={<CustomersPage />} />
+            <Route path="/dashboard/customers/:id" element={<CustomerDetailsPage />} />
             <Route path="/complaints" element={<ComplaintsDesk />} />
+            <Route path="/complaints/:id" element={<TicketDetailsPage />} />
+            <Route path="/cases" element={<MyCasesPage />} />
             <Route path="*" element={<div className="p-8">Coming Soon</div>} />
           </Route>
         </Routes>

@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { 
   ArrowLeft, 
   User, 
@@ -9,18 +9,20 @@ import {
   Fingerprint, 
   Ban, 
   CheckCircle, 
-  Activity, 
   Smartphone, 
   ShieldCheck, 
   Clock, 
   Trash2, 
   AlertTriangle,
   XCircle,
-  ShieldAlert
+  ShieldAlert,
+  UserCheck,
+  RotateCcw,
+  FileText,
+  Key
 } from "lucide-react";
 import { Card } from "@milipay/shared/components/ui/Card";
 import { StatusBadge } from "@milipay/shared/components/ui/StatusBadge";
-import { DataTable, type Column } from "@milipay/shared/components/ui/DataTable";
 import { Button } from "@milipay/shared/components/ui/Button";
 import { Modal } from "@milipay/shared/components/ui/Modal";
 import { Input } from "@milipay/shared/components/ui/Input";
@@ -31,24 +33,22 @@ import {
   approveCustomer,
   rejectCustomer
 } from "@milipay/shared/features/customers/api";
-import { fetchTransactionsByCustomerId } from "@milipay/shared/features/transactions/api";
-import { ROUTES } from "@milipay/shared/lib/constants";
-import { formatDate, formatNaira, formatTimestamp } from "@milipay/shared/lib/utils/format";
-import type { Customer, Transaction } from "@milipay/shared/types";
+import { formatDate } from "@milipay/shared/lib/utils/format";
+import { 
+  DEFAULT_REJECTION_REASONS,
+  type Customer 
+} from "@milipay/shared/types";
 import { useAuth } from "@milipay/shared/features/auth/AuthContext";
 
 export default function CustomerDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [customer, setCustomer] = useState<Customer | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [page, setPage] = useState(1);
-  const [totalTxnCount, setTotalTxnCount] = useState(0);
-  const [isTxnLoading, setIsTxnLoading] = useState(false);
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -60,11 +60,14 @@ export default function CustomerDetailsPage() {
 
   // Rejection state
   const [showRejectModal, setShowRejectModal] = useState(false);
-  const [rejectReason, setRejectReason] = useState("");
+  const [rejectReason, setRejectReason] = useState<string>(DEFAULT_REJECTION_REASONS[0]);
   const [isRejecting, setIsRejecting] = useState(false);
   const [rejectError, setRejectError] = useState<string | null>(null);
 
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const isAgent = user?.role === 'agent';
+
+  const backLink = location.pathname.startsWith('/dashboard') ? '/dashboard/customers' : '/customers';
 
   useEffect(() => {
     if (!id) return;
@@ -86,29 +89,6 @@ export default function CustomerDetailsPage() {
     return () => { cancelled = true; };
   }, [id]);
 
-  useEffect(() => {
-    if (!id) return;
-    let cancelled = false;
-    
-    const loadTransactions = async () => {
-      setIsTxnLoading(true);
-      try {
-        const data = await fetchTransactionsByCustomerId(id, { page, pageSize: 5 });
-        if (!cancelled) {
-          setTransactions(data.items);
-          setTotalTxnCount(data.totalCount);
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        if (!cancelled) setIsTxnLoading(false);
-      }
-    };
-    loadTransactions();
-
-    return () => { cancelled = true; };
-  }, [id, page]);
-
   const handleToggleStatus = async () => {
     if (!customer || !id) return;
     setIsUpdatingStatus(true);
@@ -128,7 +108,7 @@ export default function CustomerDetailsPage() {
     try {
       await deleteCustomer(id);
       setShowDeleteModal(false);
-      navigate(ROUTES.customers, { replace: true });
+      navigate(backLink, { replace: true });
     } catch (err: any) {
       setDeleteError(err.message || "Failed to delete customer record");
     } finally {
@@ -143,7 +123,13 @@ export default function CustomerDetailsPage() {
     try {
       await approveCustomer(id);
       setShowApproveModal(false);
-      setCustomer({ ...customer, status: "active", rejectionReason: undefined });
+      setCustomer({ 
+        ...customer, 
+        status: "active", 
+        rejectionReason: undefined,
+        verifiedByName: user?.fullName || "Administrator",
+        verifiedAt: new Date().toISOString()
+      });
     } catch (err: any) {
       setApprovalError(err.message || "Failed to approve customer");
     } finally {
@@ -158,30 +144,19 @@ export default function CustomerDetailsPage() {
     try {
       await rejectCustomer(id, rejectReason);
       setShowRejectModal(false);
-      setCustomer({ ...customer, status: "rejected", rejectionReason: rejectReason });
+      setCustomer({ 
+        ...customer, 
+        status: "rejected", 
+        rejectionReason: rejectReason,
+        verifiedByName: user?.fullName || "Administrator",
+        verifiedAt: new Date().toISOString()
+      });
     } catch (err: any) {
       setRejectError(err.message || "Failed to reject customer");
     } finally {
       setIsRejecting(false);
     }
   };
-
-  // Simulated Analytics based on deterministic customer ID hashing
-  const analytics = useMemo(() => {
-    if (!customer) return null;
-    const charCodeSum = customer.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
-    const ltv = totalTxnCount > 0 ? (totalTxnCount * (25000 + (charCodeSum * 100))) * 100 : 0;
-    const successRate = totalTxnCount > 0 ? Math.min(100, 85 + (charCodeSum % 15)) : 100;
-    
-    return {
-      lifetimeValue: ltv,
-      avgTransaction: totalTxnCount > 0 ? ltv / totalTxnCount : 0,
-      successRate: successRate.toFixed(1),
-      device: charCodeSum % 2 === 0 ? "iPhone 14 Pro" : "Samsung Galaxy S23",
-      os: charCodeSum % 2 === 0 ? "iOS 17.1" : "Android 14",
-      lastLogin: new Date(Date.now() - (charCodeSum * 60000)).toISOString()
-    };
-  }, [customer, totalTxnCount]);
 
   if (isLoading) {
     return (
@@ -195,60 +170,29 @@ export default function CustomerDetailsPage() {
     return (
       <div className="p-6 md:p-10 max-w-5xl mx-auto text-center space-y-4">
         <h1 className="text-2xl font-display font-bold text-ink">Customer Not Found</h1>
-        <Button variant="secondary" onClick={() => navigate(ROUTES.customers)}>Back to Customers</Button>
+        <Button variant="secondary" onClick={() => navigate(backLink)}>Back to Customers</Button>
       </div>
     );
   }
 
-  const columns: Column<Transaction>[] = [
-    {
-      key: "reference",
-      header: "Ref",
-      render: (row) => <span className="font-data text-xs text-signal-bright">{row.reference}</span>,
-    },
-    {
-      key: "merchant",
-      header: "Merchant",
-      render: (row) => <span className="text-sm text-ink-muted">{row.merchantName}</span>,
-    },
-    {
-      key: "amount",
-      header: "Amount",
-      render: (row) => <span className="font-data text-sm text-ink">{formatNaira(row.amountKobo)}</span>,
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (row) => <StatusBadge status={row.status} />,
-    },
-    {
-      key: "date",
-      header: "Date",
-      render: (row) => (
-        <div className="flex flex-col">
-          <span className="text-sm text-ink-faint">{formatDate(row.timestamp)}</span>
-          <span className="text-xs text-ink-muted">{formatTimestamp(row.timestamp)}</span>
-        </div>
-      ),
-    },
-  ];
-
   return (
-    <div className="p-6 md:p-10 max-w-5xl mx-auto space-y-8 animate-rise-in">
+    <div className="p-6 md:p-10 max-w-5xl mx-auto space-y-8 animate-rise-in pb-32">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <Link to={ROUTES.customers} className="inline-flex items-center gap-2 text-sm text-ink-muted hover:text-signal-bright transition-colors mb-4">
+          <Link to={backLink} className="inline-flex items-center gap-2 text-sm text-ink-muted hover:text-signal-bright transition-colors mb-4">
             <ArrowLeft className="w-4 h-4" /> Back to Customers
           </Link>
           <div className="flex items-center gap-4">
             <h1 className="text-2xl md:text-3xl font-display font-bold text-ink">{customer.fullName}</h1>
             <StatusBadge status={customer.status} />
           </div>
-          <p className="text-ink-muted mt-1 font-data text-sm">ID: {customer.id}</p>
+          <p className="text-ink-muted mt-1 font-data text-sm">Customer ID: {customer.id}</p>
         </div>
         
+        {/* Action Buttons */}
         <div className="flex flex-wrap gap-3">
+          {/* Admin Actions */}
           {isAdmin && (
             <>
               {customer.status === "pending" && (
@@ -267,7 +211,7 @@ export default function CustomerDetailsPage() {
                   <Button 
                     variant="secondary"
                     onClick={() => {
-                      setRejectReason("");
+                      setRejectReason(DEFAULT_REJECTION_REASONS[0]);
                       setRejectError(null);
                       setShowRejectModal(true);
                     }}
@@ -306,6 +250,16 @@ export default function CustomerDetailsPage() {
               </Button>
             </>
           )}
+
+          {/* Field Agent Actions */}
+          {isAgent && customer.status === "rejected" && (
+            <Link to="/register">
+              <Button variant="primary">
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Re-Enroll / Correct Details
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -315,20 +269,99 @@ export default function CustomerDetailsPage() {
           <Clock className="w-5 h-5 text-status-warning shrink-0 mt-0.5" />
           <div className="text-xs leading-relaxed text-ink-muted">
             <p className="text-sm font-semibold text-white mb-0.5">Pending Administrator KYC Verification</p>
-            This customer was enrolled by a field agent. Review their NIN and 4-finger biometric records below. Once approved, their Supabase Auth account will be created and an SMS with their temporary password will be dispatched to <strong className="text-white">{customer.phone}</strong>.
+            This customer was enrolled by <strong className="text-white">{customer.registeredByName || "a field agent"}</strong>. 
+            {isAdmin 
+              ? ` Review their NIN and 4-finger biometric records below. Once approved, their login password will be dispatched via SMS to ${customer.phone}.`
+              : ` Your enrollment has been submitted and is in the verification queue. The customer will receive their login credentials once reviewed.`}
           </div>
         </div>
       )}
 
       {customer.status === "rejected" && (
-        <div className="p-4 bg-status-fail/10 border border-status-fail/30 rounded-xl flex items-start gap-3">
-          <ShieldAlert className="w-5 h-5 text-status-fail shrink-0 mt-0.5" />
-          <div className="text-xs leading-relaxed text-ink-muted">
-            <p className="text-sm font-semibold text-white mb-0.5">Enrollment Rejected</p>
-            Reason: <span className="text-status-fail font-medium">{customer.rejectionReason || "Did not satisfy KYC vetting criteria."}</span>
+        <div className="p-5 bg-status-fail/10 border border-status-fail/30 rounded-xl flex items-start gap-4">
+          <ShieldAlert className="w-6 h-6 text-status-fail shrink-0 mt-0.5" />
+          <div className="text-xs leading-relaxed space-y-1.5 flex-1">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-bold text-status-fail uppercase tracking-wider">Registration Declined by Administrator</p>
+              {isAgent && (
+                <Link to="/register">
+                  <span className="text-xs font-semibold text-signal-bright hover:underline flex items-center gap-1">
+                    <RotateCcw className="w-3 h-3" /> Re-enroll customer →
+                  </span>
+                </Link>
+              )}
+            </div>
+            <p className="text-sm text-white font-medium bg-status-fail/20 border border-status-fail/30 p-2.5 rounded-lg">
+              Reason: {customer.rejectionReason || "Did not satisfy KYC vetting criteria."}
+            </p>
+            {customer.verifiedByName && (
+              <p className="text-xs text-ink-muted">
+                Reviewed by: <strong className="text-white">{customer.verifiedByName}</strong> {customer.verifiedAt ? `on ${formatDate(customer.verifiedAt)}` : ""}
+              </p>
+            )}
+            <p className="text-xs text-ink-muted">
+              An SMS notification with this explanation was dispatched to customer ({customer.phone}).
+            </p>
           </div>
         </div>
       )}
+
+      {/* KYC Lifecycle Stepper Card */}
+      <Card raised className="p-6">
+        <h2 className="text-sm font-semibold text-ink-muted uppercase tracking-wide flex items-center gap-2 mb-4">
+          <FileText className="w-4 h-4 text-signal" /> KYC Lifecycle &amp; Verification Stepper
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Step 1 */}
+          <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] space-y-1">
+            <div className="flex items-center gap-2 text-status-ok font-semibold text-xs uppercase">
+              <CheckCircle className="w-4 h-4" /> 1. Biometric Enrollment
+            </div>
+            <p className="text-sm font-medium text-white pt-1">
+              Enrolled by {customer.registeredByName || "Field Agent"}
+            </p>
+            <p className="text-xs text-ink-muted">{formatDate(customer.createdAt)}</p>
+          </div>
+
+          {/* Step 2 */}
+          <div className={`p-4 rounded-xl border space-y-1 ${
+            customer.status === 'active'
+              ? "bg-status-ok/10 border-status-ok/30"
+              : customer.status === 'rejected'
+              ? "bg-status-fail/10 border-status-fail/30"
+              : "bg-status-warning/10 border-status-warning/30"
+          }`}>
+            <div className="flex items-center gap-2 text-xs uppercase font-semibold">
+              {customer.status === 'active' && <><CheckCircle className="w-4 h-4 text-status-ok" /> <span className="text-status-ok">2. KYC Approved</span></>}
+              {customer.status === 'rejected' && <><XCircle className="w-4 h-4 text-status-fail" /> <span className="text-status-fail">2. KYC Declined</span></>}
+              {customer.status === 'pending' && <><Clock className="w-4 h-4 text-status-warning" /> <span className="text-status-warning">2. In Review</span></>}
+            </div>
+            <p className="text-sm font-medium text-white pt-1">
+              {customer.status === 'active' ? `Approved by ${customer.verifiedByName || 'Administrator'}` :
+               customer.status === 'rejected' ? `Declined by ${customer.verifiedByName || 'Administrator'}` :
+               'Pending Admin KYC Verification'}
+            </p>
+            <p className="text-xs text-ink-muted">
+              {customer.verifiedAt ? formatDate(customer.verifiedAt) : "Awaiting review"}
+            </p>
+          </div>
+
+          {/* Step 3 */}
+          <div className={`p-4 rounded-xl border space-y-1 ${
+            customer.status === 'active'
+              ? "bg-white/[0.02] border-white/[0.05]"
+              : "bg-white/[0.01] border-white/[0.03] opacity-60"
+          }`}>
+            <div className="flex items-center gap-2 text-signal-bright font-semibold text-xs uppercase">
+              <Key className="w-4 h-4" /> 3. App Login Access
+            </div>
+            <p className="text-sm font-medium text-white pt-1">
+              {customer.status === 'active' ? 'Credentials Dispatched via SMS' : 'Awaiting KYC Approval'}
+            </p>
+            <p className="text-xs font-data text-ink-muted">{customer.phone}</p>
+          </div>
+        </div>
+      </Card>
 
       {/* Top Row: Info Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -338,11 +371,11 @@ export default function CustomerDetailsPage() {
             <User className="w-24 h-24" />
           </div>
           <h2 className="text-sm font-semibold text-ink-muted uppercase tracking-wide flex items-center gap-2 relative z-10">
-            <User className="w-4 h-4 text-signal" /> Contact Info
+            <User className="w-4 h-4 text-signal" /> Contact Details
           </h2>
           <div className="space-y-4 relative z-10">
             <div>
-              <p className="text-xs text-ink-faint">Phone Number (SMS Recipient)</p>
+              <p className="text-xs text-ink-faint">Phone Number (Login ID / SMS Recipient)</p>
               <p className="font-data text-ink flex items-center gap-2 mt-0.5"><Phone className="w-3 h-3 text-ink-muted" /> {customer.phone}</p>
             </div>
             <div>
@@ -373,13 +406,14 @@ export default function CustomerDetailsPage() {
               </p>
             </div>
             <div>
-              <p className="text-xs text-ink-faint">Captured Biometric Templates</p>
-              <div className="flex flex-wrap gap-1.5 mt-1.5">
+              <p className="text-xs text-ink-faint mb-1.5">Captured Biometric Templates (4 Fingers)</p>
+              <div className="grid grid-cols-2 gap-2">
                 {customer.capturedFingers && customer.capturedFingers.length > 0 ? (
                   customer.capturedFingers.map((finger, idx) => (
-                    <span key={idx} className="text-[11px] font-medium bg-signal/10 border border-signal/25 text-signal-bright px-2 py-0.5 rounded capitalize">
-                      {finger.replace("_", " ")}
-                    </span>
+                    <div key={idx} className="flex items-center gap-2 p-2 rounded-lg bg-signal/5 border border-signal/20 text-xs">
+                      <Fingerprint className="w-3.5 h-3.5 text-signal-bright shrink-0" />
+                      <span className="font-medium text-white capitalize truncate">{finger.replace("_", " ")}</span>
+                    </div>
                   ))
                 ) : (
                   <span className="text-xs text-ink-faint">No fingers recorded</span>
@@ -393,53 +427,49 @@ export default function CustomerDetailsPage() {
           </div>
         </Card>
 
-        {/* Analytics & Health */}
+        {/* Enrollment & Audit Info */}
         <Card raised className="p-6 space-y-4 relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-            <Activity className="w-24 h-24" />
+            <UserCheck className="w-24 h-24" />
           </div>
           <h2 className="text-sm font-semibold text-ink-muted uppercase tracking-wide flex items-center gap-2 relative z-10">
-            <Activity className="w-4 h-4 text-signal" /> Account Analytics
+            <UserCheck className="w-4 h-4 text-signal" /> Enrollment Audit
           </h2>
-          {analytics ? (
-            <div className="space-y-3 relative z-10">
-              <div className="flex justify-between items-center py-1 border-b border-ledger-line">
-                <span className="text-xs text-ink-faint">Lifetime Volume</span>
-                <span className="font-data text-sm font-semibold text-ink">{formatNaira(analytics.lifetimeValue)}</span>
-              </div>
-              <div className="flex justify-between items-center py-1 border-b border-ledger-line">
-                <span className="text-xs text-ink-faint">Avg Transaction</span>
-                <span className="font-data text-sm font-semibold text-ink">{formatNaira(analytics.avgTransaction)}</span>
-              </div>
-              <div className="flex justify-between items-center py-1">
-                <span className="text-xs text-ink-faint">Success Rate</span>
-                <span className="font-data text-sm font-semibold text-status-ok">{analytics.successRate}%</span>
-              </div>
+          <div className="space-y-3 relative z-10 text-xs">
+            <div className="border-b border-ledger-line pb-2">
+              <span className="text-ink-faint block">Enrolling Agent / Staff</span>
+              <span className="text-sm font-semibold text-white mt-0.5 block">
+                {customer.registeredByName || "Direct Admin Enrollment"}
+              </span>
+              {customer.registeredByEmail && (
+                <span className="text-ink-muted text-[11px] font-data block">{customer.registeredByEmail}</span>
+              )}
+              {customer.registeredByState && (
+                <span className="text-signal-bright text-[10px] uppercase font-semibold block mt-0.5">
+                  Territory: {customer.registeredByState}
+                </span>
+              )}
             </div>
-          ) : (
-            <p className="text-xs text-ink-faint">No activity yet</p>
-          )}
+
+            {customer.verifiedByName && (
+              <div className="border-b border-ledger-line pb-2">
+                <span className="text-ink-faint block">Reviewed By</span>
+                <span className="text-sm font-semibold text-white mt-0.5 block">{customer.verifiedByName}</span>
+                {customer.verifiedAt && (
+                  <span className="text-ink-muted text-[11px] block">{formatDate(customer.verifiedAt)}</span>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-between items-center pt-1">
+              <span className="text-ink-faint">Account Status</span>
+              <StatusBadge status={customer.status} />
+            </div>
+          </div>
         </Card>
       </div>
 
-      {/* Transactions Section */}
-      <div className="pt-4 space-y-4">
-        <h2 className="text-xl font-display font-semibold text-ink">Recent Transactions</h2>
-        <DataTable
-          columns={columns}
-          data={transactions}
-          isLoading={isTxnLoading}
-          page={page}
-          pageSize={5}
-          totalCount={totalTxnCount}
-          onPageChange={setPage}
-          onRowClick={(row) => navigate(`/dashboard/transactions/${row.id}`)}
-          rowKey={(row) => row.id}
-          emptyMessage="No transactions found for this customer."
-        />
-      </div>
-
-      {/* Approve Customer Modal */}
+      {/* Approve Customer Modal (Admin Only) */}
       {showApproveModal && (
         <Modal
           isOpen={showApproveModal}
@@ -456,6 +486,21 @@ export default function CustomerDetailsPage() {
                 <p className="text-xs text-ink-muted mt-1 leading-relaxed">
                   Approving <strong className="text-white">{customer.fullName}</strong> will create their login account and immediately dispatch a temporary password via SMS to <strong className="text-signal-bright">{customer.phone}</strong>.
                 </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-white/[0.08] bg-ledger-line/50 p-4 space-y-2 text-xs">
+              <div className="flex justify-between py-1 border-b border-white/[0.05]">
+                <span className="text-ink-muted">Customer Name</span>
+                <span className="text-white font-medium">{customer.fullName}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-white/[0.05]">
+                <span className="text-ink-muted">Enrolled By</span>
+                <span className="text-signal-bright font-medium">{customer.registeredByName || "Direct Admin Enrollment"}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-white/[0.05]">
+                <span className="text-ink-muted">Phone Number (SMS Recipient)</span>
+                <span className="text-signal-bright font-data">{customer.phone}</span>
               </div>
             </div>
 
@@ -487,7 +532,7 @@ export default function CustomerDetailsPage() {
         </Modal>
       )}
 
-      {/* Reject Customer Modal */}
+      {/* Reject Customer Modal with Standard Default Reasons (Admin Only) */}
       {showRejectModal && (
         <Modal
           isOpen={showRejectModal}
@@ -498,16 +543,45 @@ export default function CustomerDetailsPage() {
         >
           <div className="space-y-4">
             <p className="text-xs text-ink-muted leading-relaxed">
-              Rejecting enrollment for <strong className="text-white">{customer.fullName}</strong>. Please provide a reason:
+              Rejecting enrollment for <strong className="text-white">{customer.fullName}</strong>. Select a standard reason or specify additional details:
             </p>
 
+            <div>
+              <label className="block text-[11px] font-semibold text-ink-muted uppercase tracking-wider mb-2">
+                Standard Rejection Reason (Click to select)
+              </label>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                {DEFAULT_REJECTION_REASONS.map((r, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setRejectReason(r === "Other Reason" ? "" : r)}
+                    className={`w-full text-left p-2.5 rounded-lg text-xs transition-all border ${
+                      rejectReason === r 
+                        ? "bg-status-warn/20 border-status-warn text-white font-medium shadow-sm" 
+                        : "bg-white/[0.02] border-white/[0.06] text-ink-muted hover:text-ink hover:bg-white/[0.06]"
+                    }`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <Input
-              label="Rejection Reason"
+              label="Selected Reason / Explanation"
               placeholder="e.g. NIN mismatch, unclear fingerprint capture..."
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               required
             />
+
+            <div className="p-3 bg-ledger-line rounded-lg border border-white/[0.08] flex items-center gap-2 text-xs text-ink-muted">
+              <Smartphone className="w-4 h-4 text-signal-bright shrink-0" />
+              <span>
+                An SMS with this rejection explanation will be dispatched to <strong className="text-white">{customer.phone}</strong>.
+              </span>
+            </div>
 
             {rejectError && (
               <div className="p-3 bg-status-fail/10 border border-status-fail/30 rounded-lg text-xs text-status-fail">
@@ -526,11 +600,11 @@ export default function CustomerDetailsPage() {
               <button
                 type="button"
                 onClick={handleConfirmReject}
-                disabled={isRejecting}
+                disabled={isRejecting || !rejectReason.trim()}
                 className="px-4 py-2 bg-status-warn hover:bg-status-warn/90 text-ledger font-semibold text-sm rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 <XCircle className="w-4 h-4" />
-                {isRejecting ? "Rejecting..." : "Confirm Rejection"}
+                {isRejecting ? "Rejecting & Sending SMS..." : "Confirm Rejection & Send SMS"}
               </button>
             </div>
           </div>

@@ -72,6 +72,26 @@ export async function fetchStaffMembers(
     };
   }
 
+  // Batch calculate real-time customer registration counts for agents
+  const agentIds = (data || []).filter((r: any) => r.role === 'agent').map((r: any) => r.id);
+  const regCountMap: Record<string, number> = {};
+
+  if (agentIds.length > 0) {
+    try {
+      const { data: customerCounts } = await supabase
+        .from('customers')
+        .select('registered_by');
+
+      (customerCounts || []).forEach((c: any) => {
+        if (c.registered_by) {
+          regCountMap[c.registered_by] = (regCountMap[c.registered_by] || 0) + 1;
+        }
+      });
+    } catch (countErr) {
+      console.warn("Could not fetch agent registration counts:", countErr);
+    }
+  }
+
   const mappedItems: StaffProfile[] = (data || []).map((row: any) => ({
     id: row.id,
     fullName: row.full_name,
@@ -82,7 +102,7 @@ export async function fetchStaffMembers(
     role: row.role as Role,
     status: row.status,
     state: row.state,
-    registrationsCount: row.role === 'agent' ? 0 : undefined,
+    registrationsCount: row.role === 'agent' ? (regCountMap[row.id] || 0) : undefined,
     createdAt: row.created_at,
   }));
 
@@ -92,6 +112,81 @@ export async function fetchStaffMembers(
     pageSize,
     totalCount: count || 0
   };
+}
+
+export async function fetchStaffDetails(id: string): Promise<{
+  profile: StaffProfile;
+  stats?: {
+    totalEnrolled: number;
+    pendingKYC: number;
+    approvedKYC: number;
+    rejectedKYC: number;
+    recentCustomers: Array<{ id: string; fullName: string; phone: string; status: string; createdAt: string }>;
+  };
+} | null> {
+  const { data: profileRow, error } = await supabase
+    .from('staff_profiles')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error || !profileRow) {
+    console.error("Error fetching staff profile details:", error);
+    return null;
+  }
+
+  const profile: StaffProfile = {
+    id: profileRow.id,
+    fullName: profileRow.full_name,
+    email: profileRow.email,
+    phone: profileRow.phone,
+    nin: profileRow.nin,
+    ninLast4: profileRow.nin_last_4,
+    role: profileRow.role as Role,
+    status: profileRow.status,
+    state: profileRow.state,
+    createdAt: profileRow.created_at,
+  };
+
+  if (profile.role === 'agent') {
+    try {
+      const { data: customers } = await supabase
+        .from('customers')
+        .select('id, first_name, last_name, phone, status, created_at')
+        .eq('registered_by', id)
+        .order('created_at', { ascending: false });
+
+      const customerList = customers || [];
+      const totalEnrolled = customerList.length;
+      const pendingKYC = customerList.filter((c: any) => c.status === 'pending').length;
+      const approvedKYC = customerList.filter((c: any) => c.status === 'active').length;
+      const rejectedKYC = customerList.filter((c: any) => c.status === 'rejected').length;
+
+      return {
+        profile: {
+          ...profile,
+          registrationsCount: totalEnrolled,
+        },
+        stats: {
+          totalEnrolled,
+          pendingKYC,
+          approvedKYC,
+          rejectedKYC,
+          recentCustomers: customerList.slice(0, 5).map((c: any) => ({
+            id: c.id,
+            fullName: `${c.first_name} ${c.last_name}`.trim(),
+            phone: c.phone,
+            status: c.status,
+            createdAt: c.created_at,
+          })),
+        },
+      };
+    } catch (err) {
+      console.warn("Could not load agent stats:", err);
+    }
+  }
+
+  return { profile };
 }
 
 export async function createStaffMember(data: {
@@ -189,7 +284,6 @@ export async function createStaffMember(data: {
   }
 
   // ── Tier 3: Isolated Auth Client SignUp + Profile Upsert ────
-  // Create an isolated auth instance that won't override the admin's session
   const ephemeralClient = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: false,

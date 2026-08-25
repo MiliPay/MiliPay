@@ -32,7 +32,7 @@ export function Sidebar() {
         <nav className="flex flex-col gap-1">
           <NavLink to={ROUTES.dashboard} end className={navLinkClasses}>
             <LayoutGrid className="w-[18px] h-[18px]" />
-            Overview
+            Dashboard
           </NavLink>
           <NavLink to={ROUTES.customers} className={navLinkClasses}>
             <Users className="w-[18px] h-[18px]" />
@@ -43,9 +43,9 @@ export function Sidebar() {
             Transactions
           </NavLink>
           {canRegister && (
-            <NavLink to={ROUTES.registerCustomer} className={navLinkClasses}>
+            <NavLink to={ROUTES.register} className={navLinkClasses}>
               <UserPlus className="w-[18px] h-[18px]" />
-              Register customer
+              Register
             </NavLink>
           )}
           {canManageSettings && (

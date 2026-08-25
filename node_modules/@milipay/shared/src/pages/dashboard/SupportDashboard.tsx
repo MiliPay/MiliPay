@@ -1,17 +1,41 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, AlertCircle, Clock, ShieldCheck, Activity } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@milipay/shared/components/ui/Button";
+import { fetchCustomers } from "@milipay/shared/features/customers/api";
+import { fetchSupportTicketStats } from "@milipay/shared/features/support/api";
 
 export function SupportDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [stats, setStats] = useState({ openComplaints: 0, escalations: 0, avgResolution: "N/A", isLoading: true });
   const navigate = useNavigate();
 
-  const handleSearch = (e: React.FormEvent) => {
+  useEffect(() => {
+    fetchSupportTicketStats().then((data) => {
+      setStats({ openComplaints: data.openComplaints, escalations: data.escalations, avgResolution: data.avgResolution, isLoading: false });
+    });
+  }, []);
+
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      // In a real app, we'd navigate to a search results page or directly to the user if exact match
-      navigate(`/customers/cus_1001`);
+    if (!searchQuery.trim() || isSearching) return;
+    
+    setIsSearching(true);
+    try {
+      const res = await fetchCustomers({ search: searchQuery.trim(), pageSize: 2 });
+      if (res.items.length === 1) {
+        // Direct hit, go straight to customer
+        navigate(`/customers/${res.items[0].id}`);
+      } else {
+        // Multiple or zero hits, go to customers page with query
+        navigate(`/customers?search=${encodeURIComponent(searchQuery.trim())}`);
+      }
+    } catch (err) {
+      console.error(err);
+      navigate(`/customers?search=${encodeURIComponent(searchQuery.trim())}`);
+    } finally {
+      setIsSearching(false);
     }
   };
 
@@ -21,10 +45,10 @@ export function SupportDashboard() {
         
         {/* Header Section */}
         <div className="text-center space-y-3 mt-10">
-          <div className="w-16 h-16 bg-status-info/10 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-[inset_0_0_20px_rgba(59,130,246,0.2)]">
-            <Search className="w-8 h-8 text-status-info" />
+          <div className="w-16 h-16 bg-signal/10 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-[inset_0_0_20px_rgba(0,200,150,0.2)]">
+            <Search className="w-8 h-8 text-signal-bright" />
           </div>
-          <h1 className="text-4xl font-display text-ink tracking-tight">Global Customer Lookup</h1>
+          <h1 className="text-4xl font-display text-white tracking-tight">Global Customer Lookup</h1>
           <p className="text-ink-muted text-lg max-w-xl mx-auto">
             Search across the MiliPay network by NIN, Phone Number, or full name to assist customers.
           </p>
@@ -33,21 +57,21 @@ export function SupportDashboard() {
         {/* Big Search Bar */}
         <div className="max-w-2xl mx-auto">
           <form onSubmit={handleSearch} className="relative group">
-            <div className="absolute inset-0 bg-status-info/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-            <div className="relative flex items-center bg-white/[0.02] border border-white/[0.1] rounded-2xl p-2 backdrop-blur-xl transition-all focus-within:border-status-info/50 focus-within:bg-white/[0.04]">
+            <div className="absolute inset-0 bg-signal/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="relative flex items-center bg-white/[0.02] border border-white/[0.1] rounded-2xl p-2 backdrop-blur-xl transition-all focus-within:border-signal/50 focus-within:bg-white/[0.04]">
               <div className="pl-4">
-                <Search className="w-6 h-6 text-ink-muted group-focus-within:text-status-info transition-colors" />
+                <Search className="w-6 h-6 text-ink-muted group-focus-within:text-signal-bright transition-colors" />
               </div>
               <input
                 type="text"
-                className="flex-1 bg-transparent border-none px-4 py-4 text-lg text-ink placeholder-ink-faint outline-none font-display"
+                className="flex-1 bg-transparent border-none px-4 py-4 text-lg text-white placeholder-ink-faint outline-none font-display"
                 placeholder="Enter NIN, Phone, or Name..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 autoFocus
               />
-              <Button type="submit" className="bg-status-info hover:bg-blue-400 text-white rounded-xl px-8 h-12 text-base shadow-[0_0_15px_rgba(59,130,246,0.3)] border border-blue-400/50">
-                Search
+              <Button type="submit" disabled={isSearching} className="bg-signal hover:brightness-110 text-white rounded-xl px-8 h-12 text-base shadow-[0_0_15px_rgba(0,200,150,0.3)] border border-signal-bright/50">
+                {isSearching ? "Searching..." : "Search"}
               </Button>
             </div>
           </form>
@@ -61,7 +85,7 @@ export function SupportDashboard() {
             </div>
             <h3 className="text-sm font-medium text-ink-muted uppercase tracking-wider">Open Complaints</h3>
             <div className="mt-2">
-              <span className="text-3xl font-display text-ink">124</span>
+              <span className="text-3xl font-display text-ink">{stats.isLoading ? "-" : stats.openComplaints}</span>
             </div>
           </div>
           
@@ -71,7 +95,7 @@ export function SupportDashboard() {
             </div>
             <h3 className="text-sm font-medium text-ink-muted uppercase tracking-wider">Avg Resolution</h3>
             <div className="mt-2">
-              <span className="text-3xl font-display text-ink">4.2h</span>
+              <span className="text-3xl font-display text-ink">{stats.isLoading ? "-" : stats.avgResolution}</span>
             </div>
           </div>
 
@@ -81,7 +105,7 @@ export function SupportDashboard() {
             </div>
             <h3 className="text-sm font-medium text-ink-muted uppercase tracking-wider">KYC Escalations</h3>
             <div className="mt-2">
-              <span className="text-3xl font-display text-ink">18</span>
+              <span className="text-3xl font-display text-ink">{stats.isLoading ? "-" : stats.escalations}</span>
             </div>
           </div>
 
