@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Lock, ShieldAlert, Copy, Clock, Smartphone } from "lucide-react";
+import { Check, Lock, ShieldAlert, Copy, Clock, Smartphone, Hand, CheckCircle } from "lucide-react";
 import { Input } from "@milipay/shared/components/ui/Input";
 import { Select } from "@milipay/shared/components/ui/Select";
 import { Button } from "@milipay/shared/components/ui/Button";
@@ -42,7 +42,7 @@ export default function RegisterCustomerPage() {
       case 2:
         return ["nin"];
       case 3:
-        return ["capturedFingers"];
+        return ["palmVeinTemplate"];
       case 4:
         return ["phone", "email", "address", "state"];
       default:
@@ -252,25 +252,24 @@ export default function RegisterCustomerPage() {
 
         {step === 3 && (
           <div className="animate-rise-in">
-            <h2 className="mb-1.5 font-display text-xl font-bold text-ink">Biometric capture</h2>
+            <h2 className="mb-1.5 font-display text-xl font-bold text-ink">Palm Vein Capture</h2>
             <p className="mb-5 text-sm text-ink-muted">
-              Select 4 fingers (at least 2 from the left hand) and capture them securely.
+              Connect the HFSecurity VP930Pro scanner and capture the customer's palm vein pattern.
             </p>
 
             <div className="mb-8 flex gap-3 rounded-lg border border-signal/25 bg-signal/[0.06] px-4 py-3">
               <Lock className="h-4 w-4 shrink-0 text-signal-bright" />
               <p className="text-xs leading-relaxed text-ink-muted">
-                Fingerprint data is encrypted before transmission. The raw biometric is never stored —
-                only the encrypted template is retained on our servers.
+                Palm Vein data is encrypted before transmission. The raw infrared image is never stored —
+                only the secured hash template is retained on our servers.
               </p>
             </div>
 
             <div className="py-6">
-              <MultiFingerSelector 
-                selectedFingers={draft.capturedFingers as FingerName[]}
-                onChange={(fingers) => update("capturedFingers", fingers)}
-                onScanComplete={() => {}}
-                error={errorFor("fingerprint")}
+              <PalmVeinScanner 
+                template={draft.palmVeinTemplate} 
+                onCapture={(hash) => update("palmVeinTemplate", hash)} 
+                error={errorFor("palmVein")}
               />
             </div>
           </div>
@@ -346,8 +345,8 @@ export default function RegisterCustomerPage() {
 
             <ReviewSection title="Biometric">
               <ReviewRow
-                label="Fingers"
-                value={draft.capturedFingers.length === 4 ? draft.capturedFingers.join(", ") : "Not completed"}
+                label="Palm Vein"
+                value={draft.palmVeinTemplate ? "Captured Successfully" : "Not completed"}
               />
             </ReviewSection>
 
@@ -358,11 +357,11 @@ export default function RegisterCustomerPage() {
               <ReviewRow label="State" value={draft.state} />
             </ReviewSection>
 
-            {draft.capturedFingers.length !== 4 && (
+            {!draft.palmVeinTemplate && (
               <div className="mb-2 flex gap-3 rounded-lg border border-status-fail/30 bg-status-fail/10 px-4 py-3">
                 <ShieldAlert className="h-4 w-4 shrink-0 text-status-fail" />
                 <p className="text-xs text-status-fail">
-                  Incomplete fingerprint capture. Go back to step 3 to complete biometric registration.
+                  Incomplete biometric capture. Go back to step 3 to complete Palm Vein registration.
                 </p>
               </div>
             )}
@@ -387,13 +386,210 @@ export default function RegisterCustomerPage() {
             ) : (
               <Button
                 isLoading={isSubmitting}
-                disabled={draft.capturedFingers.length !== 4}
+                disabled={!draft.palmVeinTemplate}
                 onClick={handleSubmit}
               >
                 {isSubmitting ? "Registering…" : "Submit registration →"}
               </Button>
             )}
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PalmVeinScanner({ 
+  template, 
+  onCapture,
+  error
+}: { 
+  template?: string; 
+  onCapture: (hash: string) => void; 
+  error?: string;
+}) {
+  const [isScanning, setIsScanning] = useState(false);
+
+  const startScan = () => {
+    setIsScanning(true);
+    // Simulate a 3-second hardware scan (HFSecurity SDK)
+    setTimeout(() => {
+      setIsScanning(false);
+      onCapture("PVT-mock-hash-" + Date.now().toString(16));
+    }, 3000);
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center space-y-8">
+      <style>{`
+        @keyframes scan-vertical {
+          0% { top: 10%; opacity: 0; }
+          10% { opacity: 1; }
+          90% { opacity: 1; }
+          100% { top: 90%; opacity: 0; }
+        }
+      `}</style>
+      
+      <div className="relative w-64 h-64 flex items-center justify-center rounded-2xl border border-signal/20 overflow-hidden bg-[#0A0D14] shadow-[inset_0_0_50px_rgba(33,219,154,0.08)]">
+        
+        {/* Futuristic Grid Background */}
+        <div className="absolute inset-0 pointer-events-none opacity-[0.04]"
+             style={{
+               backgroundImage: `linear-gradient(#0bc298 1px, transparent 1px), linear-gradient(90deg, #0bc298 1px, transparent 1px)`,
+               backgroundSize: '16px 16px',
+               backgroundPosition: 'center'
+             }} 
+        />
+
+        {/* Custom 90% Carbon Copy SVG (No Brackets, No Baked Line) */}
+        <svg 
+          className={`w-56 h-56 transition-all duration-700 z-10 ${
+            template ? 'text-status-ok drop-shadow-[0_0_12px_rgba(33,219,154,0.8)] scale-95' : isScanning ? 'text-signal-bright drop-shadow-[0_0_15px_rgba(33,219,154,0.9)] scale-100' : 'text-signal/40 drop-shadow-[0_0_5px_rgba(33,219,154,0.2)] scale-100'
+          }`} 
+          viewBox="0 0 100 100" 
+          fill="none" 
+          stroke="currentColor" 
+          strokeWidth="1.2" 
+          strokeLinecap="round" 
+          strokeLinejoin="round"
+        >
+          {/* Group that clips internal details to stay inside the hand */}
+          <g clipPath="url(#hand-clip)">
+            
+            {/* Binary Code in Fingers */}
+            <g fontSize="3.5" fontFamily="monospace" fill="currentColor" stroke="none" textAnchor="middle" className={isScanning ? "animate-pulse" : ""}>
+              {/* Index */}
+              <text x="36.5" y="36">10</text>
+              <text x="36.5" y="40">01</text>
+              <text x="36.5" y="44">11</text>
+              <text x="36.5" y="48">00</text>
+              
+              {/* Middle */}
+              <text x="45.5" y="21">11</text>
+              <text x="45.5" y="25">00</text>
+              <text x="45.5" y="29">10</text>
+              <text x="45.5" y="33">01</text>
+              <text x="45.5" y="37">11</text>
+              <text x="45.5" y="41">00</text>
+              <text x="45.5" y="45">10</text>
+              <text x="45.5" y="49">01</text>
+
+              {/* Ring */}
+              <text x="54.5" y="26">01</text>
+              <text x="54.5" y="30">10</text>
+              <text x="54.5" y="34">00</text>
+              <text x="54.5" y="38">11</text>
+              <text x="54.5" y="42">01</text>
+              <text x="54.5" y="46">10</text>
+              <text x="54.5" y="50">00</text>
+
+              {/* Pinky */}
+              <text x="63.5" y="41">10</text>
+              <text x="63.5" y="45">01</text>
+              <text x="63.5" y="49">11</text>
+            </g>
+
+            {/* Binary Code in Upper Palm */}
+            <g fontSize="4" fontFamily="monospace" fill="currentColor" stroke="none" textAnchor="middle" opacity="0.9" className={isScanning ? "animate-pulse delay-75" : ""}>
+              <text x="45" y="55">01001101</text>
+              <text x="48" y="60">11100010</text>
+              <text x="50" y="65">001110</text>
+            </g>
+
+            {/* Thumb Swirls (Concentric arcs) */}
+            <path d="M 33 69 A 6 6 0 0 1 39 75" strokeWidth="1.2" />
+            <path d="M 29 65 A 11 11 0 0 1 43 77" strokeWidth="1.2" />
+            <path d="M 26 60 A 16 16 0 0 1 47 79" strokeWidth="1.2" />
+            <path d="M 23 55 A 21 21 0 0 1 51 81" strokeWidth="1.2" />
+
+            {/* Pinky Base Lines */}
+            <path d="M 67 62 A 20 20 0 0 0 52 82" strokeWidth="1.2" />
+            <path d="M 67 67 A 15 15 0 0 0 55 83" strokeWidth="1.2" />
+            <path d="M 67 72 A 10 10 0 0 0 58 84" strokeWidth="1.2" />
+            <path d="M 67 77 A 5 5 0 0 0 61 85" strokeWidth="1.2" />
+            
+            {/* Wrist lines */}
+            <path d="M 45 88 L 45 95" strokeWidth="1.5" />
+            <path d="M 50 89 L 50 95" strokeWidth="1.5" />
+            <path d="M 55 88 L 55 95" strokeWidth="1.5" />
+          </g>
+
+          {/* Master Hand Outline */}
+          <path 
+            id="hand-outline-path" 
+            d="M 40 95 
+               C 40 80, 35 70, 16 57 
+               A 4 4 0 0 1 20 50 
+               L 33 60 
+               L 33 32 
+               A 3.5 3.5 0 0 1 40 32 
+               L 40 52 
+               L 42 52
+               L 42 17 
+               A 3.5 3.5 0 0 1 49 17 
+               L 49 52 
+               L 51 52
+               L 51 22 
+               A 3.5 3.5 0 0 1 58 22 
+               L 58 52 
+               L 60 52
+               L 60 37 
+               A 3.5 3.5 0 0 1 67 37 
+               L 67 65 
+               C 67 80, 62 85, 62 95 
+               Z" 
+            strokeWidth="2"
+          />
+
+          <defs>
+            <clipPath id="hand-clip">
+              <use href="#hand-outline-path" />
+            </clipPath>
+          </defs>
+        </svg>
+
+        {/* The sweeping laser beam (only visible when scanning) */}
+        {isScanning && (
+          <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden">
+            <div className="w-[85%] mx-auto h-[4px] rounded-full bg-[#1e5eb3] shadow-[0_0_12px_3px_rgba(30,94,179,0.7)]" 
+                 style={{ 
+                   animation: 'scan-vertical 1.5s linear infinite alternate',
+                   position: 'absolute',
+                   left: '7.5%'
+                 }} 
+            />
+          </div>
+        )}
+
+        {/* Success overlay */}
+        {template && !isScanning && (
+          <div className="absolute inset-0 flex items-center justify-center z-30 transition-all duration-300 backdrop-blur-[2px] bg-ledger/30">
+            <div className="bg-ledger/90 p-4 rounded-full shadow-2xl border border-status-ok/30">
+              <CheckCircle className="w-12 h-12 text-status-ok" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="text-center space-y-4">
+        <Button 
+          variant={template ? "secondary" : "primary"}
+          onClick={startScan}
+          disabled={isScanning}
+          className="w-56"
+        >
+          {isScanning ? "Scanning Infrared..." : template ? "Recapture Palm" : "Start Hardware Scan"}
+        </Button>
+        
+        <div className="h-4">
+          {error && !isScanning && (
+            <p className="text-xs text-status-fail font-semibold uppercase tracking-wide">{error}</p>
+          )}
+          {isScanning && (
+            <p className="text-xs text-signal-bright animate-pulse font-data uppercase tracking-widest">
+              Connecting to VP930Pro...
+            </p>
+          )}
         </div>
       </div>
     </div>

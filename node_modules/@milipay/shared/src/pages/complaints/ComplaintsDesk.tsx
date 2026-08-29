@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { MessageSquareWarning, Filter, MoreVertical, CheckCircle2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { MessageSquareWarning, Filter, MoreVertical, CheckCircle2, Search } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { supabase } from "@milipay/shared/lib/supabase";
 import { fetchSupportTickets } from "@milipay/shared/features/support/api";
 import type { SupportTicket } from "@milipay/shared/types";
 import { formatDate } from "@milipay/shared/lib/utils/format";
@@ -8,6 +9,10 @@ import { formatDate } from "@milipay/shared/lib/utils/format";
 export function ComplaintsDesk() {
   const [complaints, setComplaints] = useState<SupportTicket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchSupportTickets().then((res) => {
@@ -15,6 +20,32 @@ export function ComplaintsDesk() {
       setIsLoading(false);
     });
   }, []);
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim() || isSearching) return;
+    
+    setErrorMsg("");
+    setIsSearching(true);
+    
+    try {
+      const { data, error } = await supabase
+        .from("support_tickets")
+        .select("id")
+        .eq("ticket_id", searchQuery.trim().toUpperCase())
+        .single();
+        
+      if (error || !data) {
+        setErrorMsg("Ticket not found. Please check the Ticket ID and try again.");
+      } else {
+        navigate(`/complaints/${data.id}`);
+      }
+    } catch (err) {
+      setErrorMsg("An error occurred while searching.");
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   const getSLAColor = (createdAt: string) => {
     const hoursOpen = (new Date().getTime() - new Date(createdAt).getTime()) / (1000 * 60 * 60);
@@ -35,11 +66,27 @@ export function ComplaintsDesk() {
             </h1>
             <p className="text-ink-muted mt-1">Manage and resolve issues submitted from the MiliPay app.</p>
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.05] border border-white/[0.1] text-ink hover:bg-white/[0.1] transition-colors">
-            <Filter className="w-4 h-4" />
-            Filter Tickets
-          </button>
+          <div className="flex items-center gap-3">
+            <form onSubmit={handleSearch} className="relative flex items-center bg-white/[0.03] border border-white/[0.1] rounded-xl p-1 focus-within:border-signal/50 focus-within:bg-white/[0.05] transition-all">
+              <input
+                type="text"
+                className="bg-transparent border-none px-3 py-1.5 text-sm text-white placeholder-ink-faint outline-none uppercase font-mono w-48"
+                placeholder="Search TKT-..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <button type="submit" disabled={isSearching} className="p-1.5 text-ink-muted hover:text-white transition-colors">
+                <Search className="w-4 h-4" />
+              </button>
+            </form>
+            <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.05] border border-white/[0.1] text-ink hover:bg-white/[0.1] transition-colors">
+              <Filter className="w-4 h-4" />
+              Filter Tickets
+            </button>
+          </div>
         </div>
+        
+        {errorMsg && <div className="text-status-fail text-sm">{errorMsg}</div>}
 
         <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl backdrop-blur-xl overflow-hidden">
           <table className="w-full text-left border-collapse">

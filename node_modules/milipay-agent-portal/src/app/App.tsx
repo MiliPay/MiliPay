@@ -7,6 +7,8 @@ import { AgentDashboard } from "@milipay/shared/pages/dashboard/AgentDashboard";
 import RegisterCustomerPage from "@milipay/shared/pages/register-customer/RegisterCustomerPage";
 import CustomersPage from "@milipay/shared/pages/customers/CustomersPage";
 import CustomerDetailsPage from "@milipay/shared/pages/customers/CustomerDetailsPage";
+import { AgentSupportPage } from "@milipay/shared/pages/dashboard/AgentSupportPage";
+import { AgentTicketDetailsPage } from "@milipay/shared/pages/dashboard/AgentTicketDetailsPage";
 
 export default function App() {
   return (
@@ -26,6 +28,8 @@ export default function App() {
             <Route path="/register" element={<RegisterCustomerPage />} />
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/customers/:id" element={<CustomerDetailsPage />} />
+            <Route path="/support" element={<AgentSupportPage />} />
+            <Route path="/support/:id" element={<AgentTicketDetailsPage />} />
             {/* Compatibility Aliases for shared /dashboard prefixes */}
             <Route path="/dashboard/customers" element={<CustomersPage />} />
             <Route path="/dashboard/customers/:id" element={<CustomerDetailsPage />} />

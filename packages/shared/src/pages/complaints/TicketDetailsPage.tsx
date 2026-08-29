@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useLocation } from "react-router-dom";
 import { ArrowLeft, User, MessageSquareWarning, ShieldCheck, AlertTriangle, Send } from "lucide-react";
 import { supabase } from "@milipay/shared/lib/supabase";
 import type { SupportTicket, TicketMessage } from "@milipay/shared/types";
@@ -91,6 +91,9 @@ export function TicketDetailsPage() {
 
   const isAssignedToMe = ticket.assignedTo === user?.id;
   const canChat = isAssignedToMe && ticket.status !== "resolved";
+  
+  const location = useLocation();
+  const backLink = location.pathname.includes("/dashboard/support") ? "/dashboard/support" : "/complaints";
 
   return (
     <div className="flex-1 overflow-hidden bg-ledger flex flex-col h-screen">
@@ -98,7 +101,7 @@ export function TicketDetailsPage() {
       <div className="p-6 border-b border-white/[0.05] bg-ledger/95 backdrop-blur-sm z-10 flex-shrink-0">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <Link to="/complaints" className="text-ink-muted hover:text-ink transition-colors">
+            <Link to={backLink} className="text-ink-muted hover:text-ink transition-colors">
               <ArrowLeft className="w-5 h-5" />
             </Link>
             <div>

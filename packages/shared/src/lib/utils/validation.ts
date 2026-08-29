@@ -29,7 +29,7 @@ export function validateCustomerDraft(draft: {
   email: string;
   address: string;
   state: string;
-  capturedFingers: string[];
+  palmVeinTemplate: string;
 }): FieldError[] {
   const errors: FieldError[] = [];
 
@@ -57,13 +57,8 @@ export function validateCustomerDraft(draft: {
   if (!isNotBlank(draft.state)) {
     errors.push({ field: "state", message: "Select a state." });
   }
-  if (draft.capturedFingers.length !== 4) {
-    errors.push({ field: "fingerprint", message: "Exactly 4 fingers must be captured." });
-  } else {
-    const leftCount = draft.capturedFingers.filter((f) => f.startsWith("Left ")).length;
-    if (leftCount < 2) {
-      errors.push({ field: "fingerprint", message: "At least 2 fingers must be from the left hand." });
-    }
+  if (!isNotBlank(draft.palmVeinTemplate)) {
+    errors.push({ field: "palmVein", message: "A Palm Vein scan is required." });
   }
 
   return errors;

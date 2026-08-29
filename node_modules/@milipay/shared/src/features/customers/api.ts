@@ -85,7 +85,7 @@ export async function fetchCustomers(
       ninLast4: row.nin_last_4,
       state: row.state,
       status: row.status as CustomerStatus,
-      capturedFingers: row.captured_fingers || [],
+      palmVeinTemplate: row.palm_vein_template,
       linkedAccountCount: 0, 
       authUserId: row.auth_user_id,
       registeredBy: row.registered_by,
@@ -127,8 +127,8 @@ export async function fetchPendingCustomerCount(registeredBy?: string): Promise<
 export async function registerCustomer(
   draft: CustomerDraft
 ): Promise<CustomerRegistrationResult> {
-  if (draft.capturedFingers.length !== 4) {
-    throw new Error("Exactly 4 fingers must be captured before registration.");
+  if (!draft.palmVeinTemplate) {
+    throw new Error("Palm vein scan is required before registration.");
   }
 
   // Get current staff session
@@ -156,7 +156,7 @@ export async function registerCustomer(
     nin_last_4: ninLast4,
     state: draft.state,
     status: initialStatus,
-    captured_fingers: draft.capturedFingers,
+    palm_vein_template: draft.palmVeinTemplate,
     registered_by: currentUserId || null,
     verified_by: isAdmin ? currentUserId : null,
     verified_at: isAdmin ? new Date().toISOString() : null,
@@ -359,7 +359,7 @@ export async function fetchCustomerById(id: string): Promise<Customer | null> {
     ninLast4: data.nin_last_4,
     state: data.state,
     status: data.status as CustomerStatus,
-    capturedFingers: data.captured_fingers || [],
+    palmVeinTemplate: data.palm_vein_template,
     linkedAccountCount: 0,
     authUserId: data.auth_user_id,
     registeredBy: data.registered_by,

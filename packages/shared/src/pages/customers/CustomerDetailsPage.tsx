@@ -271,7 +271,7 @@ export default function CustomerDetailsPage() {
             <p className="text-sm font-semibold text-white mb-0.5">Pending Administrator KYC Verification</p>
             This customer was enrolled by <strong className="text-white">{customer.registeredByName || "a field agent"}</strong>. 
             {isAdmin 
-              ? ` Review their NIN and 4-finger biometric records below. Once approved, their login password will be dispatched via SMS to ${customer.phone}.`
+              ? ` Review their NIN and Palm Vein biometric records below. Once approved, their login password will be dispatched via SMS to ${customer.phone}.`
               : ` Your enrollment has been submitted and is in the verification queue. The customer will receive their login credentials once reviewed.`}
           </div>
         </div>
@@ -406,17 +406,15 @@ export default function CustomerDetailsPage() {
               </p>
             </div>
             <div>
-              <p className="text-xs text-ink-faint mb-1.5">Captured Biometric Templates (4 Fingers)</p>
-              <div className="grid grid-cols-2 gap-2">
-                {customer.capturedFingers && customer.capturedFingers.length > 0 ? (
-                  customer.capturedFingers.map((finger, idx) => (
-                    <div key={idx} className="flex items-center gap-2 p-2 rounded-lg bg-signal/5 border border-signal/20 text-xs">
-                      <Fingerprint className="w-3.5 h-3.5 text-signal-bright shrink-0" />
-                      <span className="font-medium text-white capitalize truncate">{finger.replace("_", " ")}</span>
-                    </div>
-                  ))
+              <p className="text-xs text-ink-faint mb-1.5">Captured Biometric Template</p>
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-signal/5 border border-signal/20 text-xs w-full max-w-xs">
+                {customer.palmVeinTemplate ? (
+                  <>
+                    <Fingerprint className="w-3.5 h-3.5 text-signal-bright shrink-0" />
+                    <span className="font-medium text-status-ok capitalize truncate">Palm Vein Enrolled</span>
+                  </>
                 ) : (
-                  <span className="text-xs text-ink-faint">No fingers recorded</span>
+                  <span className="text-xs text-status-warn">No palm vein template recorded</span>
                 )}
               </div>
             </div>

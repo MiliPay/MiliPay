@@ -16,7 +16,7 @@ create table public.users (
 -- RLS: Users can only read/update their own record
 alter table public.users enable row level security;
 create policy "Users can view their own profile" 
-  on public.users for read using (auth.uid() = id);
+  on public.users for select using (auth.uid() = id);
 create policy "Users can update their own profile" 
   on public.users for update using (auth.uid() = id);
 

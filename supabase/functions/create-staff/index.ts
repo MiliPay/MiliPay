@@ -74,9 +74,20 @@ serve(async (req) => {
       });
     }
 
-    // 3. Create the user in Auth with default temporary password
+    // 3. Create the user in Auth with secure temporary password
     console.log("Creating user in Auth...");
-    const tempPassword = 'Password12$';
+    function generateSecurePassword(length = 12): string {
+      const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+      let password = "";
+      for (let i = 0; i < length; i++) {
+        password += charset[Math.floor(Math.random() * charset.length)];
+      }
+      return password + "aA1!"; 
+    }
+    
+    const tempPassword = password && password.trim().length >= 8 
+      ? password.trim() 
+      : generateSecurePassword(10);
     
     const ninLast4 = nin.slice(-4);
 

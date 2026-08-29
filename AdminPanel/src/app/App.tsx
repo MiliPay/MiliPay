@@ -16,6 +16,8 @@ import TransactionDetailsPage from "@milipay/shared/pages/transactions/Transacti
 import SettingsPage from "@milipay/shared/pages/settings/SettingsPage";
 import StaffPage from "@milipay/shared/pages/staff/StaffPage";
 import StaffDetailsPage from "@milipay/shared/pages/staff/StaffDetailsPage";
+import { AdminSupportPage } from "@milipay/shared/pages/dashboard/AdminSupportPage";
+import { TicketDetailsPage } from "@milipay/shared/pages/complaints/TicketDetailsPage";
 import NotFoundPage from "@milipay/shared/pages/not-found/NotFoundPage";
 
 export default function App() {
@@ -45,6 +47,8 @@ export default function App() {
             <Route path="settings" element={<SettingsPage />} />
             <Route path="staff" element={<StaffPage />} />
             <Route path="staff/:id" element={<StaffDetailsPage />} />
+            <Route path="support" element={<AdminSupportPage />} />
+            <Route path="support/:id" element={<TicketDetailsPage />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

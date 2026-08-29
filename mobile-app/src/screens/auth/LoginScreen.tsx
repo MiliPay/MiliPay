@@ -14,27 +14,29 @@ export default function LoginScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const passwordRef = useRef<VaultInputRef>(null);
   
   const navigation = useNavigation<any>();
   const login = useAuthStore((state) => state.login);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!phoneNumber || !password) {
       passwordRef.current?.shake();
+      setErrorMsg('Please enter both phone and password');
       return;
     }
 
     setIsLoading(true);
-    // Simulate network request
-    setTimeout(() => {
+    setErrorMsg('');
+    try {
+      await login(phoneNumber, password);
+      // Success! useAuthStore will automatically navigate via AppNavigator listening to isAuthenticated
+    } catch (error: any) {
+      passwordRef.current?.shake();
+      setErrorMsg(error.message || 'Invalid login credentials');
       setIsLoading(false);
-      if (password === '0000') { // Mock logic for first time login
-        navigation.navigate('ChangePassword');
-      } else {
-        login();
-      }
-    }, 1500);
+    }
   };
 
   return (
@@ -85,6 +87,12 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
               />
+              
+              {errorMsg ? (
+                <Text className="text-red-400 font-inter text-sm text-center mt-4">
+                  {errorMsg}
+                </Text>
+              ) : null}
             </GlassCard>
 
             <SecureButton

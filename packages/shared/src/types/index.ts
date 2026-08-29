@@ -45,7 +45,7 @@ export interface Customer {
   ninLast4: string;
   state: string;
   status: CustomerStatus;
-  capturedFingers: string[];
+  palmVeinTemplate?: string;
   linkedAccountCount: number;
   createdAt: string;
   authUserId?: string;
@@ -98,7 +98,7 @@ export interface CustomerDraft {
   email: string;
   address: string;
   state: string;
-  capturedFingers: string[];
+  palmVeinTemplate: string;
 }
 
 export const EMPTY_CUSTOMER_DRAFT: CustomerDraft = {
@@ -110,7 +110,7 @@ export const EMPTY_CUSTOMER_DRAFT: CustomerDraft = {
   email: "",
   address: "",
   state: "",
-  capturedFingers: [],
+  palmVeinTemplate: "",
 };
 
 export type TicketStatus = "open" | "in_progress" | "resolved";

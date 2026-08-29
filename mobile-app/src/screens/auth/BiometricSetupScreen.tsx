@@ -55,7 +55,7 @@ export default function BiometricSetupScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       
       setTimeout(() => {
-        login(); // Complete auth flow!
+        console.log("Biometric setup bypassed");
       }, 2000);
     }, 3000);
   };
@@ -132,7 +132,7 @@ export default function BiometricSetupScreen() {
           <SecureButton
             title="Skip for now"
             variant="secondary"
-            onPress={() => login()}
+            onPress={() => console.log("Skip biometric setup")}
             disabled={isScanning || isSuccess}
           />
         </View>

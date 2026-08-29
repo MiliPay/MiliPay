@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
-import { UserPlus, History, Settings, LogOut, Users, UserCheck } from "lucide-react";
+import { UserPlus, History, Settings, LogOut, Users, UserCheck, Ticket } from "lucide-react";
 import clsx from "clsx";
 import { useAuth } from "@milipay/shared/features/auth/AuthContext";
 
@@ -12,6 +12,7 @@ export function AgentLayout() {
     { name: "Dashboard", path: "/dashboard", icon: History },
     { name: "Register Customer", path: "/register", icon: UserPlus },
     { name: "Customers", path: "/customers", icon: Users },
+    { name: "Support", path: "/support", icon: Ticket },
     { name: "Settings", path: "/settings", icon: Settings },
   ];
 

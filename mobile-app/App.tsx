@@ -5,10 +5,13 @@ import AppNavigator from './src/navigation/AppNavigator';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { SpaceMono_400Regular, SpaceMono_700Bold } from '@expo-google-fonts/space-mono';
 import * as SplashScreen from 'expo-splash-screen';
+import { useAuthStore } from './src/store/useStore';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
+  const initializeAuth = useAuthStore((state) => state.initialize);
+  
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -19,10 +22,11 @@ export default function App() {
   });
 
   useEffect(() => {
+    initializeAuth();
     if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded, fontError, initializeAuth]);
 
   if (!fontsLoaded && !fontError) {
     return null;

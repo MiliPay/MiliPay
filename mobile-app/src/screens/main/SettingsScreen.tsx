@@ -30,7 +30,7 @@ const SettingItem = ({ icon: Icon, label, value, type = 'nav', danger = false, o
     ) : type === 'value' ? (
       <Text className="text-white/40 font-inter text-sm">{value}</Text>
     ) : (
-      <Text className="text-white/20 font-mono-bold">></Text>
+      <Text className="text-white/20 font-mono-bold">&gt;</Text>
     )}
   </Pressable>
 );

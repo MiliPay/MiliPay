@@ -66,20 +66,31 @@ export async function fetchSupportTickets(options: FetchTicketsOptions = {}): Pr
 }
 
 export async function fetchSupportTicketStats() {
-  // Get open complaints
+  const { count: totalTickets } = await supabase
+    .from("support_tickets")
+    .select("*", { count: "exact", head: true });
+
   const { count: openCount } = await supabase
     .from("support_tickets")
     .select("*", { count: "exact", head: true })
     .eq("status", "open");
 
-  // Get escalations (urgency = high or critical and not resolved)
+  const { count: inProgressCount } = await supabase
+    .from("support_tickets")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "in_progress");
+
+  const { count: resolvedCount } = await supabase
+    .from("support_tickets")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "resolved");
+
   const { count: escalationCount } = await supabase
     .from("support_tickets")
     .select("*", { count: "exact", head: true })
     .in("urgency", ["high", "critical"])
     .neq("status", "resolved");
 
-  // Get resolved tickets to calculate average resolution time
   const { data: resolvedTickets } = await supabase
     .from("support_tickets")
     .select("started_at, resolved_at")
@@ -97,11 +108,69 @@ export async function fetchSupportTicketStats() {
     avgResolution = (totalHours / resolvedTickets.length).toFixed(1) + "h";
   }
 
+  const total = totalTickets || 0;
+  const pending = (openCount || 0) + (inProgressCount || 0);
+  const resolved = resolvedCount || 0;
+
   return {
+    totalTickets: total,
     openComplaints: openCount || 0,
+    pendingTickets: pending,
+    resolvedTickets: resolved,
     escalations: escalationCount || 0,
     avgResolution,
+    resolvedPercentage: total > 0 ? Math.round((resolved / total) * 100) : 0,
+    pendingPercentage: total > 0 ? Math.round((pending / total) * 100) : 0,
   };
+}
+
+export async function fetchEscalatedTickets(): Promise<PaginatedResult<SupportTicket>> {
+  let query = supabase
+    .from("support_tickets")
+    .select(`
+      id,
+      ticket_id,
+      issue_description,
+      status,
+      urgency,
+      created_at,
+      updated_at,
+      customer_id,
+      customers:customer_id ( first_name, last_name, phone ),
+      assigned_to,
+      staff_profiles:assigned_to ( full_name )
+    `, { count: "exact" })
+    .in("urgency", ["high", "critical"])
+    .neq("status", "resolved")
+    .order("created_at", { ascending: false });
+
+  const { data, error, count } = await query.range(0, 49);
+
+  if (error) {
+    console.error("Error fetching escalated tickets:", error);
+    return { items: [], page: 1, pageSize: 50, totalCount: 0 };
+  }
+
+  const items: SupportTicket[] = (data || []).map((row: any) => {
+    const cust = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+    const staff = Array.isArray(row.staff_profiles) ? row.staff_profiles[0] : row.staff_profiles;
+    return {
+      id: row.id,
+      ticketId: row.ticket_id,
+      issueDescription: row.issue_description,
+      status: row.status,
+      urgency: row.urgency,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      customerId: row.customer_id,
+      customerName: cust ? `${cust.first_name} ${cust.last_name}` : "Unknown",
+      customerPhone: cust?.phone,
+      assignedTo: row.assigned_to,
+      assignedToName: staff?.full_name,
+    };
+  });
+
+  return { items, page: 1, pageSize: 50, totalCount: count || 0 };
 }
 
 export async function claimTicket(ticketId: string, agentId: string) {
@@ -219,6 +288,46 @@ export async function sendTicketMessage(ticketId: string, senderId: string, send
       await supabase.from("support_tickets").update({ status: "in_progress" }).eq("id", ticketId);
     }
   }
+
+  return data;
+}
+
+export async function createTicket(customerId: string, issueDescription: string, createdById: string) {
+  const ticketId = `TKT-${Math.floor(1000 + Math.random() * 9000)}`;
+  const { data, error } = await supabase
+    .from("support_tickets")
+    .insert({
+      ticket_id: ticketId,
+      customer_id: customerId,
+      issue_description: issueDescription,
+      created_by: createdById,
+      status: "open",
+      urgency: "medium"
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function bumpTicketPriority(ticketId: string, agentName: string) {
+  const { data, error } = await supabase
+    .from("support_tickets")
+    .update({ urgency: "critical" })
+    .eq("id", ticketId)
+    .select()
+    .single();
+    
+  if (error) throw error;
+
+  await supabase
+    .from("ticket_messages")
+    .insert({
+      ticket_id: ticketId,
+      sender_type: "system",
+      content: `Priority escalated to CRITICAL by Field Agent ${agentName} due to 24hr SLA breach.`,
+    });
 
   return data;
 }

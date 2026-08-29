@@ -17,32 +17,35 @@ function normalizeNigerianPhone(phone: string): string {
   return `+${digits}`;
 }
 
-async function sendSmsNotification(phone: string, tempPassword: string, customerName: string): Promise<boolean> {
-  const message = `Welcome to MiliPay, ${customerName}! Your biometric account has been verified. Download the MiliPay app and log in with your phone (${phone}) and temporary password: ${tempPassword}. Please change your password on first login.`;
+async function sendEmailNotification(email: string, tempPassword: string, customerName: string): Promise<boolean> {
+  const message = `Welcome to MiliPay, ${customerName}! Your biometric account has been verified. Log in with your temporary password: ${tempPassword}. Please change your password on first login.`;
   
-  console.log(`[SMS DISPATCH SIMULATOR] To: ${phone} | Message: ${message}`);
+  console.log(`[EMAIL DISPATCH SIMULATOR] To: ${email} | Message: ${message}`);
 
-  const termiiApiKey = Deno.env.get('TERMII_API_KEY');
-  if (termiiApiKey) {
+  const resendApiKey = Deno.env.get('RESEND_API_KEY');
+  if (resendApiKey && email && email.includes('@')) {
     try {
-      const response = await fetch('https://api.ng.termii.com/api/sms/send', {
+      const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Authorization': `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
-          to: phone,
-          from: 'MiliPay',
-          sms: message,
-          type: 'plain',
-          channel: 'generic',
-          api_key: termiiApiKey,
+          from: 'MiliPay <onboarding@resend.dev>',
+          to: email,
+          subject: 'Your MiliPay Account is Ready!',
+          html: `<p>Welcome to MiliPay, <strong>${customerName}</strong>!</p><p>Your biometric account has been verified.</p><p>Log in using your <strong>registered phone number</strong> and your temporary password: <strong>${tempPassword}</strong></p><p><em>Please change your password on your first login.</em></p>`,
         }),
       });
-      console.log("Termii SMS response status:", response.status);
+      console.log("Resend Email response status:", response.status);
     } catch (err) {
-      console.error("Termii SMS sending error:", err);
+      console.error("Resend Email sending error:", err);
     }
   }
 
+  // NOTE: To switch back to SMS in production, simply replace this block with the Termii SMS API payload
+  // and rename back to sendSmsNotification.
   return true;
 }
 
@@ -109,9 +112,19 @@ serve(async (req) => {
     }
 
     // 4. Generate temporary password
+    function generateSecurePassword(length = 12): string {
+      const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+      let password = "";
+      for (let i = 0; i < length; i++) {
+        password += charset[Math.floor(Math.random() * charset.length)];
+      }
+      // Ensure at least one uppercase, one lowercase, one number, and one special char
+      return password + "aA1!"; 
+    }
+
     const tempPassword = customPassword && customPassword.trim().length >= 8
       ? customPassword.trim()
-      : `MiliPay!${Math.floor(100000 + Math.random() * 900000)}`;
+      : generateSecurePassword(10);
 
     const normalizedPhone = normalizeNigerianPhone(customer.phone);
     const authEmail = customer.email || `${customer.phone.replace(/\D/g, '')}@customer.milipay.ng`;
@@ -177,17 +190,18 @@ serve(async (req) => {
       throw updateError;
     }
 
-    // 7. Dispatch SMS with temporary password
+    // 7. Dispatch Email with temporary password (SMS disabled for testing)
     const customerFullName = `${customer.first_name} ${customer.last_name}`.trim();
-    await sendSmsNotification(customer.phone, tempPassword, customerFullName);
+    await sendEmailNotification(authEmail, tempPassword, customerFullName);
 
     return new Response(JSON.stringify({
       success: true,
       customerId: customer.id,
       authUserId: authUserId,
       tempPassword: tempPassword,
-      smsDispatched: true,
-      message: 'Customer verified, auth created, and SMS password dispatched successfully.',
+      smsDispatched: false,
+      emailDispatched: true,
+      message: 'Customer verified, auth created, and Email password dispatched successfully.',
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,

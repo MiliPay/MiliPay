@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, Dimensions, Pressable } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, Dimensions, Pressable, Modal, TextInput, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { 
   useAnimatedScrollHandler, 
@@ -7,41 +7,52 @@ import Animated, {
   useAnimatedStyle, 
   interpolate, 
   Extrapolation,
-  withTiming,
 } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Eye, EyeOff, Smartphone, Wifi, Zap, ArrowUpRight, ArrowDownLeft, MoreHorizontal, Lightbulb, Tv, Copy, CheckCheck } from 'lucide-react-native';
+import { Eye, EyeOff, Smartphone, Wifi, Zap, ArrowUpRight, ArrowDownLeft, MoreHorizontal, Lightbulb, Tv, Copy, CheckCheck, Plus } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 
+import { MonoProvider, useMonoConnect } from '@mono.co/connect-react-native';
 import { useBankStore, useAuthStore } from '../../store/useStore';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.90;
 const SNAP_INTERVAL = CARD_WIDTH + 16;
 
-const mockBanks = [
-  { id: '1', bankName: 'Guaranty Trust Bank', accountName: 'John Doe', accountNumber: '0123456789', balance: '₦450,000.00' },
-  { id: '2', bankName: 'Zenith Bank', accountName: 'John Doe', accountNumber: '9876543210', balance: '₦1,250,000.00' },
-  { id: '3', bankName: 'Access Bank', accountName: 'John Doe', accountNumber: '1122334455', balance: '₦50,000.00' },
-];
-
-const mockTransactions = {
-  0: [
-    { id: 't1', title: 'Chicken Republic', date: 'Today, 2:30 PM', amount: '-₦4,500.00', type: 'debit' },
-    { id: 't2', title: 'Salary Deposit', date: 'Yesterday', amount: '+₦450,000.00', type: 'credit' },
-  ],
-  1: [
-    { id: 't3', title: 'Uber Ride', date: 'Today, 8:15 AM', amount: '-₦3,200.00', type: 'debit' },
-  ],
-  2: [
-    { id: 't4', title: 'Airtime Recharge', date: 'Aug 14, 2026', amount: '-₦1,000.00', type: 'debit' },
-    { id: 't5', title: 'Transfer from Jane', date: 'Aug 10, 2026', amount: '+₦25,000.00', type: 'credit' },
-  ]
-};
-
 const BankNode = ({ item, index, scrollX, isBalanceHidden, toggleBalance, isActive }: any) => {
+  if (item.isLinkCard) {
+    const { init } = useMonoConnect();
+
+    // Add Bank Card
+    const inputRange = [
+      (index - 1) * SNAP_INTERVAL,
+      index * SNAP_INTERVAL,
+      (index + 1) * SNAP_INTERVAL,
+    ];
+    const animatedStyle = useAnimatedStyle(() => {
+      const scale = interpolate(scrollX.value, inputRange, [0.9, 1, 0.9], Extrapolation.CLAMP);
+      const opacity = interpolate(scrollX.value, inputRange, [0.5, 1, 0.5], Extrapolation.CLAMP);
+      return { transform: [{ scale }], opacity };
+    });
+
+    return (
+      <Animated.View style={[animatedStyle, { width: CARD_WIDTH, marginHorizontal: 8 }]}>
+        <Pressable 
+          onPress={() => init()}
+          className="rounded-3xl overflow-hidden h-56 border border-dashed border-white/20 bg-white/5 items-center justify-center active:bg-white/10"
+        >
+          <View className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 items-center justify-center mb-4">
+            <Plus color="#10b981" size={32} />
+          </View>
+          <Text className="text-white font-inter-bold text-xl mb-1">Link Bank Account</Text>
+          <Text className="text-white/60 font-inter text-sm text-center px-8">Connect another account to use with BioPay.</Text>
+        </Pressable>
+      </Animated.View>
+    );
+  }
+
   const [isCopied, setIsCopied] = useState(false);
   
   const inputRange = [
@@ -134,14 +145,19 @@ const BankNode = ({ item, index, scrollX, isBalanceHidden, toggleBalance, isActi
   );
 };
 
-export default function HomeScreen({ navigation }: any) {
+function HomeScreenContent({ navigation }: any) {
   const user = useAuthStore((state) => state.user);
   
-  const activeBankIndex = useBankStore((state) => state.activeBankIndex);
-  const setActiveBankIndex = useBankStore((state) => state.setActiveBankIndex);
+  const { linkedAccounts, activeBankIndex, isLoading, fetchAccounts, setActiveBankIndex } = useBankStore();
   
   const [isBalanceHidden, setIsBalanceHidden] = useState(true);
   const [txFilter, setTxFilter] = useState<'7d' | '1m' | 'all'>('7d');
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchAccounts(user.id);
+    }
+  }, [user?.id]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -163,7 +179,8 @@ export default function HomeScreen({ navigation }: any) {
 
   const handleMomentumScrollEnd = (event: any) => {
     const index = Math.round(event.nativeEvent.contentOffset.x / SNAP_INTERVAL);
-    if (index !== activeBankIndex) {
+    // Don't set active if they scroll to the "Link Bank" card
+    if (index !== activeBankIndex && index < linkedAccounts.length) {
       Haptics.selectionAsync();
       setActiveBankIndex(index);
     }
@@ -174,7 +191,11 @@ export default function HomeScreen({ navigation }: any) {
     setIsBalanceHidden(!isBalanceHidden);
   };
 
-  const activeTransactions = mockTransactions[activeBankIndex as keyof typeof mockTransactions] || [];
+  // Build the carousel items: Max 3 linked accounts + 1 Link Card if < 3
+  const carouselItems = [...linkedAccounts];
+  if (carouselItems.length < 3) {
+    carouselItems.push({ id: 'link_card', isLinkCard: true } as any);
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-black">
@@ -199,58 +220,35 @@ export default function HomeScreen({ navigation }: any) {
         </View>
 
         {/* Bank Nodes Carousel */}
-        <View className="mt-4">
-          <Animated.ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            snapToInterval={SNAP_INTERVAL}
-            decelerationRate="fast"
-            onScroll={scrollHandler}
-            onMomentumScrollEnd={handleMomentumScrollEnd}
-            scrollEventThrottle={16}
-            contentContainerStyle={{ paddingHorizontal: (width - CARD_WIDTH) / 2 - 8 }}
-          >
-            {mockBanks.map((item, index) => (
-              <BankNode 
-                key={item.id} 
-                item={item} 
-                index={index} 
-                scrollX={scrollX}
-                isBalanceHidden={isBalanceHidden}
-                toggleBalance={toggleBalance}
-                isActive={index === activeBankIndex}
-              />
-            ))}
-          </Animated.ScrollView>
-        </View>
-
-        {/* Recent Merchants (Send Again) */}
-        <View className="px-6 mt-8 mb-4">
-          <Text className="text-white/90 font-inter-bold uppercase tracking-widest text-xs">
-            Send Again
-          </Text>
-        </View>
-        <View className="px-6 flex-row gap-5">
-          <Pressable className="items-center" onPress={() => Haptics.selectionAsync()}>
-            <View className="w-14 h-14 rounded-full bg-orange-500/20 border border-orange-500/40 items-center justify-center mb-2 shadow-lg shadow-orange-500/20">
-              <Text className="text-orange-400 font-inter-bold text-lg">CR</Text>
+        <View className="mt-4 min-h-[224px]">
+          {isLoading && linkedAccounts.length === 0 ? (
+            <View className="h-56 items-center justify-center">
+               <ActivityIndicator color="#10b981" />
             </View>
-            <Text className="text-white/70 font-inter text-xs">Chicken Rep.</Text>
-          </Pressable>
-          
-          <Pressable className="items-center" onPress={() => Haptics.selectionAsync()}>
-            <View className="w-14 h-14 rounded-full bg-blue-500/20 border border-blue-500/40 items-center justify-center mb-2 shadow-lg shadow-blue-500/20">
-              <Text className="text-blue-400 font-inter-bold text-lg">MT</Text>
-            </View>
-            <Text className="text-white/70 font-inter text-xs">MTN Bill</Text>
-          </Pressable>
-
-          <Pressable className="items-center" onPress={() => Haptics.selectionAsync()}>
-            <View className="w-14 h-14 rounded-full bg-purple-500/20 border border-purple-500/40 items-center justify-center mb-2 shadow-lg shadow-purple-500/20">
-              <Text className="text-purple-400 font-inter-bold text-lg">UB</Text>
-            </View>
-            <Text className="text-white/70 font-inter text-xs">Uber</Text>
-          </Pressable>
+          ) : (
+            <Animated.ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              snapToInterval={SNAP_INTERVAL}
+              decelerationRate="fast"
+              onScroll={scrollHandler}
+              onMomentumScrollEnd={handleMomentumScrollEnd}
+              scrollEventThrottle={16}
+              contentContainerStyle={{ paddingHorizontal: (width - CARD_WIDTH) / 2 - 8 }}
+            >
+              {carouselItems.map((item, index) => (
+                <BankNode 
+                  key={item.id} 
+                  item={item} 
+                  index={index} 
+                  scrollX={scrollX}
+                  isBalanceHidden={isBalanceHidden}
+                  toggleBalance={toggleBalance}
+                  isActive={index === activeBankIndex && !(item as any).isLinkCard}
+                />
+              ))}
+            </Animated.ScrollView>
+          )}
         </View>
 
         {/* Quick Services Shortcuts */}
@@ -260,50 +258,31 @@ export default function HomeScreen({ navigation }: any) {
           </Text>
         </View>
         <View className="px-5 flex-row justify-between">
-          <Pressable 
-            onPress={() => {}}
-            className="items-center w-[18%]"
-          >
+          <Pressable onPress={() => {}} className="items-center w-[18%]">
             <View className="w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-500/50 items-center justify-center mb-2">
               <Smartphone color="#10b981" size={20} />
             </View>
             <Text className="text-white/70 font-inter text-[11px] text-center" numberOfLines={1}>Airtime</Text>
           </Pressable>
-          
-          <Pressable 
-            onPress={() => {}}
-            className="items-center w-[18%]"
-          >
+          <Pressable onPress={() => {}} className="items-center w-[18%]">
             <View className="w-12 h-12 rounded-full bg-blue-500/20 border border-blue-500/50 items-center justify-center mb-2">
               <Wifi color="#3b82f6" size={20} />
             </View>
             <Text className="text-white/70 font-inter text-[11px] text-center" numberOfLines={1}>Data</Text>
           </Pressable>
-
-          <Pressable 
-            onPress={() => {}}
-            className="items-center w-[18%]"
-          >
+          <Pressable onPress={() => {}} className="items-center w-[18%]">
             <View className="w-12 h-12 rounded-full bg-orange-500/20 border border-orange-500/50 items-center justify-center mb-2">
               <Lightbulb color="#f97316" size={20} />
             </View>
             <Text className="text-white/70 font-inter text-[11px] text-center" numberOfLines={1}>Power</Text>
           </Pressable>
-
-          <Pressable 
-            onPress={() => {}}
-            className="items-center w-[18%]"
-          >
+          <Pressable onPress={() => {}} className="items-center w-[18%]">
             <View className="w-12 h-12 rounded-full bg-purple-500/20 border border-purple-500/50 items-center justify-center mb-2">
               <Tv color="#a855f7" size={20} />
             </View>
             <Text className="text-white/70 font-inter text-[11px] text-center" numberOfLines={1}>Cable</Text>
           </Pressable>
-
-          <Pressable 
-            onPress={() => navigation.navigate('Services')}
-            className="items-center w-[18%]"
-          >
+          <Pressable onPress={() => navigation.navigate('Services')} className="items-center w-[18%]">
             <View className="w-12 h-12 rounded-full bg-white/5 border border-white/10 items-center justify-center mb-2">
               <MoreHorizontal color="rgba(255,255,255,0.7)" size={20} />
             </View>
@@ -314,53 +293,59 @@ export default function HomeScreen({ navigation }: any) {
         {/* Contextual Transaction History */}
         <View className="px-6 mt-12 mb-5 flex-row items-center justify-between">
           <Text className="text-white/90 font-inter-bold uppercase tracking-widest text-xs">
-            Recent
+            Recent Transactions
           </Text>
           <View className="flex-row gap-1.5">
-            <Pressable 
-              onPress={() => setTxFilter('7d')}
-              className={`px-2 py-1 rounded-md ${txFilter === '7d' ? 'bg-emerald-500/20 border border-emerald-500/30' : 'bg-white/5 border border-transparent active:bg-white/10'}`}
-            >
+            <Pressable onPress={() => setTxFilter('7d')} className={`px-2 py-1 rounded-md ${txFilter === '7d' ? 'bg-emerald-500/20 border border-emerald-500/30' : 'bg-white/5 border border-transparent active:bg-white/10'}`}>
               <Text className={`${txFilter === '7d' ? 'text-emerald-400' : 'text-white/50'} font-inter-semibold text-[10px] uppercase tracking-wider`}>7 Days</Text>
             </Pressable>
-            
-            <Pressable 
-              onPress={() => setTxFilter('1m')}
-              className={`px-2 py-1 rounded-md ${txFilter === '1m' ? 'bg-emerald-500/20 border border-emerald-500/30' : 'bg-white/5 border border-transparent active:bg-white/10'}`}
-            >
+            <Pressable onPress={() => setTxFilter('1m')} className={`px-2 py-1 rounded-md ${txFilter === '1m' ? 'bg-emerald-500/20 border border-emerald-500/30' : 'bg-white/5 border border-transparent active:bg-white/10'}`}>
               <Text className={`${txFilter === '1m' ? 'text-emerald-400' : 'text-white/50'} font-inter-semibold text-[10px] uppercase tracking-wider`}>1 Month</Text>
             </Pressable>
-            
-            <Pressable 
-              onPress={() => setTxFilter('all')}
-              className={`px-2 py-1 rounded-md ${txFilter === 'all' ? 'bg-emerald-500/20 border border-emerald-500/30' : 'bg-white/5 border border-transparent active:bg-white/10'}`}
-            >
+            <Pressable onPress={() => setTxFilter('all')} className={`px-2 py-1 rounded-md ${txFilter === 'all' ? 'bg-emerald-500/20 border border-emerald-500/30' : 'bg-white/5 border border-transparent active:bg-white/10'}`}>
               <Text className={`${txFilter === 'all' ? 'text-emerald-400' : 'text-white/50'} font-inter-semibold text-[10px] uppercase tracking-wider`}>All</Text>
             </Pressable>
           </View>
         </View>
-        <View className="px-6 pb-12">
-          {activeTransactions.map((tx: any, i: number) => (
-            <Animated.View 
-              key={tx.id} 
-              className="flex-row justify-between items-center mb-6"
-            >
-              <View className="flex-row items-center">
-                <View className={`w-12 h-12 rounded-full items-center justify-center mr-4 ${tx.type === 'debit' ? 'bg-red-500/10' : 'bg-emerald-500/10'}`}>
-                  {tx.type === 'debit' ? <ArrowUpRight color="#ef4444" size={20} /> : <ArrowDownLeft color="#10b981" size={20} />}
-                </View>
-                <View>
-                  <Text className="text-white font-inter-semibold text-base">{tx.title}</Text>
-                  <Text className="text-white/40 font-inter text-xs mt-1">{tx.date}</Text>
-                </View>
-              </View>
-              <Text className={`font-mono-bold text-base ${tx.type === 'debit' ? 'text-white' : 'text-emerald-400'}`}>
-                {tx.amount}
-              </Text>
-            </Animated.View>
-          ))}
+        
+        <View className="px-6 pb-12 items-center justify-center py-8">
+           <View className="w-16 h-16 rounded-full bg-white/5 items-center justify-center mb-4">
+             <ArrowDownLeft color="rgba(255,255,255,0.2)" size={24} />
+           </View>
+           <Text className="text-white/40 font-inter text-sm">No recent MiliPay transactions</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+export default function HomeScreen({ navigation }: any) {
+  const user = useAuthStore((state) => state.user);
+  const { linkMonoAccount } = useBankStore();
+
+  const monoConfig = {
+    publicKey: process.env.EXPO_PUBLIC_MONO_PUBLIC_KEY || "", // Loaded from mobile-app/.env
+    scope: "auth",
+    data: {
+      customer: {
+        name: user?.firstName || "Test User",
+        email: user?.email || "test@biopay.app"
+      }
+    },
+    onClose: () => console.log('Widget closed'),
+    onSuccess: async (data: any) => {
+      try {
+        const code = data.getAuthCode();
+        await linkMonoAccount(code);
+      } catch (err) {
+        console.error("Mono link error", err);
+      }
+    }
+  };
+
+  return (
+    <MonoProvider {...monoConfig}>
+      <HomeScreenContent navigation={navigation} />
+    </MonoProvider>
   );
 }

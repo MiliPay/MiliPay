@@ -19,4 +19,6 @@ export const ROUTES = {
   settings: "/dashboard/settings",
   staff: "/dashboard/staff",
   staffDetails: "/dashboard/staff/:id",
+  support: "/dashboard/support",
+  supportDetails: "/dashboard/support/:id",
 } as const;
