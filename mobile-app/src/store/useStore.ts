@@ -9,6 +9,8 @@ interface User {
   initials: string;
   email: string;
   phone: string;
+  address?: string;
+  nin?: string;
 }
 
 interface AuthState {
@@ -26,11 +28,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isLoading: true,
   
   initialize: () => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         const meta = session.user.user_metadata || {};
         const fullName = meta.full_name || '';
         const names = fullName.split(' ');
+        
+        // Fetch additional fields from customers table
+        // We select * so it won't crash before the address migration is applied
+        const { data: customerData } = await supabase
+          .from('customers')
+          .select('*')
+          .eq('auth_user_id', session.user.id)
+          .single();
         
         set({ 
           isAuthenticated: true, 
@@ -41,6 +51,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             initials: (names[0]?.[0] || 'U') + (names[1]?.[0] || ''),
             email: session.user.email || '',
             phone: session.user.phone || '',
+            nin: customerData?.nin_last_4 || undefined,
+            address: customerData?.address || customerData?.state || undefined
           },
           isLoading: false
         });
@@ -49,11 +61,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     });
 
-    supabase.auth.onAuthStateChange((_event, session) => {
+    supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         const meta = session.user.user_metadata || {};
         const fullName = meta.full_name || '';
         const names = fullName.split(' ');
+        
+        // Fetch additional fields from customers table
+        const { data: customerData } = await supabase
+          .from('customers')
+          .select('*')
+          .eq('auth_user_id', session.user.id)
+          .single();
         
         set({ 
           isAuthenticated: true, 
@@ -64,6 +83,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             initials: (names[0]?.[0] || 'U') + (names[1]?.[0] || ''),
             email: session.user.email || '',
             phone: session.user.phone || '',
+            nin: customerData?.nin_last_4 || undefined,
+            address: customerData?.address || customerData?.state || undefined
           }
         });
       } else {
@@ -137,11 +158,7 @@ export const useBankStore = create<BankState>((set, get) => ({
         bankName: acc.bank_name,
         accountName: acc.account_name,
         accountNumber: acc.account_number,
-        // Since we removed mocks, but we don't have a real banking API to pull real-time balances, 
-        // we'll assign a static default balance for the UI requirement, or randomly generate it based on ID.
-        // But to be fully "no mock", we should ideally get it from the bank. 
-        // For now, we will just set a placeholder or derive from ID. Let's use ₦0.00 to be safe from fake data.
-        balance: '₦0.00' 
+        balance: `₦${((acc.balance || 0) / 100).toLocaleString('en-NG', { minimumFractionDigits: 2 })}` 
       }));
       
       set({ linkedAccounts: accounts, isLoading: false });
@@ -178,7 +195,7 @@ export const useBankStore = create<BankState>((set, get) => ({
         bankName: data.account.bank_name,
         accountName: data.account.account_name,
         accountNumber: data.account.account_number,
-        balance: '₦0.00' // Mocked balance for UI until we fetch live balances
+        balance: `₦${((data.account.balance || 0) / 100).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
       };
       
       set(state => ({

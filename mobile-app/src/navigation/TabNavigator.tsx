@@ -5,8 +5,10 @@ import { Home, Compass, Settings } from 'lucide-react-native';
 
 import HomeScreen from '../screens/main/HomeScreen';
 import ServicesScreen from '../screens/main/ServicesScreen';
-import PlaceholderScreen from '../screens/main/PlaceholderScreen';
+import ExploreScreen from '../screens/main/ExploreScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
+import TransactionsScreen from '../screens/main/TransactionsScreen';
+import ProfileSettingsScreen from '../screens/main/ProfileSettingsScreen';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator();
@@ -16,21 +18,39 @@ function HomeStackNavigator() {
     <HomeStack.Navigator screenOptions={{ headerShown: false }}>
       <HomeStack.Screen name="HomeScreen" component={HomeScreen} />
       <HomeStack.Screen name="Services" component={ServicesScreen} />
+      <HomeStack.Screen name="Transactions" component={TransactionsScreen} />
+      <HomeStack.Screen name="ProfileSettings" component={ProfileSettingsScreen} />
     </HomeStack.Navigator>
   );
 }
 
+const SettingsStack = createNativeStackNavigator();
+
+function SettingsStackNavigator() {
+  return (
+    <SettingsStack.Navigator screenOptions={{ headerShown: false }}>
+      <SettingsStack.Screen name="SettingsScreen" component={SettingsScreen} />
+      <SettingsStack.Screen name="ProfileSettings" component={ProfileSettingsScreen} />
+    </SettingsStack.Navigator>
+  );
+}
+
+import { useColorScheme } from 'nativewind';
+
 export default function TabNavigator() {
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme !== 'light';
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#111827', // gray-900
-          borderTopColor: '#374151', // gray-700
+          backgroundColor: isDark ? '#000' : '#fff', 
+          borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', 
         },
-        tabBarActiveTintColor: '#22c55e', // green-500
-        tabBarInactiveTintColor: '#9ca3af', // gray-400
+        tabBarActiveTintColor: '#10b981', 
+        tabBarInactiveTintColor: isDark ? '#6b7280' : '#9ca3af', 
       }}
     >
       <Tab.Screen 
@@ -42,8 +62,8 @@ export default function TabNavigator() {
         }}
       />
       <Tab.Screen 
-        name="ComingSoonTab" 
-        component={PlaceholderScreen} 
+        name="ExploreTab" 
+        component={ExploreScreen} 
         options={{
           tabBarLabel: 'Explore',
           tabBarIcon: ({ color, size }) => <Compass color={color} size={size} />
@@ -51,7 +71,7 @@ export default function TabNavigator() {
       />
       <Tab.Screen 
         name="SettingsTab" 
-        component={SettingsScreen} 
+        component={SettingsStackNavigator} 
         options={{
           tabBarLabel: 'Settings',
           tabBarIcon: ({ color, size }) => <Settings color={color} size={size} />

@@ -83,11 +83,14 @@ serve(async (req) => {
     }
 
     const accountData = await accountRes.json();
-    // v2 may wrap in data
-    const acct = accountData?.data || accountData;
-    const bankName = acct.institution?.name || acct.meta?.data_status || 'Unknown Bank';
-    const accountNumber = acct.accountNumber || acct.account_number || acct.meta?.account_number || '0000000000';
-    const accountName = acct.name || acct.meta?.name || 'Unknown User';
+    console.log("Mono Account Response:", JSON.stringify(accountData));
+    
+    // v2 structure: { data: { account: { name, account_number, balance, institution: { name } }, meta: {...} } }
+    const acct = accountData?.data?.account || accountData?.data || accountData;
+    const bankName = acct.institution?.name || accountData?.data?.meta?.data_status || 'Unknown Bank';
+    const accountNumber = acct.account_number || acct.accountNumber || '0000000000';
+    const accountName = acct.name || 'Unknown User';
+    const balance = acct.balance || 0;
 
     // --- Database: save everything using admin client (bypasses RLS) ---
 
@@ -98,6 +101,7 @@ serve(async (req) => {
       bank_name: bankName,
       account_number: accountNumber,
       account_name: accountName,
+      balance: balance,
     }).select().single();
 
     if (error) {
