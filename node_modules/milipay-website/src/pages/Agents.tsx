@@ -1,84 +1,70 @@
-import { FadeIn } from '../components/ui/FadeIn';
-import { Users, Briefcase, TrendingUp, Award } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Briefcase, ArrowRight, UserPlus, MapPin } from 'lucide-react';
 
 export function Agents() {
   return (
-    <div className="overflow-hidden">
-      {/* Hero Section */}
-      <section className="pt-20 pb-16 bg-gray-900 text-center text-white">
-        <div className="max-w-4xl mx-auto px-4">
-          <FadeIn>
-            <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
-              <Users className="w-8 h-8 text-white" />
-            </div>
-            <h1 className="text-4xl md:text-5xl font-extrabold mb-6">
-              The Frontline of Identity Assurance.
-            </h1>
-            <p className="text-lg text-gray-400 max-w-3xl mx-auto mb-10 leading-relaxed">
-              MiliPay agents form the foundation of our trusted network. Join as a certified agent to perform strict, in-person biometric capture and National Identity (NIN) verification, ensuring absolute security for every enrolled user. As an agent, you become the crucial human bridge connecting unbanked and banked citizens alike to the most secure financial infrastructure in Africa. Your diligence guarantees that synthetic fraud never enters our ecosystem.
-            </p>
-            <a href="http://localhost:5174/login" className="inline-block bg-primary hover:bg-primary-dark text-white font-bold px-8 py-4 rounded-xl transition-all shadow-[0_4px_20px_rgba(14,173,105,0.3)]">
-              Agent Portal Login
-            </a>
-          </FadeIn>
-        </div>
-      </section>
+    <section className="relative py-24 bg-[#020617] text-white overflow-hidden border-t border-white/5">
+      <div className="absolute left-0 bottom-0 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[120px] pointer-events-none" />
 
-      {/* Steps to Earn */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <FadeIn className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-gray-900">How You Earn</h2>
-          </FadeIn>
-          <div className="grid md:grid-cols-3 gap-8">
-            <FadeIn delay={100} className="text-center p-6">
-              <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-100">
-                <Briefcase className="w-8 h-8 text-blue-500" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">1. Get the Gear</h3>
-              <p className="text-gray-600 text-sm">Receive your MiliPay Agent tablet and biometric scanner setup.</p>
-            </FadeIn>
-            
-            <FadeIn delay={200} className="text-center p-6">
-              <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-green-100">
-                <TrendingUp className="w-8 h-8 text-green-500" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">2. Secure Enrollment</h3>
-              <p className="text-gray-600 text-sm">Verify NINs against the NIMC database and capture multi-modal biometrics (Fingerprint + Palm print) under controlled conditions.</p>
-            </FadeIn>
-
-            <FadeIn delay={300} className="text-center p-6">
-              <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-amber-100">
-                <Award className="w-8 h-8 text-amber-500" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">3. Earn Commissions</h3>
-              <p className="text-gray-600 text-sm">Get paid instantly for every successful customer enrollment you complete.</p>
-            </FadeIn>
-          </div>
+      <div className="max-w-7xl mx-auto px-6 relative z-10">
+        <div className="text-center mb-16">
+          <motion.h2 
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-4xl md:text-5xl font-extrabold mb-6"
+          >
+            Become an Agent
+          </motion.h2>
+          <motion.p 
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.1 }}
+            className="text-xl text-slate-400 max-w-2xl mx-auto"
+          >
+            Join the MiliPay network. Onboard new users and earn commissions on every successful registration.
+          </motion.p>
         </div>
-      </section>
 
-      {/* Agent Hardware Showcase */}
-      <section className="py-20 bg-gray-50 border-t border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <FadeIn>
-              <div className="rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.1)] overflow-hidden border border-gray-200">
-                <img src="/images/agent_enrollment.png" alt="MiliPay Agent Enrollment Process" className="w-full h-auto object-cover hover:scale-105 transition-transform duration-700" />
+        <div className="grid md:grid-cols-3 gap-6">
+          {[
+            { step: "01", icon: UserPlus, title: "Register Users", desc: "Use the agent app to scan new user palms and link their NIN." },
+            { step: "02", icon: MapPin, title: "Build Your Hub", desc: "Become the go-to biometric financial center in your community." },
+            { step: "03", icon: Briefcase, title: "Earn Daily", desc: "Get instant commissions credited to your agent wallet." }
+          ].map((item, idx) => (
+            <motion.div
+              key={idx}
+              initial={{ opacity: 0, y: 40 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: idx * 0.15 }}
+              className="relative p-6 rounded-3xl bg-white/5 border border-white/10 hover:border-emerald-500/50 transition-colors group"
+            >
+              <div className="absolute top-6 right-6 text-4xl font-extrabold text-white/5 group-hover:text-emerald-500/10 transition-colors">
+                {item.step}
               </div>
-            </FadeIn>
-            <FadeIn delay={200}>
-              <h2 className="text-3xl font-bold text-gray-900 mb-6">Equipped for Absolute Trust</h2>
-              <p className="text-gray-600 text-lg leading-relaxed mb-6">
-                When you become a MiliPay agent, you are provided with our enterprise-grade biometric enrollment tablet. This is not a standard mobile device—it is a hardened, certified instrument capable of capturing ultra-high-resolution multi-modal biometrics (fingerprints and palm prints). 
-              </p>
-              <p className="text-gray-600 text-lg leading-relaxed">
-                The hardware interfaces directly with the National Identity Management Commission (NIMC) database via our secure API. This ensures that every customer you onboard is verified against their official government records before their biometric template is securely hashed and stored in our decentralized vault.
-              </p>
-            </FadeIn>
-          </div>
+              <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center mb-6">
+                <item.icon className="text-blue-400" size={24} />
+              </div>
+              <h3 className="text-xl font-bold mb-3">{item.title}</h3>
+              <p className="text-slate-400 text-sm leading-relaxed">{item.desc}</p>
+            </motion.div>
+          ))}
         </div>
-      </section>
-    </div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="mt-16 text-center"
+        >
+          <button className="inline-flex items-center gap-2 px-8 py-4 bg-white/10 hover:bg-white/20 rounded-full font-bold text-lg transition-all border border-white/20">
+            Apply Now
+            <ArrowRight size={20} />
+          </button>
+        </motion.div>
+      </div>
+    </section>
   );
 }

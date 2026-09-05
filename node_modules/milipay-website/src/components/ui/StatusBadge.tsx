@@ -1,4 +1,5 @@
-import type { CustomerStatus, TransactionStatus } from "@milipay/shared/types";
+export type CustomerStatus = 'active' | 'suspended' | 'pending';
+export type TransactionStatus = 'success' | 'failed' | 'pending' | 'rejected';
 
 type Status = CustomerStatus | TransactionStatus;
 

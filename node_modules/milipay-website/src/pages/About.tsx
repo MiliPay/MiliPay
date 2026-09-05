@@ -1,72 +1,60 @@
-import { FadeIn } from '../components/ui/FadeIn';
+import { motion } from 'framer-motion';
 
 export function About() {
   return (
-    <div className="overflow-hidden bg-white">
-      <section className="pt-20 pb-16 text-center">
-        <div className="max-w-3xl mx-auto px-4">
-          <FadeIn>
-            <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-6">
-              The Infrastructure for a Cardless Africa.
-            </h1>
-            <p className="text-lg text-gray-600 mb-10 leading-relaxed">
-              MiliPay was founded to solve a systemic infrastructure problem: point-of-sale friction and card fraud. By bypassing legacy card networks and building a direct, biometric-to-bank authorization layer, we are creating the most secure and reliable payment settlement network on the continent.
-            </p>
-          </FadeIn>
+    <section className="relative py-32 bg-[#050b1a] text-white overflow-hidden border-t border-white/5">
+      
+      <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
+        <div className="relative h-16 w-48 mx-auto mb-10">
+          <motion.img 
+            initial={{ opacity: 0, scale: 0.8 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+            src="/logo-main.png" 
+            alt="MiliPay" 
+            className="absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 h-32 w-auto object-contain scale-125" 
+          />
         </div>
-      </section>
+        
+        <motion.h2 
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.1 }}
+          className="text-4xl md:text-6xl font-extrabold mb-8 leading-tight"
+        >
+          Building the future of <br/>
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">Identity-driven Finance</span>.
+        </motion.h2>
 
-      {/* Investor Roadmap */}
-      <section className="py-16 bg-white">
-        <div className="max-w-4xl mx-auto px-4">
-          <FadeIn delay={200}>
-            <h2 className="text-3xl font-bold text-gray-900 mb-10 text-center">Strategic Roadmap</h2>
-            <div className="space-y-8 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-gray-200 before:to-transparent">
-              
-              <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white bg-primary text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10 font-bold text-sm">
-                  P0
-                </div>
-                <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-white p-6 rounded-2xl border border-primary/20 shadow-[0_0_15px_rgba(14,173,105,0.05)]">
-                  <h3 className="font-bold text-gray-900 text-lg mb-1">Phase 0: Architecture & Proof of Concept</h3>
-                  <p className="text-sm text-gray-600">Current Phase. Core engineering of the non-custodial gateway, merchant POS APIs, and agent portal architecture.</p>
-                </div>
-              </div>
+        <motion.p 
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.2 }}
+          className="text-xl text-slate-400 mb-12 leading-relaxed"
+        >
+          MiliPay is on a mission to eliminate financial friction. 
+          By combining Open Banking with military-grade Palm Vein biometrics, we are ensuring that anyone, anywhere can access their money with nothing but their hand.
+        </motion.p>
 
-              <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-gray-50 text-gray-500 shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10 font-bold text-sm">
-                  P1
-                </div>
-                <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-white p-6 rounded-2xl border border-gray-100">
-                  <h3 className="font-bold text-gray-900 text-lg mb-1">Phase 1: Alpha Testing</h3>
-                  <p className="text-sm text-gray-600">Controlled rollout with 2 initial partner banks and 5 flagship supermarket chains in Lagos.</p>
-                </div>
-              </div>
-
-              <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-gray-50 text-gray-500 shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10 font-bold text-sm">
-                  P2
-                </div>
-                <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-white p-6 rounded-2xl border border-gray-100">
-                  <h3 className="font-bold text-gray-900 text-lg mb-1">Phase 2: Agent Network Scaling</h3>
-                  <p className="text-sm text-gray-600">Deploying hardware scanners to 1,000 certified agents for rapid customer identity onboarding.</p>
-                </div>
-              </div>
-
-              <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-gray-50 text-gray-500 shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10 font-bold text-sm">
-                  P3
-                </div>
-                <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-white p-6 rounded-2xl border border-gray-100">
-                  <h3 className="font-bold text-gray-900 text-lg mb-1">Phase 3 & 4: National Expansion</h3>
-                  <p className="text-sm text-gray-600">Full API release for third-party POS manufacturers and expansion into Tier 2 cities.</p>
-                </div>
-              </div>
-
-            </div>
-          </FadeIn>
-        </div>
-      </section>
-    </div>
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.3 }}
+          className="flex flex-col sm:flex-row justify-center gap-6"
+        >
+          <div className="px-8 py-6 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-md">
+            <h4 className="text-4xl font-extrabold text-white mb-2">99.9%</h4>
+            <p className="text-slate-400">Uptime Reliability</p>
+          </div>
+          <div className="px-8 py-6 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-md">
+            <h4 className="text-4xl font-extrabold text-white mb-2">&lt;0.5s</h4>
+            <p className="text-slate-400">Scan to Payment</p>
+          </div>
+        </motion.div>
+      </div>
+    </section>
   );
 }

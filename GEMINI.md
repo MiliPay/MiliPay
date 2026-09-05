@@ -18,9 +18,15 @@ When implementing support ticketing features, the following strict lifecycle MUS
 - **Primary Method**: Email MUST be the primary default communication method for user onboarding, password generation, and authentication to optimize operational costs during the MVP phase.
 - **Future SMS Architecture**: While SMS (e.g., via Termii) is disabled for standard onboarding to save costs, the system architecture and edge functions MUST be designed to easily toggle or re-integrate SMS in the future. Do not hardcode systems that rely exclusively on email without leaving room for a phone-based fallback.
 
-## Biometric & Hardware Strategy
-- **Palm Vein Over Fingerprint**: Due to security vulnerabilities with standard fingerprint cloning, the core POS biometric authentication MUST utilize Palm Vein Recognition.
-- **Target Hardware**: The system is targeted to interface with the HFSecurity VP930Pro Biometric Palm Vein Scanner Module. All biometric data models and SDK integrations must account for Palm Vein template structures rather than basic fingerprints.
+## Biometric & Hardware Strategy (VP930Pro Architecture)
+- **Palm Vein Over Fingerprint**: Due to security vulnerabilities with standard fingerprint cloning, the core POS biometric authentication MUST utilize Palm Vein Recognition targeting the HFSecurity VP930Pro.
+- **Frontend Integration (React Native)**: Because there is no official React Native SDK, the mobile app MUST use a custom Java Native Module bridge. The bridge will initialize the HFSecurity Android SDK (`PalmSdk`), capture the palm, and extract the raw `byte[]` arrays (`rgbFeature` and `irFeature`).
+- **Data Transit & Format**: 
+  - **Transit**: The Android bridge converts the raw byte arrays to **Base64 strings** to send over the network to the Node.js backend.
+  - **Storage**: Supabase MUST store the palm scan features strictly as **`BYTEA` (Binary/Byte Array)** data types. Do NOT store them as raw strings in the database to save space and maintain precision.
+- **Matching Engine (C++ Microservice)**: 1:N Biometric Matching MUST NOT be done natively in Node.js. To achieve lightning-fast in-memory looping, a dedicated **C++ Microservice** utilizing the HFSecurity Linux C++ SDK will be built. 
+  - The Node.js backend handles business logic and delegates the matching task to the C++ Microservice.
+  - The C++ Microservice loads the `BYTEA` templates into RAM as `std::vector<float>` and runs the proprietary `CompareFeaturesScore` algorithm across the dataset.
 
 ## Scalability & Security (Enterprise Grade)
 - **Zero Exposed Keys**: NEVER hardcode API keys, Supabase Service Role keys, or third-party secrets in the frontend or public repositories. They MUST be restricted to Edge Functions, environment variables, and the Supabase Vault.
