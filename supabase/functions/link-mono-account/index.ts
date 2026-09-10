@@ -42,6 +42,23 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     )
 
+    // Enforce maximum 3 active bank accounts limit
+    const { count: activeCount } = await adminClient
+      .from('linked_accounts')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('is_active', true);
+
+    if (activeCount !== null && activeCount >= 3) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: "Maximum limit reached. You can only link up to 3 bank accounts. Please remove an existing account first." 
+      }), { 
+        status: 200, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      });
+    }
+
     // --- Mono API: exchange code for account details ---
     const monoSecretKey = Deno.env.get('MONO_SECRET_KEY') ?? '';
     

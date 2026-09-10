@@ -26,8 +26,8 @@ export function formatDate(iso: string): string {
 }
 
 export function maskId(value: string): string {
-  if (value.length < 4) return "••••";
-  return `••••${value.slice(-4)}`;
+  if (value.length < 4) return "****";
+  return `****${value.slice(-4)}`;
 }
 
 export function lastFour(value: string): string {

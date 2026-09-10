@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, Switch, Alert, Modal } from 'react-native';
+import { View, Text, ScrollView, Pressable, Switch, Alert, Modal, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -16,7 +16,7 @@ import {
   HelpCircle,
   FileText,
   Info,
-  Palette, X, Sun, Moon, Smartphone, Check,
+  Palette, X, Sun, Moon, Smartphone, Check, Trash2, Landmark, Building,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useColorScheme } from 'nativewind';
@@ -81,7 +81,7 @@ const SectionHeader = ({ title }: { title: string }) => (
 export default function SettingsScreen({ navigation }: any) {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
-  const { linkedAccounts } = useBankStore();
+  const { linkedAccounts, unlinkAccount } = useBankStore();
   
   const { colorScheme, setColorScheme } = useColorScheme();
   const isDark = colorScheme !== 'light';
@@ -90,6 +90,9 @@ export default function SettingsScreen({ navigation }: any) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [isThemeModalVisible, setIsThemeModalVisible] = useState(false);
   const [activeTheme, setActiveTheme] = useState('system');
+  const [isBankModalVisible, setIsBankModalVisible] = useState(false);
+  const [accountToUnlink, setAccountToUnlink] = useState<any>(null);
+  const [isUnlinking, setIsUnlinking] = useState(false);
 
   const handleLogout = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -175,6 +178,10 @@ export default function SettingsScreen({ navigation }: any) {
               label="Linked Bank Accounts" 
               value={activeAccounts > 0 ? `${activeAccounts} Active` : 'None'}
               type="badge"
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setIsBankModalVisible(true);
+              }}
             />
           </GlassCard>
         </View>
@@ -237,6 +244,7 @@ export default function SettingsScreen({ navigation }: any) {
               icon={HelpCircle} 
               label="Help & Support" 
               subtitle="FAQs and contact support"
+              onPress={() => navigation.navigate('SupportScreen')}
             />
             <SectionDivider />
             <SettingRow 
@@ -399,6 +407,166 @@ export default function SettingsScreen({ navigation }: any) {
 
               </View>
 
+            </View>
+          </View>
+        </View>
+      </Modal>
+    
+            {/* Linked Bank Accounts Modal */}
+      <Modal
+        visible={isBankModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsBankModalVisible(false)}
+      >
+        <View className="flex-1 justify-end">
+          <Pressable 
+            className="absolute inset-0" 
+            onPress={() => setIsBankModalVisible(false)}
+          >
+            <BlurView intensity={isDark ? 40 : 20} tint={isDark ? 'dark' : 'light'} className="absolute inset-0" />
+            <View className={`absolute inset-0 ${isDark ? 'bg-black/40' : 'bg-black/10'}`} />
+          </Pressable>
+
+          <View className={`w-full rounded-t-[40px] overflow-hidden border-t ${isDark ? 'bg-[#0f172a] border-white/10' : 'bg-white border-slate-200'} shadow-[0_-10px_40px_rgba(0,0,0,0.15)] pb-10 min-h-[50%]`}>
+            <LinearGradient 
+              colors={isDark ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0)'] : ['rgba(16,185,129,0.03)', 'rgba(255,255,255,0)']} 
+              className="absolute inset-0" 
+            />
+            
+            <View className="p-8">
+              <View className="flex-row items-center justify-between mb-8">
+                <View>
+                  <Text className="text-slate-900 dark:text-white font-inter-bold text-3xl tracking-tight mb-1">Linked Banks</Text>
+                  <Text className="text-slate-500 dark:text-white/50 font-inter text-sm">Manage your connected accounts</Text>
+                </View>
+                <Pressable 
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setIsBankModalVisible(false);
+                  }}
+                  className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/10 items-center justify-center border border-slate-200 dark:border-white/10"
+                >
+                  <X color={isDark ? '#fff' : '#000'} size={20} />
+                </Pressable>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} className="max-h-96">
+                {linkedAccounts.length === 0 ? (
+                  <View className="items-center py-12">
+                    <View className="w-20 h-20 rounded-full bg-emerald-500/10 items-center justify-center mb-4">
+                      <Building color={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"} size={32} />
+                    </View>
+                    <Text className="text-slate-500 dark:text-white/40 font-inter-medium text-base">No banks linked yet.</Text>
+                  </View>
+                ) : (
+                  linkedAccounts.map((acc, index) => (
+                    <Pressable 
+                      key={acc.id || index.toString()} 
+                      className={`flex-row items-center justify-between p-5 mb-4 rounded-[28px] border ${isDark ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'} shadow-sm`}
+                    >
+                      <View className="flex-row items-center flex-1">
+                        <View className="w-14 h-14 rounded-2xl bg-emerald-500/10 items-center justify-center mr-4 border border-emerald-500/20">
+                          <Building color="#10b981" size={24} />
+                        </View>
+                        <View className="flex-1">
+                          <Text className="text-slate-900 dark:text-white font-inter-bold text-lg mb-1">{acc.bankName}</Text>
+                          <View className="flex-row items-center">
+                            <View className="flex-row mr-2 space-x-0.5">
+                              <View className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-white/40" />
+                              <View className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-white/40" />
+                              <View className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-white/40" />
+                              <View className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-white/40" />
+                            </View>
+                            <Text className="text-slate-500 dark:text-white/50 font-inter-medium text-sm tracking-widest">
+                              {acc.accountNumber?.slice(-4) || '****'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                      
+                      <Pressable 
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                          setAccountToUnlink(acc);
+                        }}
+                        className="w-12 h-12 rounded-full bg-red-50 dark:bg-red-500/10 items-center justify-center border border-red-100 dark:border-red-500/20 ml-2"
+                        style={({pressed}) => ({ opacity: pressed ? 0.6 : 1, transform: [{scale: pressed ? 0.95 : 1}] })}
+                      >
+                        <Trash2 color="#ef4444" size={20} />
+                      </Pressable>
+                    </Pressable>
+                  ))
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Custom Confirm Unlink Modal */}
+      <Modal
+        visible={!!accountToUnlink}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setAccountToUnlink(null)}
+      >
+        <View className="flex-1 justify-center items-center px-6">
+          <Pressable 
+            className="absolute inset-0" 
+            onPress={() => setAccountToUnlink(null)}
+          >
+            <BlurView intensity={isDark ? 50 : 30} tint={isDark ? 'dark' : 'light'} className="absolute inset-0" />
+            <View className={`absolute inset-0 ${isDark ? 'bg-black/60' : 'bg-black/20'}`} />
+          </Pressable>
+
+          <View className={`w-full rounded-[36px] overflow-hidden border ${isDark ? 'bg-[#0f172a] border-white/10' : 'bg-white border-slate-200'} shadow-[0_0_40px_rgba(0,0,0,0.2)]`}>
+            <View className="p-8 items-center">
+              <View className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-500/10 items-center justify-center mb-6 border border-red-100 dark:border-red-500/20">
+                <Trash2 color="#ef4444" size={32} />
+              </View>
+              
+              <Text className="text-slate-900 dark:text-white font-inter-bold text-2xl text-center mb-3">Remove Bank?</Text>
+              <Text className="text-slate-500 dark:text-white/60 font-inter text-center text-sm mb-8 leading-relaxed px-2">
+                Are you sure you want to unlink your <Text className="font-inter-bold text-slate-700 dark:text-white/90">{accountToUnlink?.bankName}</Text> account? You won't be able to use it for transactions.
+              </Text>
+
+              <View className="w-full flex-row justify-between">
+                <Pressable 
+                  disabled={isUnlinking}
+                  onPress={() => {
+                    if (!isUnlinking) {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setAccountToUnlink(null);
+                    }
+                  }}
+                  className={`w-[48%] h-14 rounded-2xl items-center justify-center border ${isDark ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'} ${isUnlinking ? 'opacity-40' : ''}`}
+                >
+                  <Text className="text-slate-700 dark:text-white font-inter-semibold text-base">Cancel</Text>
+                </Pressable>
+                
+                <Pressable 
+                  disabled={isUnlinking}
+                  onPress={async () => {
+                    if (accountToUnlink && !isUnlinking) {
+                      setIsUnlinking(true);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      const targetId = accountToUnlink.id;
+                      await unlinkAccount(targetId);
+                      setIsUnlinking(false);
+                      setAccountToUnlink(null);
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    }
+                  }}
+                  className={`w-[48%] h-14 rounded-2xl bg-red-500 items-center justify-center shadow-[0_4px_12px_rgba(239,68,68,0.3)] ${isUnlinking ? 'opacity-80' : ''}`}
+                >
+                  {isUnlinking ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text className="text-white font-inter-bold text-base">Remove</Text>
+                  )}
+                </Pressable>
+              </View>
             </View>
           </View>
         </View>

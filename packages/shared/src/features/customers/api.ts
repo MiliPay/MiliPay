@@ -79,9 +79,12 @@ export async function fetchCustomers(
 
     return {
       id: row.id,
+      firstName: row.first_name,
+      lastName: row.last_name,
       fullName: `${row.first_name} ${row.last_name}`.trim(),
       phone: row.phone,
       email: row.email || "",
+      address: row.address || "",
       ninLast4: row.nin_last_4,
       state: row.state,
       status: row.status as CustomerStatus,
@@ -153,6 +156,7 @@ export async function registerCustomer(
     last_name: lastName,
     phone: draft.phone,
     email: draft.email || null,
+    address: draft.address || null,
     nin_last_4: ninLast4,
     state: draft.state,
     status: initialStatus,
@@ -353,9 +357,12 @@ export async function fetchCustomerById(id: string): Promise<Customer | null> {
 
   return {
     id: data.id,
+    firstName: data.first_name,
+    lastName: data.last_name,
     fullName: `${data.first_name} ${data.last_name}`.trim(),
     phone: data.phone,
     email: data.email || "",
+    address: data.address || "",
     ninLast4: data.nin_last_4,
     state: data.state,
     status: data.status as CustomerStatus,
@@ -374,6 +381,68 @@ export async function fetchCustomerById(id: string): Promise<Customer | null> {
     rejectionReason: data.rejection_reason,
     createdAt: data.created_at
   };
+}
+
+export async function updateCustomerProfile(params: {
+  id: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email?: string;
+  address?: string;
+  state: string;
+  authUserId?: string;
+}): Promise<boolean> {
+  const { id, firstName, lastName, phone, email, address, state, authUserId } = params;
+
+  const trimmedFirstName = firstName.trim();
+  const trimmedLastName = lastName.trim();
+  const trimmedPhone = phone.trim();
+  const trimmedEmail = email ? email.trim() : null;
+  const trimmedAddress = address !== undefined ? (address.trim() || null) : undefined;
+  const trimmedState = state.trim();
+
+  // 1. Update customers table
+  const updatePayload: Record<string, any> = {
+    first_name: trimmedFirstName,
+    last_name: trimmedLastName,
+    phone: trimmedPhone,
+    email: trimmedEmail,
+    state: trimmedState,
+  };
+
+  if (trimmedAddress !== undefined) {
+    updatePayload.address = trimmedAddress;
+  }
+
+  const { error: customerError } = await supabase
+    .from('customers')
+    .update(updatePayload)
+    .eq('id', id);
+
+  if (customerError) {
+    console.error("Error updating customer profile:", customerError);
+    throw new Error(customerError.message || "Failed to update customer profile");
+  }
+
+  // 2. Dual-sync with public.users table if authUserId is present
+  if (authUserId) {
+    try {
+      await supabase
+        .from('users')
+        .update({
+          full_name: `${trimmedFirstName} ${trimmedLastName}`.trim(),
+          phone: trimmedPhone,
+          email: trimmedEmail || undefined,
+          state: trimmedState,
+        })
+        .eq('id', authUserId);
+    } catch (userErr) {
+      console.warn("Could not sync profile changes to public.users:", userErr);
+    }
+  }
+
+  return true;
 }
 
 export async function updateCustomerStatus(id: string, status: CustomerStatus): Promise<boolean> {

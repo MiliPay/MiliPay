@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Ticket, AlertTriangle, ShieldAlert } from "lucide-react";
+import { ArrowLeft, Ticket, AlertTriangle, ShieldAlert, Send } from "lucide-react";
 import { supabase } from "@milipay/shared/lib/supabase";
 import type { SupportTicket, TicketMessage } from "@milipay/shared/types";
 import { formatDate } from "@milipay/shared/lib/utils/format";
@@ -13,8 +13,11 @@ export function AgentTicketDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const [ticket, setTicket] = useState<SupportTicket | null>(null);
   const [messages, setMessages] = useState<TicketMessage[]>([]);
+  const [replyText, setReplyText] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isBumping, setIsBumping] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
 
   const loadTicket = async () => {
@@ -50,13 +53,37 @@ export function AgentTicketDetailsPage() {
 
       const msgs = await fetchTicketMessages(data.id);
       setMessages(msgs);
+      scrollToBottom();
     }
     setIsLoading(false);
   };
 
   useEffect(() => {
     loadTicket();
+    
+    // Subscribe to realtime messages
+    if (id) {
+      const channel = supabase
+        .channel(`agent_chat_${id}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'ticket_messages', filter: `ticket_id=eq.${id}` },
+          async () => {
+            const msgs = await fetchTicketMessages(id);
+            setMessages(msgs);
+            scrollToBottom();
+          }
+        )
+        .subscribe();
+      return () => { supabase.removeChannel(channel); };
+    }
   }, [id]);
+
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
+  };
 
   const handleBumpPriority = async () => {
     if (!ticket || !user) return;
@@ -71,6 +98,41 @@ export function AgentTicketDetailsPage() {
     }
   };
 
+  const handleSendReply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!replyText.trim() || isSending || !ticket || !user) return;
+    
+    setIsSending(true);
+    try {
+      // If ticket is open, mark it as in_progress and assign to this agent
+      if (ticket.status === 'open') {
+        await supabase
+          .from('support_tickets')
+          .update({ status: 'in_progress', assigned_to: user.id })
+          .eq('id', ticket.id);
+        
+        // Refresh ticket details silently
+        loadTicket();
+      }
+
+      await supabase
+        .from('ticket_messages')
+        .insert({
+          ticket_id: ticket.id,
+          sender_id: user.id,
+          sender_type: 'staff',
+          content: replyText.trim()
+        });
+
+      setReplyText("");
+      // realtime will handle fetching
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   if (isLoading) return <div className="p-8 text-ink-muted">Loading ticket...</div>;
   if (!ticket) return <div className="p-8 text-status-fail">Ticket not found.</div>;
 
@@ -80,7 +142,7 @@ export function AgentTicketDetailsPage() {
 
   return (
     <div className="flex-1 overflow-auto bg-ledger min-h-screen">
-      <div className="max-w-4xl mx-auto p-8 space-y-8 pb-32">
+      <div className="max-w-5xl mx-auto p-8 space-y-8 pb-32">
         
         <Link to="/support" className="inline-flex items-center gap-2 text-ink-muted hover:text-ink transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back to Support
@@ -89,7 +151,7 @@ export function AgentTicketDetailsPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-display text-ink tracking-tight flex items-center gap-3">
             <Ticket className="w-8 h-8 text-signal" />
-            Ticket {ticket.ticketId}
+            Ticket {ticket.ticketId || 'Informal Chat'}
           </h1>
           
           {canBumpPriority && (
@@ -111,40 +173,66 @@ export function AgentTicketDetailsPage() {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="md:col-span-2 space-y-6">
+          <div className="md:col-span-2 space-y-6 flex flex-col h-[70vh]">
             
-            <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl p-6 backdrop-blur-xl">
-              <h2 className="text-sm font-semibold text-ink-muted uppercase tracking-wider mb-4">Initial Complaint</h2>
-              <p className="text-ink text-lg leading-relaxed">{ticket.issueDescription}</p>
-            </div>
-
-            <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl p-6 backdrop-blur-xl space-y-4">
-              <h2 className="text-sm font-semibold text-ink-muted uppercase tracking-wider mb-2">Communication History</h2>
+            <div className="flex-1 bg-white/[0.02] border border-white/[0.05] rounded-3xl p-6 backdrop-blur-xl flex flex-col">
+              <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/[0.05]">
+                <h2 className="text-sm font-semibold text-ink-muted uppercase tracking-wider">Complaint Dialogue & Updates</h2>
+                <div className="text-xs text-ink-muted">{ticket.issueDescription}</div>
+              </div>
               
-              {messages.length === 0 ? (
-                <p className="text-ink-muted text-sm">No messages yet. Support team will reply soon.</p>
-              ) : (
-                <div className="space-y-4">
-                  {messages.map((msg) => (
-                    <div key={msg.id} className="p-4 rounded-xl border border-white/[0.05] bg-white/[0.01]">
-                      <div className="flex justify-between items-start mb-2">
-                        <span className={clsx("text-sm font-medium", 
-                          msg.senderType === "system" ? "text-status-warning" : 
-                          msg.senderType === "staff" ? "text-signal" : "text-ink"
+              <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+                {messages.length === 0 ? (
+                  <div className="flex items-center justify-center h-full">
+                    <p className="text-ink-muted text-sm">No recorded dialogue or notes yet.</p>
+                  </div>
+                ) : (
+                  messages.map((msg) => {
+                    const isStaff = msg.senderType === 'staff';
+                    const isSystem = msg.senderType === 'system';
+                    return (
+                      <div key={msg.id} className={clsx("flex", isStaff ? "justify-end" : "justify-start")}>
+                        <div className={clsx(
+                          "max-w-[80%] p-4 rounded-2xl",
+                          isSystem ? "bg-status-warning/10 border border-status-warning/20 text-status-warning mx-auto" :
+                          isStaff ? "bg-signal text-white rounded-br-sm" : "bg-white/[0.05] border border-white/[0.05] text-ink rounded-bl-sm"
                         )}>
-                          {msg.senderName} {msg.senderType === "system" && "(System)"}
-                        </span>
-                        <span className="text-xs text-ink-muted">{formatDate(msg.createdAt)}</span>
+                          <div className="flex justify-between items-baseline gap-4 mb-1">
+                            <span className="text-xs font-semibold opacity-75">
+                              {isStaff ? 'You' : (isSystem ? 'System' : ticket.customerName)}
+                            </span>
+                            <span className="text-[10px] opacity-60">
+                              {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                        </div>
                       </div>
-                      <p className={clsx("text-sm", msg.senderType === "system" ? "text-status-warning" : "text-ink-muted")}>
-                        {msg.content}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    );
+                  })
+                )}
+                <div ref={messagesEndRef} />
+              </div>
 
+              {/* Reply Box */}
+              <form onSubmit={handleSendReply} className="mt-4 flex gap-2 pt-4 border-t border-white/[0.05]">
+                <input
+                  type="text"
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  placeholder="Type notes or update..."
+                  className="flex-1 bg-white/[0.03] border border-white/[0.1] rounded-xl px-4 py-3 text-white placeholder-ink-faint focus:border-signal/50 focus:bg-white/[0.05] outline-none transition-all"
+                  disabled={isSending}
+                />
+                <Button 
+                  type="submit" 
+                  disabled={!replyText.trim() || isSending}
+                  className="bg-signal hover:brightness-110 text-white rounded-xl px-6"
+                >
+                  <Send className="w-5 h-5" />
+                </Button>
+              </form>
+            </div>
           </div>
           
           <div className="space-y-6">
@@ -156,7 +244,7 @@ export function AgentTicketDetailsPage() {
                   <span className="text-ink-muted text-sm">{ticket.customerPhone}</span>
                 </div>
               ) : (
-                <span className="text-ink-muted">Unknown</span>
+                <span className="text-ink-muted">Unknown Walk-in</span>
               )}
             </div>
 

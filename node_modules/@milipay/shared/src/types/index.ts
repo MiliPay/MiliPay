@@ -39,9 +39,12 @@ export const DEFAULT_REJECTION_REASONS = [
 
 export interface Customer {
   id: string;
+  firstName?: string;
+  lastName?: string;
   fullName: string;
   phone: string;
   email?: string;
+  address?: string;
   ninLast4: string;
   state: string;
   status: CustomerStatus;
@@ -118,7 +121,8 @@ export type TicketUrgency = "low" | "medium" | "high" | "critical";
 
 export interface SupportTicket {
   id: string;
-  ticketId: string;
+  ticketId?: string;
+  subject?: string;
   customerId?: string;
   customerName?: string;
   customerPhone?: string;
@@ -128,6 +132,8 @@ export interface SupportTicket {
   assignedTo?: string;
   assignedToName?: string;
   createdBy?: string;
+  solvedBy?: string;
+  isEscalated?: boolean;
   startedAt?: string;
   resolvedAt?: string;
   createdAt: string;

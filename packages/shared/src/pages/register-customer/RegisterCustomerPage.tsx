@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { Check, Lock, ShieldAlert, Copy, Clock, Smartphone, Hand, CheckCircle } from "lucide-react";
+import { Check, Lock, ShieldAlert, Copy, Clock, Smartphone, CheckCircle } from "lucide-react";
 import { Input } from "@milipay/shared/components/ui/Input";
 import { Select } from "@milipay/shared/components/ui/Select";
 import { Button } from "@milipay/shared/components/ui/Button";
 import { Card } from "@milipay/shared/components/ui/Card";
-import { MultiFingerSelector, type FingerName } from "@milipay/shared/components/ui/MultiFingerSelector";
 import { StepProgress } from "@milipay/shared/components/ui/StepProgress";
 import { NIGERIAN_STATES } from "@milipay/shared/lib/constants";
 import { validateCustomerDraft, type FieldError } from "@milipay/shared/lib/utils/validation";

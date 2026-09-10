@@ -12,7 +12,7 @@ export function AgentLayout() {
     { name: "Dashboard", path: "/dashboard", icon: History },
     { name: "Register Customer", path: "/register", icon: UserPlus },
     { name: "Customers", path: "/customers", icon: Users },
-    { name: "Support", path: "/support", icon: Ticket },
+    { name: "Complaints", path: "/support", icon: Ticket },
     { name: "Settings", path: "/settings", icon: Settings },
   ];
 

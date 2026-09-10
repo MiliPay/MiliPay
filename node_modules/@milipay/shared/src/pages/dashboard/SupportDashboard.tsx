@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@milipay/shared/components/ui/Button";
 import { fetchCustomers } from "@milipay/shared/features/customers/api";
 import { fetchSupportTicketStats } from "@milipay/shared/features/support/api";
+import { LiveChatQueue } from "@milipay/shared/components/support/LiveChatQueue";
 
 export function SupportDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -118,6 +119,11 @@ export function SupportDashboard() {
               <span className="text-xl font-display text-status-ok">All Systems Go</span>
             </div>
           </div>
+        </div>
+
+        {/* Live Chat Queue Addition */}
+        <div className="pt-6 h-[500px]">
+           <LiveChatQueue routePrefix="/complaints" />
         </div>
 
       </div>

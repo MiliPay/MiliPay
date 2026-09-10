@@ -22,9 +22,9 @@ export async function fetchSupportTickets(options: FetchTicketsOptions = {}): Pr
       created_at,
       updated_at,
       customer_id,
-      customers:customer_id ( first_name, last_name, phone ),
+      customers ( first_name, last_name, phone ),
       assigned_to,
-      staff_profiles:assigned_to ( full_name )
+      staff_profiles!support_tickets_assigned_to_fkey ( full_name )
     `, { count: "exact" })
     .order("created_at", { ascending: false });
 
@@ -130,15 +130,16 @@ export async function fetchEscalatedTickets(): Promise<PaginatedResult<SupportTi
     .select(`
       id,
       ticket_id,
+      subject,
       issue_description,
       status,
       urgency,
       created_at,
       updated_at,
       customer_id,
-      customers:customer_id ( first_name, last_name, phone ),
+      customers ( first_name, last_name, phone ),
       assigned_to,
-      staff_profiles:assigned_to ( full_name )
+      staff_profiles!support_tickets_assigned_to_fkey ( full_name )
     `, { count: "exact" })
     .in("urgency", ["high", "critical"])
     .neq("status", "resolved")
@@ -157,6 +158,7 @@ export async function fetchEscalatedTickets(): Promise<PaginatedResult<SupportTi
     return {
       id: row.id,
       ticketId: row.ticket_id,
+      subject: row.subject,
       issueDescription: row.issue_description,
       status: row.status,
       urgency: row.urgency,
@@ -174,11 +176,16 @@ export async function fetchEscalatedTickets(): Promise<PaginatedResult<SupportTi
 }
 
 export async function claimTicket(ticketId: string, agentId: string) {
+  // If the ticket doesn't have a ticket_id yet, generate one upon being attended
+  const { data: existing } = await supabase.from("support_tickets").select("ticket_id").eq("id", ticketId).single();
+  const tktId = existing?.ticket_id || `TKT-${Math.floor(1000 + Math.random() * 9000)}`;
+
   const { data, error } = await supabase
     .from("support_tickets")
     .update({ 
       assigned_to: agentId, 
       status: "in_progress",
+      ticket_id: tktId,
       started_at: new Date().toISOString()
     })
     .eq("id", ticketId)
@@ -186,37 +193,93 @@ export async function claimTicket(ticketId: string, agentId: string) {
     .single();
     
   if (error) throw error;
+
+  // Fetch staff member name for friendly notification
+  const { data: staff } = await supabase.from("staff_profiles").select("full_name").eq("id", agentId).single();
+  const agentName = staff?.full_name || "A support agent";
+
+  // Notify chat participants
+  try {
+    await supabase.from("ticket_messages").insert({
+      ticket_id: ticketId,
+      sender_id: agentId,
+      sender_type: "system",
+      content: `${agentName} has attended this chat and is now assisting you.`
+    });
+  } catch (msgErr) {
+    console.warn("Could not insert attend system message:", msgErr);
+  }
+
   return data;
 }
 
-export async function resolveTicket(ticketId: string) {
+export async function resolveTicket(dbId: string, staffId: string) {
+  // If the ticket doesn't have an ID yet, give it one for the archives
+  const { data: existing } = await supabase.from("support_tickets").select("ticket_id").eq("id", dbId).single();
+  const tktId = existing?.ticket_id || `TKT-${Math.floor(1000 + Math.random() * 9000)}`;
+
   const { data, error } = await supabase
     .from("support_tickets")
     .update({ 
       status: "resolved",
-      resolved_at: new Date().toISOString()
+      resolved_at: new Date().toISOString(),
+      ticket_id: tktId,
+      solved_by: staffId
     })
-    .eq("id", ticketId)
+    .eq("id", dbId)
     .select()
     .single();
     
   if (error) throw error;
+
+  // Insert resolution announcement
+  try {
+    await supabase.from("ticket_messages").insert({
+      ticket_id: dbId,
+      sender_id: staffId,
+      sender_type: "system",
+      content: `Ticket ${tktId} has been marked as solved.`
+    });
+  } catch (msgErr) {
+    console.warn("Could not insert solve system message:", msgErr);
+  }
+
   return data;
 }
 
-export async function escalateTicket(ticketId: string) {
+export async function escalateTicket(dbId: string, subject: string, staffId?: string) {
+  // Formalize the ticket if it was informal
+  const { data: existing } = await supabase.from("support_tickets").select("ticket_id").eq("id", dbId).single();
+  const tktId = existing?.ticket_id || `TKT-${Math.floor(1000 + Math.random() * 9000)}`;
+
   const { data, error } = await supabase
     .from("support_tickets")
     .update({ 
       urgency: "high",
       assigned_to: null, // Return to admin queue
-      status: "open"      // Reset status so it appears as new
+      status: "open",     // Reset status so it appears as new to Admin
+      is_escalated: true,
+      ticket_id: tktId,
+      subject: subject
     })
-    .eq("id", ticketId)
+    .eq("id", dbId)
     .select()
     .single();
     
   if (error) throw error;
+
+  // Insert escalation announcement
+  try {
+    await supabase.from("ticket_messages").insert({
+      ticket_id: dbId,
+      sender_id: staffId || null,
+      sender_type: "system",
+      content: `Ticket ${tktId} has been escalated to Administration: "${subject}". An Administrator will review and resolve this case.`
+    });
+  } catch (msgErr) {
+    console.warn("Could not insert escalation system message:", msgErr);
+  }
+
   return data;
 }
 
@@ -225,16 +288,7 @@ import type { TicketMessage, MessageSenderType } from "@milipay/shared/types";
 export async function fetchTicketMessages(ticketId: string): Promise<TicketMessage[]> {
   const { data, error } = await supabase
     .from("ticket_messages")
-    .select(`
-      id,
-      ticket_id,
-      sender_id,
-      sender_type,
-      content,
-      created_at,
-      staff_profiles:sender_id ( full_name ),
-      customers:sender_id ( first_name, last_name )
-    `)
+    .select("id, ticket_id, sender_id, sender_type, content, created_at")
     .eq("ticket_id", ticketId)
     .order("created_at", { ascending: true });
 
@@ -243,14 +297,32 @@ export async function fetchTicketMessages(ticketId: string): Promise<TicketMessa
     return [];
   }
 
+  // Fetch staff sender IDs to display friendly agent names
+  const staffSenderIds = Array.from(
+    new Set(
+      (data || [])
+        .filter((r) => r.sender_type === "staff" && r.sender_id)
+        .map((r) => r.sender_id)
+    )
+  );
+
+  const staffNameMap: Record<string, string> = {};
+  if (staffSenderIds.length > 0) {
+    const { data: staffData } = await supabase
+      .from("staff_profiles")
+      .select("id, full_name")
+      .in("id", staffSenderIds);
+    if (staffData) {
+      staffData.forEach((s) => {
+        staffNameMap[s.id] = s.full_name;
+      });
+    }
+  }
+
   return (data || []).map((row: any) => {
-    let senderName = "Unknown";
-    if (row.sender_type === "staff" && row.staff_profiles) {
-      const staff = Array.isArray(row.staff_profiles) ? row.staff_profiles[0] : row.staff_profiles;
-      senderName = staff?.full_name || "Staff";
-    } else if (row.sender_type === "customer" && row.customers) {
-      const cust = Array.isArray(row.customers) ? row.customers[0] : row.customers;
-      senderName = cust ? `${cust.first_name} ${cust.last_name}` : "Customer";
+    let senderName = "Customer";
+    if (row.sender_type === "staff") {
+      senderName = staffNameMap[row.sender_id] || "Support Agent";
     } else if (row.sender_type === "system") {
       senderName = "System";
     }
@@ -300,7 +372,7 @@ export async function createTicket(customerId: string, issueDescription: string,
       ticket_id: ticketId,
       customer_id: customerId,
       issue_description: issueDescription,
-      created_by: createdById,
+      created_by: customerId, // Walk-in tickets must belong to the customer to sync to their app
       status: "open",
       urgency: "medium"
     })
@@ -308,6 +380,16 @@ export async function createTicket(customerId: string, issueDescription: string,
     .single();
 
   if (error) throw error;
+
+  await supabase
+    .from("ticket_messages")
+    .insert({
+      ticket_id: data.id,
+      sender_id: createdById,
+      sender_type: "staff",
+      content: "Hello! We created this formal ticket for your walk-in visit. You can track our progress and reply to us directly here.",
+    });
+
   return data;
 }
 

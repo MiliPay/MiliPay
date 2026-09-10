@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { Home, Compass, Settings } from 'lucide-react-native';
 
 import HomeScreen from '../screens/main/HomeScreen';
@@ -9,6 +10,7 @@ import ExploreScreen from '../screens/main/ExploreScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
 import TransactionsScreen from '../screens/main/TransactionsScreen';
 import ProfileSettingsScreen from '../screens/main/ProfileSettingsScreen';
+import SupportScreen from '../screens/main/SupportScreen';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator();
@@ -31,6 +33,7 @@ function SettingsStackNavigator() {
     <SettingsStack.Navigator screenOptions={{ headerShown: false }}>
       <SettingsStack.Screen name="SettingsScreen" component={SettingsScreen} />
       <SettingsStack.Screen name="ProfileSettings" component={ProfileSettingsScreen} />
+      <SettingsStack.Screen name="SupportScreen" component={SupportScreen} />
     </SettingsStack.Navigator>
   );
 }
@@ -72,9 +75,19 @@ export default function TabNavigator() {
       <Tab.Screen 
         name="SettingsTab" 
         component={SettingsStackNavigator} 
-        options={{
-          tabBarLabel: 'Settings',
-          tabBarIcon: ({ color, size }) => <Settings color={color} size={size} />
+        options={({ route }) => {
+          const routeName = getFocusedRouteNameFromRoute(route) ?? '';
+          const isSupportScreen = routeName === 'SupportScreen';
+          return {
+            tabBarLabel: 'Settings',
+            tabBarIcon: ({ color, size }) => <Settings color={color} size={size} />,
+            tabBarStyle: isSupportScreen 
+              ? { display: 'none' } 
+              : {
+                  backgroundColor: isDark ? '#000' : '#fff', 
+                  borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', 
+                }
+          };
         }}
       />
     </Tab.Navigator>

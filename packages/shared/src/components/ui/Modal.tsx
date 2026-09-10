@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, type ReactNode } from "react";
 import { X } from "lucide-react";
 
-type ModalSize = "sm" | "md" | "lg";
+type ModalSize = "sm" | "md" | "lg" | "xl" | "2xl";
 
 interface ModalProps {
   isOpen: boolean;
@@ -15,6 +15,8 @@ const SIZE_CLASSES: Record<ModalSize, string> = {
   sm: "max-w-sm",
   md: "max-w-lg",
   lg: "max-w-2xl",
+  xl: "max-w-3xl",
+  "2xl": "max-w-4xl",
 };
 
 export function Modal({ isOpen, onClose, title, children, size = "md" }: ModalProps) {

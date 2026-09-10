@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useColorScheme } from 'nativewind';
-import { View, Text, ScrollView, Dimensions, Pressable, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Dimensions, Pressable, Modal, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { 
   useAnimatedScrollHandler, 
@@ -25,41 +25,86 @@ const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.90;
 const SNAP_INTERVAL = CARD_WIDTH + 16;
 
-const BankNode = ({ item, index, scrollX, isBalanceHidden, toggleBalance, isActive }: any) => {
-  const { colorScheme } = useColorScheme();
-  const isDark = colorScheme !== 'light';
+const CARD_THEMES = [
+  {
+    gradient: ['#065f46', '#022c22'] as [string, string],
+    bg: '#064e3b',
+    accent: '#34d399',
+    badgeBg: 'rgba(52, 211, 153, 0.25)',
+    badgeBorder: 'rgba(52, 211, 153, 0.5)',
+    badgeText: '#34d399',
+    shadow: '#065f46',
+  },
+  {
+    gradient: ['#1e40af', '#0f172a'] as [string, string],
+    bg: '#1e3a8a',
+    accent: '#60a5fa',
+    badgeBg: 'rgba(96, 165, 250, 0.25)',
+    badgeBorder: 'rgba(96, 165, 250, 0.5)',
+    badgeText: '#60a5fa',
+    shadow: '#1e40af',
+  },
+  {
+    gradient: ['#831843', '#4a044e'] as [string, string],
+    bg: '#831843',
+    accent: '#f472b6',
+    badgeBg: 'rgba(244, 114, 182, 0.25)',
+    badgeBorder: 'rgba(244, 114, 182, 0.5)',
+    badgeText: '#f472b6',
+    shadow: '#831843',
+  },
+];
 
-  if (item.isLinkCard) {
-    const { init } = useMonoConnect();
+const LinkBankCard = ({ index, scrollX, isDark }: any) => {
+  const { init } = useMonoConnect();
+  const { linkedAccounts } = useBankStore();
 
-    const inputRange = [
-      (index - 1) * SNAP_INTERVAL,
-      index * SNAP_INTERVAL,
-      (index + 1) * SNAP_INTERVAL,
-    ];
-    const animatedStyle = useAnimatedStyle(() => {
-      const scale = interpolate(scrollX.value, inputRange, [0.9, 1, 0.9], Extrapolation.CLAMP);
-      const opacity = interpolate(scrollX.value, inputRange, [0.5, 1, 0.5], Extrapolation.CLAMP);
-      return { transform: [{ scale }], opacity };
-    });
+  const handleLinkPress = () => {
+    if (linkedAccounts.length >= 3) {
+      Alert.alert(
+        "Limit Reached",
+        "You have reached the maximum limit of 3 linked bank accounts. Please remove an existing account to link a new one."
+      );
+      return;
+    }
+    init();
+  };
 
-    return (
-      <Animated.View style={[animatedStyle, { width: CARD_WIDTH, marginHorizontal: 8 }]}>
-        <Pressable 
-          onPress={() => init()}
-          className="rounded-3xl overflow-hidden h-56 border border-dashed border-slate-200 dark:border-white/10 bg-black/5 dark:bg-white/10 items-center justify-center active:bg-black/10 dark:active:bg-white/20"
-        >
-          <View className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 items-center justify-center mb-4">
-            <Plus color="#10b981" size={32} />
-          </View>
-          <Text className="text-slate-900 dark:text-white font-inter-bold text-xl mb-1">Link Bank Account</Text>
-          <Text className="text-slate-500 dark:text-white/60 font-inter text-sm text-center px-8">Connect another account to use with BioPay.</Text>
-        </Pressable>
-      </Animated.View>
-    );
-  }
+  const inputRange = [
+    (index - 1) * SNAP_INTERVAL,
+    index * SNAP_INTERVAL,
+    (index + 1) * SNAP_INTERVAL,
+  ];
 
+  const animatedStyle = useAnimatedStyle(() => {
+    const scale = interpolate(scrollX.value, inputRange, [0.9, 1, 0.9], Extrapolation.CLAMP);
+    const opacity = interpolate(scrollX.value, inputRange, [0.5, 1, 0.5], Extrapolation.CLAMP);
+    return { transform: [{ scale }], opacity };
+  });
+
+  return (
+    <Animated.View style={[animatedStyle, { width: CARD_WIDTH, marginHorizontal: 8 }]}>
+      <Pressable 
+        onPress={handleLinkPress}
+        className={`rounded-3xl overflow-hidden h-56 border border-dashed items-center justify-center ${
+          isDark 
+            ? 'border-white/15 bg-white/5 active:bg-white/10' 
+            : 'border-slate-300 bg-white shadow-sm active:bg-slate-50'
+        }`}
+      >
+        <View className="w-16 h-16 rounded-full bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-500/25 dark:border-emerald-500/40 items-center justify-center mb-4">
+          <Plus color="#10b981" size={32} />
+        </View>
+        <Text className="text-slate-900 dark:text-white font-inter-bold text-xl mb-1">Link Bank Account</Text>
+        <Text className="text-slate-500 dark:text-white/60 font-inter text-sm text-center px-8">Connect another account to use with BioPay.</Text>
+      </Pressable>
+    </Animated.View>
+  );
+};
+
+const ActiveBankCard = ({ item, index, scrollX, isBalanceHidden, toggleBalance, isActive, isDark }: any) => {
   const [isCopied, setIsCopied] = useState(false);
+  const theme = CARD_THEMES[index % CARD_THEMES.length];
   
   const inputRange = [
     (index - 1) * SNAP_INTERVAL,
@@ -78,78 +123,132 @@ const BankNode = ({ item, index, scrollX, isBalanceHidden, toggleBalance, isActi
 
   return (
     <Animated.View style={[animatedStyle, { width: CARD_WIDTH, marginHorizontal: 8 }]}>
-      <View className="rounded-3xl overflow-hidden h-56 border border-slate-200 dark:border-white/10 shadow-2xl">
+      <View 
+        className={`rounded-3xl overflow-hidden h-56 border ${isDark ? 'border-white/15' : 'border-black/5'}`}
+        style={{
+          backgroundColor: theme.bg,
+          shadowColor: theme.shadow,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: isDark ? 0.35 : 0.22,
+          shadowRadius: 16,
+          elevation: 8,
+        }}
+      >
+        {/* Base rich gradient */}
         <LinearGradient
-          colors={index === 0 ? ['#065f46', '#022c22'] : index === 1 ? ['#1e3a8a', '#172554'] : ['#831843', '#4c0519']}
+          colors={theme.gradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          className="absolute inset-0"
+          style={StyleSheet.absoluteFill}
         />
-        <BlurView intensity={20} tint="dark" className="absolute inset-0" />
         
-        <View className="p-6 flex-1">
-          <View className="flex-row justify-between items-start mb-4">
+        {/* Subtle glass reflection overlay */}
+        <LinearGradient
+          colors={['rgba(255,255,255,0.18)', 'rgba(255,255,255,0.01)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0.7, y: 0.7 }}
+          style={StyleSheet.absoluteFill}
+        />
+        
+        <View className="p-6 flex-1 justify-between">
+          <View className="flex-row justify-between items-start">
             <View className="flex-1 pr-4">
               <View className="flex-row items-center mb-1">
                 <Text className="text-white/80 font-inter-semibold uppercase tracking-widest text-xs mr-3">
                   {item.bankName}
                 </Text>
                 {isActive && (
-                  <View className="px-2 py-0.5 bg-emerald-500/20 border border-emerald-500/40 rounded-full">
-                    <Text className="text-emerald-400 font-inter-bold text-[8px] uppercase tracking-widest">Active Link</Text>
+                  <View 
+                    className="px-2 py-0.5 rounded-full border"
+                    style={{ backgroundColor: theme.badgeBg, borderColor: theme.badgeBorder }}
+                  >
+                    <Text 
+                      className="font-inter-bold text-[8px] uppercase tracking-widest"
+                      style={{ color: theme.badgeText }}
+                    >
+                      Active Link
+                    </Text>
                   </View>
                 )}
               </View>
-              <Text className="text-white font-inter-bold text-lg">
+              <Text className="text-white font-inter-bold text-lg" numberOfLines={1}>
                 {item.accountName}
               </Text>
             </View>
-            <View className="w-10 h-10 rounded-full bg-white/10 items-center justify-center">
-              <Zap color="#10b981" size={20} />
+            <View className="w-10 h-10 rounded-full bg-white/15 items-center justify-center border border-white/20">
+              <Zap color="#34d399" size={20} />
             </View>
           </View>
           
           <View>
-            <Text className="text-white/80 font-inter-semibold uppercase tracking-widest text-xs mb-1">Available Balance</Text>
+            <Text className="text-white/70 font-inter-medium uppercase tracking-widest text-xs mb-1">
+              Available Balance
+            </Text>
             <View className="flex-row items-center justify-between">
-              <Text className="text-white font-mono-bold text-3xl tracking-tighter">
+              <Text className="text-white font-mono-bold text-3xl tracking-tight">
                 {isBalanceHidden ? '••••••••' : item.balance}
               </Text>
-              <Pressable onPress={toggleBalance} className="p-2 -mr-2 bg-white/10 rounded-full active:bg-white/20">
-                {isBalanceHidden ? <EyeOff color="rgba(255,255,255,0.7)" size={20} /> : <Eye color="rgba(255,255,255,0.7)" size={20} />}
+              <Pressable 
+                onPress={toggleBalance} 
+                className="p-2 -mr-2 bg-white/15 rounded-full active:bg-white/25 border border-white/10"
+              >
+                {isBalanceHidden ? <EyeOff color="#fff" size={18} /> : <Eye color="#fff" size={18} />}
               </Pressable>
             </View>
           </View>
 
-          <View className="flex-1 justify-end">
-            <View className="flex-row items-center justify-between">
-              <View className="flex-row items-center">
-                <Text className="text-white/80 font-inter-semibold uppercase tracking-widest text-xs mr-2">Account No:</Text>
-                <Text className="text-white/90 font-mono text-sm mr-2">{item.accountNumber}</Text>
-                <Pressable 
-                  onPress={async () => {
-                    await Clipboard.setStringAsync(item.accountNumber);
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                    setIsCopied(true);
-                    setTimeout(() => setIsCopied(false), 2000);
-                  }}
-                  className="p-1.5 rounded-lg bg-white/10 active:bg-white/20 flex-row items-center"
-                >
-                  {isCopied ? (
-                    <>
-                      <CheckCheck color="#34d399" size={14} />
-                      <Text className="text-emerald-400 font-inter-semibold text-[10px] ml-1 uppercase">Copied</Text>
-                    </>
-                  ) : (
-                    <Copy color="rgba(255,255,255,0.7)" size={14} />
-                  )}
-                </Pressable>
-              </View>
+          <View className="flex-row items-center justify-between pt-1">
+            <View className="flex-row items-center">
+              <Text className="text-white/70 font-inter-medium uppercase tracking-widest text-xs mr-2">
+                Account No:
+              </Text>
+              <Text className="text-white font-mono-bold text-sm mr-2 tracking-wider">
+                {item.accountNumber}
+              </Text>
+              <Pressable 
+                onPress={async () => {
+                  await Clipboard.setStringAsync(item.accountNumber);
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  setIsCopied(true);
+                  setTimeout(() => setIsCopied(false), 2000);
+                }}
+                className="p-1.5 rounded-lg bg-white/15 active:bg-white/25 border border-white/15 flex-row items-center"
+              >
+                {isCopied ? (
+                  <>
+                    <CheckCheck color="#34d399" size={14} />
+                    <Text className="text-emerald-300 font-inter-semibold text-[10px] ml-1 uppercase">Copied</Text>
+                  </>
+                ) : (
+                  <Copy color="#fff" size={14} />
+                )}
+              </Pressable>
             </View>
           </View>
         </View>
       </View>
     </Animated.View>
+  );
+};
+
+const BankNode = ({ item, index, scrollX, isBalanceHidden, toggleBalance, isActive }: any) => {
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme !== 'light';
+
+  if (item.isLinkCard) {
+    return <LinkBankCard index={index} scrollX={scrollX} isDark={isDark} />;
+  }
+
+  return (
+    <ActiveBankCard 
+      item={item} 
+      index={index} 
+      scrollX={scrollX} 
+      isBalanceHidden={isBalanceHidden} 
+      toggleBalance={toggleBalance} 
+      isActive={isActive} 
+      isDark={isDark} 
+    />
   );
 };
 
@@ -195,7 +294,10 @@ function HomeScreenContent({ navigation }: any) {
     }
   };
 
-  const carouselData = [...linkedAccounts, { isLinkCard: true, id: 'link-card' }];
+  const maxReached = linkedAccounts.length >= 3;
+  const carouselData = maxReached 
+    ? [...linkedAccounts] 
+    : [...linkedAccounts, { isLinkCard: true, id: 'link-card' }];
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50 dark:bg-black">
