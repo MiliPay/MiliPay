@@ -1,36 +1,45 @@
+import { useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
-import { UserPlus, History, Settings, LogOut, Users, UserCheck, Ticket } from "lucide-react";
+import { UserPlus, History, Settings, LogOut, Users, UserCheck, Ticket, Store } from "lucide-react";
 import clsx from "clsx";
 import { useAuth } from "@milipay/shared/features/auth/AuthContext";
+import { MobileHeader, type MobileNavItem } from "@milipay/shared/components/layout/MobileHeader";
+import { LogoutModal } from "@milipay/shared/components/layout/LogoutModal";
 
 export function AgentLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
-  const navItems = [
-    { name: "Dashboard", path: "/dashboard", icon: History },
+  const navItems: MobileNavItem[] = [
+    { name: "Dashboard", path: "/dashboard", icon: History, end: true },
     { name: "Register Customer", path: "/register", icon: UserPlus },
+    { name: "Register Merchant", path: "/merchants/register", icon: Store },
+    { name: "Merchants", path: "/merchants", icon: Store },
     { name: "Customers", path: "/customers", icon: Users },
     { name: "Complaints", path: "/support", icon: Ticket },
     { name: "Settings", path: "/settings", icon: Settings },
   ];
 
-  const handleLogout = async () => {
+
+  const handleConfirmLogout = async () => {
     await logout();
-    navigate("/login");
+    navigate("/login", { replace: true });
   };
 
   return (
-    <div className="flex h-screen bg-ledger text-ink font-sans">
-      {/* Sidebar */}
-      <aside className="w-64 border-r border-white/[0.05] bg-ledger-line flex flex-col">
+    <div className="flex flex-col md:flex-row h-screen bg-ledger text-ink font-sans">
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex w-64 border-r border-white/[0.05] bg-ledger-line flex-col shrink-0">
         <div className="p-6">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded bg-signal flex items-center justify-center font-display font-bold text-white shadow-[0_0_15px_rgba(var(--color-signal),0.4)]">
-              B
+          <div className="flex items-center justify-between mb-9 mt-4 relative h-10 w-full -ml-2">
+            <div className="relative h-10 w-32">
+              <img src="/main.png" alt="MiliPay Agent" className="absolute top-1/2 -translate-y-1/2 left-0 h-28 w-auto object-contain scale-125 origin-left" />
             </div>
-            <span className="font-display font-medium text-xl tracking-tight">MiliPay Agent</span>
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-signal/15 text-signal-bright border border-signal/25 shrink-0 mr-2">
+              Agent
+            </span>
           </div>
         </div>
 
@@ -69,7 +78,7 @@ export function AgentLayout() {
             </div>
           )}
           <button 
-            onClick={handleLogout}
+            onClick={() => setIsLogoutModalOpen(true)}
             className="flex items-center gap-3 px-3 py-2 rounded-xl text-ink-muted hover:text-status-warning hover:bg-status-warning/10 transition-colors w-full text-left text-xs font-medium"
           >
             <LogOut className="w-4 h-4" />
@@ -78,10 +87,27 @@ export function AgentLayout() {
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 min-w-0 h-screen overflow-y-auto pb-20 md:pb-0">
-        <Outlet />
-      </main>
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        <MobileHeader
+          portalName="Agent"
+          portalBadge="Field Agent"
+          navItems={navItems}
+          user={user}
+          onLogout={() => setIsLogoutModalOpen(true)}
+        />
+        <main className="flex-1 min-w-0 overflow-y-auto pb-16 md:pb-0">
+          <Outlet />
+        </main>
+      </div>
+
+      <LogoutModal
+        isOpen={isLogoutModalOpen}
+        onClose={() => setIsLogoutModalOpen(false)}
+        onConfirm={handleConfirmLogout}
+        portalName="Field Agent Portal"
+        user={user}
+      />
     </div>
   );
 }

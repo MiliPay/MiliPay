@@ -9,13 +9,14 @@ import CustomerDetailsPage from "@milipay/shared/pages/customers/CustomerDetails
 import { ComplaintsDesk } from "@milipay/shared/pages/complaints/ComplaintsDesk";
 import { MyCasesPage } from "@milipay/shared/pages/complaints/MyCasesPage";
 import { TicketDetailsPage } from "@milipay/shared/pages/complaints/TicketDetailsPage";
+import SettingsPage from "@milipay/shared/pages/settings/SettingsPage";
 
 export default function App() {
   return (
     <AuthProvider allowedRoles={["support", "super_admin"]}>
       <BrowserRouter>
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
+          <Route path="/login" element={<LoginPage portal="support" />} />
           <Route 
             element={
               <ProtectedRoute>
@@ -28,11 +29,14 @@ export default function App() {
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/customers/:id" element={<CustomerDetailsPage />} />
             {/* Compatibility Aliases for shared /dashboard prefixes */}
-            <Route path="/dashboard/customers" element={<CustomersPage />} />
-            <Route path="/dashboard/customers/:id" element={<CustomerDetailsPage />} />
             <Route path="/complaints" element={<ComplaintsDesk />} />
             <Route path="/complaints/:id" element={<TicketDetailsPage />} />
             <Route path="/cases" element={<MyCasesPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            {/* Compatibility Aliases for shared /dashboard prefixes */}
+            <Route path="/dashboard/customers" element={<CustomersPage />} />
+            <Route path="/dashboard/customers/:id" element={<CustomerDetailsPage />} />
+            <Route path="/dashboard/settings" element={<SettingsPage />} />
             <Route path="*" element={<div className="p-8">Coming Soon</div>} />
           </Route>
         </Routes>

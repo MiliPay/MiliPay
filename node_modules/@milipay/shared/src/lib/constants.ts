@@ -16,9 +16,13 @@ export const ROUTES = {
   transactionDetails: "/dashboard/transactions/:id",
   register: "/dashboard/register",
   registerCustomer: "/dashboard/register/customer",
+  registerMerchant: "/dashboard/register/merchant",
+  merchants: "/dashboard/merchants",
+  merchantDetails: "/dashboard/merchants/:id",
+  terminals: "/dashboard/terminals",
   settings: "/dashboard/settings",
   staff: "/dashboard/staff",
   staffDetails: "/dashboard/staff/:id",
   support: "/dashboard/support",
   supportDetails: "/dashboard/support/:id",
-} as const;
+} as const;

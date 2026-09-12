@@ -16,9 +16,14 @@ import TransactionDetailsPage from "@milipay/shared/pages/transactions/Transacti
 import SettingsPage from "@milipay/shared/pages/settings/SettingsPage";
 import StaffPage from "@milipay/shared/pages/staff/StaffPage";
 import StaffDetailsPage from "@milipay/shared/pages/staff/StaffDetailsPage";
+import MerchantsPage from "@milipay/shared/pages/merchants/MerchantsPage";
+import MerchantDetailsPage from "@milipay/shared/pages/merchants/MerchantDetailsPage";
+import TerminalsPage from "@milipay/shared/pages/merchants/TerminalsPage";
+import RegisterMerchantPage from "@milipay/shared/pages/merchants/RegisterMerchantPage";
 import { AdminSupportPage } from "@milipay/shared/pages/dashboard/AdminSupportPage";
 import { TicketDetailsPage } from "@milipay/shared/pages/complaints/TicketDetailsPage";
 import NotFoundPage from "@milipay/shared/pages/not-found/NotFoundPage";
+
 
 export default function App() {
   return (
@@ -27,7 +32,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Navigate to={ROUTES.dashboard} replace />} />
 
-          <Route path={ROUTES.login} element={<LoginPage />} />
+          <Route path={ROUTES.login} element={<LoginPage portal="admin" />} />
 
           <Route
             path={ROUTES.dashboard}
@@ -40,11 +45,16 @@ export default function App() {
             <Route index element={<Overview />} />
             <Route path="customers" element={<CustomersPage />} />
             <Route path="customers/:id" element={<CustomerDetailsPage />} />
+            <Route path="merchants" element={<MerchantsPage />} />
+            <Route path="merchants/:id" element={<MerchantDetailsPage />} />
+            <Route path="terminals" element={<TerminalsPage />} />
             <Route path="transactions" element={<TransactionsPage />} />
             <Route path="transactions/:id" element={<TransactionDetailsPage />} />
             <Route path="register" element={<RegisterHubPage />} />
             <Route path="register/customer" element={<RegisterCustomerPage />} />
+            <Route path="register/merchant" element={<RegisterMerchantPage />} />
             <Route path="settings" element={<SettingsPage />} />
+
             <Route path="staff" element={<StaffPage />} />
             <Route path="staff/:id" element={<StaffDetailsPage />} />
             <Route path="support" element={<AdminSupportPage />} />

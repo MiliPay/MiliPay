@@ -446,6 +446,20 @@ export async function updateCustomerProfile(params: {
 }
 
 export async function updateCustomerStatus(id: string, status: CustomerStatus): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { data: staff } = await supabase
+    .from("staff_profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!staff || (staff.role !== "admin" && staff.role !== "super_admin")) {
+    console.error("Forbidden: Field agents and support staff cannot modify customer account status.");
+    return false;
+  }
+
   const { error } = await supabase
     .from('customers')
     .update({ status })
@@ -459,6 +473,20 @@ export async function updateCustomerStatus(id: string, status: CustomerStatus): 
 }
 
 export async function deleteCustomer(id: string): Promise<boolean> {
+  // Strictly enforce role authorization: Only Admins and Super Admins can delete customers
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized: You must be authenticated to perform this operation.");
+
+  const { data: staff } = await supabase
+    .from("staff_profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!staff || (staff.role !== "admin" && staff.role !== "super_admin")) {
+    throw new Error("Forbidden: Field agents and support staff do not have permission to delete customers. Only administrators have deletion clearance.");
+  }
+
   // 1. First attempt: Use PostgreSQL SECURITY DEFINER RPC function
   const { data: rpcData, error: rpcError } = await supabase.rpc('delete_customer_user', {
     target_customer_id: id,

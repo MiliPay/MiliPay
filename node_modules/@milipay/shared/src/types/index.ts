@@ -1,4 +1,4 @@
-export type Role = "agent" | "admin" | "super_admin" | "support";
+export type Role = "agent" | "admin" | "super_admin" | "support" | "merchant";
 
 export interface StaffUser {
   id: string;
@@ -151,3 +151,108 @@ export interface TicketMessage {
   content: string;
   createdAt: string;
 }
+
+// --- Merchant & POS Hardware Types ---
+
+export type MerchantCategory =
+  | "supermarket"
+  | "retail"
+  | "dining"
+  | "fuel"
+  | "pharmacy"
+  | "services"
+  | "other";
+
+export type MerchantStatus = "pending" | "active" | "suspended" | "blacklisted";
+export type SettlementSchedule = "instant" | "daily_eod";
+
+export interface Merchant {
+  id: string;
+  businessName: string;
+  category: MerchantCategory;
+  address: string;
+  state: string;
+  cacRcNumber?: string;
+  directorName: string;
+  directorPhone: string;
+  directorBvn?: string;
+  settlementBankName: string;
+  settlementBankCode: string;
+  settlementAccountNumber: string;
+  settlementAccountName: string;
+  monoSubaccountId?: string;
+  platformFeePercent: number;
+  settlementSchedule: SettlementSchedule;
+  status: MerchantStatus;
+  email?: string;
+  authUserId?: string;
+  onboardedBy?: string;
+  onboardedByName?: string;
+  onboardedByEmail?: string;
+  onboardedByRole?: string;
+  createdAt: string;
+  updatedAt: string;
+  terminalCount?: number;
+  activeTerminalCount?: number;
+  totalVolumeNgn?: number;
+}
+
+export interface POSTerminal {
+  id: string;
+  terminalId: string;
+  merchantId: string;
+  merchantName?: string;
+  deviceSerialNumber: string;
+  deviceModel: string;
+  isActive: boolean;
+  lastHeartbeat?: string;
+  assignedBy?: string;
+  assignedByName?: string;
+  assignedByEmail?: string;
+  assignedByRole?: string;
+  createdAt: string;
+  transactionCount?: number;
+  totalVolumeNgn?: number;
+}
+
+export interface MerchantDraft {
+  businessName: string;
+  category: MerchantCategory;
+  address: string;
+  state: string;
+  cacRcNumber: string;
+  directorName: string;
+  directorPhone: string;
+  directorBvn: string;
+  email: string;
+  password?: string;
+  settlementBankName: string;
+  settlementBankCode: string;
+  settlementAccountNumber: string;
+  settlementAccountName: string;
+  platformFeePercent: number;
+  settlementSchedule: SettlementSchedule;
+  terminalId?: string;
+  deviceSerialNumber?: string;
+  deviceModel?: string;
+}
+
+export interface MerchantCredentials {
+  email: string;
+  tempPassword: string;
+  portalUrl: string;
+}
+
+export interface MerchantTransaction {
+  id: string;
+  reference: string;
+  amount: number;
+  platformFee: number;
+  netPayout: number;
+  terminalId?: string;
+  merchantId: string;
+  merchantName: string;
+  status: TransactionStatus;
+  timestamp: string;
+}
+

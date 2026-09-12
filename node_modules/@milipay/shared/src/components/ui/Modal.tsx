@@ -56,23 +56,25 @@ export function Modal({ isOpen, onClose, title, children, size = "md" }: ModalPr
       onClick={handleBackdropClick}
       onCancel={handleCancel}
       className={`
-        ${SIZE_CLASSES[size]} w-full p-0 bg-transparent
-        backdrop:bg-black/70 backdrop:backdrop-blur-sm
+        ${SIZE_CLASSES[size]} w-[calc(100%-2rem)] sm:w-full p-0 bg-transparent m-auto max-h-[90vh]
+        backdrop:bg-black/75 backdrop:backdrop-blur-sm outline-none
       `}
     >
-      <div className="bg-ledger-raised border border-ledger-line rounded-lg p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-display font-semibold text-ink">{title}</h2>
+      <div className="bg-ledger-raised border border-ledger-line rounded-2xl p-4 sm:p-6 max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+        <div className="flex items-center justify-between mb-4 shrink-0">
+          <h2 className="text-base sm:text-lg font-display font-semibold text-ink">{title}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="text-ink-faint hover:text-ink transition-colors rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal"
+            className="text-ink-faint hover:text-ink transition-colors p-1.5 rounded-xl hover:bg-white/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal"
             aria-label="Close dialog"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
-        {children}
+        <div className="overflow-y-auto flex-1 pr-0.5 custom-scrollbar">
+          {children}
+        </div>
       </div>
     </dialog>
   );

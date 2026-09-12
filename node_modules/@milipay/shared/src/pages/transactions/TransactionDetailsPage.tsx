@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowUpRight, Copy, Receipt, User, Store, ShieldCheck, MapPi
 import { Card } from "@milipay/shared/components/ui/Card";
 import { StatusBadge } from "@milipay/shared/components/ui/StatusBadge";
 import { Button } from "@milipay/shared/components/ui/Button";
+import { LoadingState } from "@milipay/shared/components/ui/LoadingState";
 import { fetchTransactionById } from "@milipay/shared/features/transactions/api";
 import { ROUTES } from "@milipay/shared/lib/constants";
 import { formatNaira, formatTimestamp } from "@milipay/shared/lib/utils/format";
@@ -64,8 +65,12 @@ export default function TransactionDetailsPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 md:p-10 max-w-3xl mx-auto flex justify-center items-center h-64">
-        <div className="w-8 h-8 border-2 border-signal border-t-transparent rounded-full animate-spin" />
+      <div className="flex-1 overflow-auto bg-ledger min-h-screen flex items-center justify-center p-6">
+        <LoadingState
+          minHeight="min-h-[50vh]"
+          title="Loading Transaction Details..."
+          description="Fetching settlement status, fee breakdown, and processor verification records."
+        />
       </div>
     );
   }
@@ -80,18 +85,18 @@ export default function TransactionDetailsPage() {
   }
 
   return (
-    <div className="p-6 md:p-10 max-w-3xl mx-auto space-y-8 animate-rise-in">
+    <div className="p-4 sm:p-6 md:p-10 max-w-3xl mx-auto space-y-6 sm:space-y-8 animate-rise-in">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div>
           <button 
             onClick={() => navigate(-1)} 
-            className="inline-flex items-center gap-2 text-sm text-ink-muted hover:text-signal-bright transition-colors mb-4"
+            className="inline-flex items-center gap-2 text-sm text-ink-muted hover:text-signal transition-colors mb-4"
           >
             <ArrowLeft className="w-4 h-4" /> Back
           </button>
-          <div className="flex items-center gap-4">
-            <h1 className="text-2xl md:text-3xl font-display font-bold text-ink flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-display font-bold text-ink flex items-center gap-3">
               {analytics ? formatNaira(analytics.totalAmount) : formatNaira(transaction.amountKobo)}
             </h1>
             <StatusBadge status={transaction.status} />

@@ -1,6 +1,7 @@
 import { useState, useCallback, type ReactNode } from "react";
 import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@milipay/shared/components/ui/Button";
+import { TableSkeletonRows } from "@milipay/shared/components/ui/Skeleton";
 
 export interface Column<T> {
   key: string;
@@ -110,16 +111,7 @@ export function DataTable<T>({
 
           <tbody className="divide-y divide-ledger-line">
             {/* Loading skeleton */}
-            {isLoading &&
-              Array.from({ length: 5 }).map((_, i) => (
-                <tr key={`skeleton-${i}`}>
-                  {columns.map((col) => (
-                    <td key={col.key} className="px-4 py-3">
-                      <div className="h-4 w-3/4 rounded bg-white/[0.06] animate-pulse" />
-                    </td>
-                  ))}
-                </tr>
-              ))}
+            {isLoading && <TableSkeletonRows columns={columns.length} rows={pageSize || 5} />}
 
             {/* Empty state */}
             {!isLoading && data.length === 0 && (

@@ -183,7 +183,7 @@ export default function RegisterCustomerPage() {
     <div className="min-h-screen bg-ledger">
       <StepProgress steps={STEPS} current={step} />
 
-      <div className="mx-auto max-w-xl px-6 py-8 pb-36">
+      <div className="mx-auto max-w-xl px-4 sm:px-6 py-6 sm:py-8 pb-36">
         {step === 1 && (
           <div className="animate-rise-in">
             <h2 className="mb-1.5 font-display text-xl font-bold text-ink">Personal information</h2>

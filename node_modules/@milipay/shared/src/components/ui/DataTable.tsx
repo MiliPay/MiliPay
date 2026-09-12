@@ -1,6 +1,7 @@
 import { useState, useCallback, type ReactNode } from "react";
 import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "./Button";
+import { TableSkeletonRows } from "./Skeleton";
 
 export interface Column<T> {
   key: string;
@@ -110,16 +111,7 @@ export function DataTable<T>({
 
           <tbody className="divide-y divide-ledger-line">
             {/* Loading skeleton */}
-            {isLoading &&
-              Array.from({ length: 5 }).map((_, i) => (
-                <tr key={`skeleton-${i}`}>
-                  {columns.map((col) => (
-                    <td key={col.key} className="px-4 py-3">
-                      <div className="h-4 w-3/4 rounded bg-white/[0.06] animate-pulse" />
-                    </td>
-                  ))}
-                </tr>
-              ))}
+            {isLoading && <TableSkeletonRows columns={columns.length} rows={pageSize || 5} />}
 
             {/* Empty state */}
             {!isLoading && data.length === 0 && (
@@ -177,19 +169,20 @@ export function DataTable<T>({
 
       {/* Pagination footer */}
       {total > 0 && (
-        <div className="flex items-center justify-between border-t border-ledger-line bg-ledger-raised px-4 py-3">
-          <p className="text-xs text-ink-muted font-data">
+        <div className="flex flex-col sm:flex-row items-center justify-between border-t border-ledger-line bg-ledger-raised px-4 py-3 gap-3">
+          <p className="text-xs text-ink-muted font-data text-center sm:text-left">
             Showing {rangeStart}–{rangeEnd} of {total}
           </p>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             <Button
               variant="ghost"
               size="sm"
               disabled={!hasPrev}
               onClick={() => onPageChange?.(page - 1)}
               aria-label="Previous page"
+              className="h-9 px-3"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="w-4 h-4 mr-1" />
               Prev
             </Button>
             <Button
@@ -198,9 +191,10 @@ export function DataTable<T>({
               disabled={!hasNext}
               onClick={() => onPageChange?.(page + 1)}
               aria-label="Next page"
+              className="h-9 px-3"
             >
               Next
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
           </div>
         </div>

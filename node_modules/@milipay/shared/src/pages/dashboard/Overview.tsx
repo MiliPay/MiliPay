@@ -3,6 +3,9 @@ import { Link } from "react-router-dom";
 import { UserPlus, ArrowRight, TrendingUp } from "lucide-react";
 import { LiveLedgerStrip } from "@milipay/shared/components/layout/LiveLedgerStrip";
 import { Card } from "@milipay/shared/components/ui/Card";
+import { Skeleton } from "@milipay/shared/components/ui/Skeleton";
+import { LoadingSpinner } from "@milipay/shared/components/ui/LoadingSpinner";
+import { WeeklyRegistrationsChart } from "@milipay/shared/components/dashboard/WeeklyRegistrationsChart";
 import { ROUTES } from "@milipay/shared/lib/constants";
 import { fetchDashboardStats, fetchRecentTransactions } from "@milipay/shared/features/transactions/api";
 import { formatNaira } from "@milipay/shared/lib/utils/format";
@@ -45,62 +48,58 @@ export default function Overview() {
     return () => { cancelled = true; };
   }, []);
 
-  const maxReg = stats ? Math.max(...stats.dailyRegistrations, 1) : 1;
-
-  // Build the last 7 day labels dynamically (e.g. "Mon", "Tue", ...)
-  const dayLabels: string[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    dayLabels.push(d.toLocaleDateString("en-US", { weekday: "short" }));
-  }
-
   return (
-    <div className="p-6 md:p-10 max-w-6xl mx-auto space-y-8 animate-rise-in">
-      <div className="mb-8">
-        <h1 className="text-2xl font-display font-bold text-ink">Dashboard</h1>
-        <p className="text-ink-muted mt-1">Network status and recent activity.</p>
+    <div className="p-4 sm:p-6 md:p-10 max-w-6xl mx-auto space-y-6 sm:space-y-8 animate-rise-in">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-xl sm:text-2xl font-display font-bold text-ink">Dashboard</h1>
+        <p className="text-sm text-ink-muted mt-1">Network status and recent activity.</p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
         <StatCard 
           label="Total Customers" 
-          value={isLoading ? "-" : new Intl.NumberFormat().format(stats!.totalCustomers)} 
+          value={isLoading ? "" : new Intl.NumberFormat().format(stats!.totalCustomers)} 
+          isLoading={isLoading}
           href={ROUTES.customers}
         />
         <StatCard 
           label="Pending KYC" 
-          value={isLoading ? "-" : new Intl.NumberFormat().format(stats!.pendingKYC)} 
+          value={isLoading ? "" : new Intl.NumberFormat().format(stats!.pendingKYC)} 
+          isLoading={isLoading}
           href={ROUTES.customers}
           highlightWarn={!isLoading && stats!.pendingKYC > 0}
         />
         <StatCard 
           label="Active Staff" 
-          value={isLoading ? "-" : new Intl.NumberFormat().format(stats!.activeStaff)} 
+          value={isLoading ? "" : new Intl.NumberFormat().format(stats!.activeStaff)} 
+          isLoading={isLoading}
           href={ROUTES.staff}
         />
         <StatCard 
           label="Transactions Today" 
-          value={isLoading ? "-" : new Intl.NumberFormat().format(stats!.transactionsToday)} 
+          value={isLoading ? "" : new Intl.NumberFormat().format(stats!.transactionsToday)} 
+          isLoading={isLoading}
           href={ROUTES.transactions}
         />
         <StatCard 
           label="Volume (MTD)" 
-          value={isLoading ? "-" : formatNaira(stats!.volumeMTD)} 
+          value={isLoading ? "" : formatNaira(stats!.volumeMTD)} 
+          isLoading={isLoading}
         />
         <StatCard 
           label="System Health" 
-          value={isLoading ? "-" : `${stats!.systemHealth}%`} 
+          value={isLoading ? "" : `${stats!.systemHealth}%`} 
+          isLoading={isLoading}
           highlight 
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <Link 
               to={ROUTES.registerCustomer}
-              className="group flex items-center justify-between p-5 rounded-lg border border-ledger-line bg-ledger-raised hover:border-signal/50 transition-colors"
+              className="group flex items-center justify-between p-4 sm:p-5 rounded-xl border border-ledger-line bg-ledger-raised hover:border-signal/50 transition-colors"
             >
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded bg-signal/10 text-signal-bright flex items-center justify-center">
@@ -131,44 +130,17 @@ export default function Overview() {
             </Link>
           </div>
 
-          <Card raised className="p-6 h-[220px] flex flex-col">
-            <h2 className="text-sm font-display font-semibold text-ink mb-6">Registrations this week</h2>
-            <div className="flex-1 flex items-stretch gap-2 sm:gap-4 relative">
-              {isLoading ? (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-6 h-6 border-2 border-signal border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : (
-                dayLabels.map((day, i) => {
-                  const val = stats!.dailyRegistrations[i];
-                  const pct = (val / maxReg) * 100;
-                  // Ensure non-zero values always show at least 8% height
-                  const height = val > 0 ? `${Math.max(pct, 8)}%` : "0%";
-                  return (
-                    <div key={day + i} className="flex-1 flex flex-col items-center gap-2 group">
-                      <div className="w-full flex-1 relative rounded-t overflow-hidden bg-white/5">
-                        <div 
-                          className="absolute bottom-0 left-0 right-0 bg-signal group-hover:bg-signal-bright transition-all duration-300 rounded-t"
-                          style={{ height, minHeight: val > 0 ? "6px" : undefined }}
-                        >
-                          <div className="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-xs font-data text-signal-bright bg-ledger-raised border border-ledger-line rounded px-1.5 py-0.5 pointer-events-none shadow-xl z-10">
-                            {val}
-                          </div>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-semibold text-ink-faint uppercase tracking-wider">{day}</span>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </Card>
+          <WeeklyRegistrationsChart 
+            data={stats?.dailyRegistrations} 
+            isLoading={isLoading} 
+          />
         </div>
 
         <div className="lg:col-span-1">
           {isLoading ? (
-            <Card raised className="h-full min-h-[400px] flex items-center justify-center">
-              <div className="w-6 h-6 border-2 border-signal border-t-transparent rounded-full animate-spin" />
+            <Card raised className="h-full min-h-[400px] flex flex-col items-center justify-center gap-3 p-6 text-center">
+              <LoadingSpinner size="lg" />
+              <p className="text-xs text-ink-muted font-medium">Streaming live ledger...</p>
             </Card>
           ) : (
             <LiveLedgerStrip transactions={recentTransactions} />
@@ -179,13 +151,17 @@ export default function Overview() {
   );
 }
 
-function StatCard({ label, value, highlight, highlightWarn, href }: { label: string; value: string; highlight?: boolean; highlightWarn?: boolean; href?: string }) {
+function StatCard({ label, value, isLoading, highlight, highlightWarn, href }: { label: string; value: string; isLoading?: boolean; highlight?: boolean; highlightWarn?: boolean; href?: string }) {
   const content = (
     <Card raised className={`p-5 h-full ${href ? "hover:border-signal/50 transition-colors" : ""}`}>
       <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-2">{label}</p>
-      <p className={`text-2xl font-display font-bold ${highlight ? "text-status-ok" : highlightWarn ? "text-status-warning" : "text-ink"}`}>
-        <span className={(highlight || highlightWarn) ? "" : "font-data tracking-tight"}>{value}</span>
-      </p>
+      {isLoading ? (
+        <Skeleton className="h-7 w-20 my-0.5" />
+      ) : (
+        <p className={`text-2xl font-display font-bold ${highlight ? "text-status-ok" : highlightWarn ? "text-status-warning" : "text-ink"}`}>
+          <span className={(highlight || highlightWarn) ? "" : "font-data tracking-tight"}>{value}</span>
+        </p>
+      )}
     </Card>
   );
 

@@ -12,6 +12,8 @@ import { StatusBadge } from "@milipay/shared/components/ui/StatusBadge";
 import { Button } from "@milipay/shared/components/ui/Button";
 import { Modal } from "@milipay/shared/components/ui/Modal";
 import { Input } from "@milipay/shared/components/ui/Input";
+import { LoadingState } from "@milipay/shared/components/ui/LoadingState";
+import { LoadingSpinner } from "@milipay/shared/components/ui/LoadingSpinner";
 import { supabase } from "@milipay/shared/lib/supabase";
 import { 
   fetchCustomerById, 
@@ -118,31 +120,40 @@ export default function CustomerDetailsPage() {
     loadData();
   }, [id]);
 
-  const handleStatusChange = async (newStatus: Customer['status']) => {
-    if (!customer || !id) return;
+  const handleStatusChange = async (newStatus: 'active' | 'suspended') => {
+    if (!isAdmin || !customer || !id) return;
     setIsUpdatingStatus(true);
-    const updated = await updateCustomerStatus(id, newStatus);
-    if (updated) {
+    const success = await updateCustomerStatus(id, newStatus);
+    if (success) {
       setCustomer({ ...customer, status: newStatus });
     }
     setIsUpdatingStatus(false);
   };
 
   const handleDelete = async () => {
+    if (!isAdmin) {
+      setDeleteError("Access denied: Only administrators have permission to delete customer records.");
+      return;
+    }
     if (!customer || !id) return;
     setIsDeleting(true);
     setDeleteError(null);
-    const success = await deleteCustomer(id);
-    if (success) {
-      navigate(backLink);
-    } else {
-      setDeleteError("Failed to delete customer. They might have active transactions or tickets.");
+    try {
+      const success = await deleteCustomer(id);
+      if (success) {
+        navigate(backLink);
+      } else {
+        setDeleteError("Failed to delete customer. They might have active transactions or tickets.");
+        setIsDeleting(false);
+      }
+    } catch (err: any) {
+      setDeleteError(err.message || "Failed to delete customer");
       setIsDeleting(false);
     }
   };
 
   const handleApprove = async () => {
-    if (!customer || !id || !user) return;
+    if (!isAdmin || !customer || !id || !user) return;
     setIsApproving(true);
     setApprovalError(null);
     const success = await approveCustomer(id, user.id);
@@ -156,7 +167,7 @@ export default function CustomerDetailsPage() {
   };
 
   const handleReject = async () => {
-    if (!customer || !id || !user) return;
+    if (!isAdmin || !customer || !id || !user) return;
     const finalReason = rejectReason === "Other" ? customRejectReason : rejectReason;
     if (!finalReason.trim()) {
       setRejectError("Please provide a rejection reason.");
@@ -263,7 +274,15 @@ export default function CustomerDetailsPage() {
   };
 
   if (isLoading) {
-    return <div className="p-8 text-ink-muted">Loading customer details...</div>;
+    return (
+      <div className="flex-1 overflow-auto bg-ledger min-h-screen flex items-center justify-center">
+        <LoadingState
+          minHeight="min-h-[60vh]"
+          title="Loading Customer Profile..."
+          description="Retrieving biometric enrollment status, linked accounts, and KYC verification records."
+        />
+      </div>
+    );
   }
 
   if (!customer) {
@@ -279,57 +298,57 @@ export default function CustomerDetailsPage() {
 
   return (
     <div className="flex-1 overflow-auto bg-ledger min-h-screen">
-      <div className="max-w-6xl mx-auto p-8 space-y-8 pb-32">
+      <div className="max-w-6xl mx-auto p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 pb-32">
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/[0.05] pb-6">
-          <div className="flex items-center gap-4">
-            <Link to={backLink} className="p-2 -ml-2 rounded-xl hover:bg-white/[0.05] text-ink-muted transition-colors">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <Link to={backLink} className="p-2 -ml-2 rounded-xl hover:bg-white/[0.05] text-ink-muted transition-colors shrink-0">
               <ArrowLeft className="w-5 h-5" />
             </Link>
-            <div>
-              <h1 className="text-3xl font-display text-white tracking-tight flex items-center gap-3">
-                {customer.fullName}
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-display text-white tracking-tight flex flex-wrap items-center gap-2 sm:gap-3">
+                <span className="truncate">{customer.fullName}</span>
                 <StatusBadge status={customer.status} />
               </h1>
-              <p className="text-ink-muted mt-1 font-mono text-sm">ID: {customer.id}</p>
+              <p className="text-ink-muted mt-1 font-mono text-xs sm:text-sm break-all">ID: {customer.id}</p>
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
-            {customer.status === 'pending' && (
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {isAdmin && customer.status === 'pending' && (
               <>
                 <Button 
                   onClick={() => setShowApproveModal(true)} 
-                  className="bg-status-ok hover:bg-status-ok/90 text-ledger gap-2"
+                  className="bg-status-ok hover:bg-status-ok/90 text-ledger gap-1.5 sm:gap-2 text-xs sm:text-sm"
                 >
                   <CheckCircle className="w-4 h-4" /> Approve
                 </Button>
                 <Button 
                   onClick={() => setShowRejectModal(true)} 
                   variant="danger" 
-                  className="gap-2"
+                  className="gap-1.5 sm:gap-2 text-xs sm:text-sm"
                 >
                   <XCircle className="w-4 h-4" /> Reject
                 </Button>
               </>
             )}
 
-            {customer.status === 'active' && (
+            {isAdmin && customer.status === 'active' && (
               <Button 
                 onClick={() => handleStatusChange('suspended')} 
                 variant="secondary" 
-                className="border-status-warning/30 text-status-warning hover:bg-status-warning/10 gap-2"
+                className="border-status-warning/30 text-status-warning hover:bg-status-warning/10 gap-1.5 sm:gap-2 text-xs sm:text-sm"
                 disabled={isUpdatingStatus}
               >
                 <Ban className="w-4 h-4" /> Suspend Account
               </Button>
             )}
 
-            {customer.status === 'suspended' && (
+            {isAdmin && customer.status === 'suspended' && (
               <Button 
                 onClick={() => handleStatusChange('active')} 
                 variant="secondary" 
-                className="border-status-ok/30 text-status-ok hover:bg-status-ok/10 gap-2"
+                className="border-status-ok/30 text-status-ok hover:bg-status-ok/10 gap-1.5 sm:gap-2 text-xs sm:text-sm"
                 disabled={isUpdatingStatus}
               >
                 <RotateCcw className="w-4 h-4" /> Reactivate
@@ -340,37 +359,39 @@ export default function CustomerDetailsPage() {
               <Button 
                 onClick={handleOpenEditModal} 
                 variant="secondary" 
-                className="border-signal/30 text-signal hover:bg-signal/10 gap-2"
+                className="border-signal/30 text-signal hover:bg-signal/10 gap-1.5 sm:gap-2 text-xs sm:text-sm"
               >
                 <Pencil className="w-4 h-4" /> Edit Details
               </Button>
             )}
             
-            <Button 
-              onClick={() => setShowDeleteModal(true)}
-              variant="danger"
-              className="p-3"
-              title="Delete Customer"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
+            {isAdmin && (
+              <Button 
+                onClick={() => setShowDeleteModal(true)}
+                variant="danger" 
+                className="p-2.5 sm:p-3"
+                title="Delete Customer"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            )}
           </div>
         </div>
 
         {customer.status === 'rejected' && customer.rejectionReason && (
-          <div className="bg-status-fail/10 border border-status-fail/30 rounded-2xl p-6 flex gap-4 items-start">
-            <AlertTriangle className="w-6 h-6 text-status-fail shrink-0 mt-0.5" />
+          <div className="bg-status-fail/10 border border-status-fail/30 rounded-2xl p-4 sm:p-6 flex gap-3 sm:gap-4 items-start">
+            <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-status-fail shrink-0 mt-0.5" />
             <div>
-              <h3 className="text-status-fail font-medium">Application Rejected</h3>
-              <p className="text-status-fail/80 mt-1">{customer.rejectionReason}</p>
+              <h3 className="text-status-fail font-medium text-sm sm:text-base">Application Rejected</h3>
+              <p className="text-status-fail/80 mt-1 text-xs sm:text-sm">{customer.rejectionReason}</p>
             </div>
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
           
           {/* Profile Details Card */}
-          <Card className="md:col-span-1 p-6 space-y-6">
+          <Card className="lg:col-span-1 p-4 sm:p-6 space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-medium text-white flex items-center gap-2">
                 <User className="w-5 h-5 text-signal" /> Profile Details
@@ -453,12 +474,12 @@ export default function CustomerDetailsPage() {
           </Card>
 
           {/* Linked Banks & Transactions */}
-          <div className="md:col-span-2 space-y-8">
+          <div className="lg:col-span-2 space-y-6 sm:space-y-8">
             
             {/* Linked Accounts */}
-            <Card className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-medium text-white flex items-center gap-2">
+            <Card className="p-4 sm:p-6">
+              <div className="flex items-center justify-between mb-4 sm:mb-6">
+                <h2 className="text-base sm:text-lg font-medium text-white flex items-center gap-2">
                   <Building2 className="w-5 h-5 text-signal" /> Linked Bank Accounts
                 </h2>
                 {linkedAccounts.length > 0 && (
@@ -594,86 +615,93 @@ export default function CustomerDetailsPage() {
         </div>
       </div>
 
-      {/* Delete Modal */}
-      <Modal isOpen={showDeleteModal} onClose={() => !isDeleting && setShowDeleteModal(false)} title="Delete Customer">
-        <div className="space-y-4">
-          <div className="bg-status-fail/10 text-status-fail p-4 rounded-xl flex gap-3 text-sm border border-status-fail/20">
-            <ShieldAlert className="w-5 h-5 shrink-0" />
-            <p>This action cannot be undone. All personal data will be permanently deleted. Transaction records will be anonymized.</p>
-          </div>
-          {deleteError && <p className="text-status-fail text-sm font-medium">{deleteError}</p>}
-          <div className="flex justify-end gap-3 mt-6">
-            <Button variant="secondary" onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>Cancel</Button>
-            <Button onClick={handleDelete} className="bg-status-fail text-white hover:bg-status-fail/90" disabled={isDeleting}>
-              {isDeleting ? "Deleting..." : "Delete Permanently"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Approve Modal */}
-      <Modal isOpen={showApproveModal} onClose={() => !isApproving && setShowApproveModal(false)} title="Approve Customer">
-        <div className="space-y-4">
-          <div className="bg-status-ok/10 text-status-ok p-4 rounded-xl flex gap-3 text-sm border border-status-ok/20">
-            <UserCheck className="w-5 h-5 shrink-0" />
-            <p>You are about to verify this customer's KYC data. This will grant them full access to the MiliPay network.</p>
-          </div>
-          {approvalError && <p className="text-status-fail text-sm font-medium">{approvalError}</p>}
-          <div className="flex justify-end gap-3 mt-6">
-            <Button variant="secondary" onClick={() => setShowApproveModal(false)} disabled={isApproving}>Cancel</Button>
-            <Button onClick={handleApprove} className="bg-status-ok text-ledger hover:bg-status-ok/90" disabled={isApproving}>
-              {isApproving ? "Approving..." : "Approve & Verify"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Reject Modal */}
-      <Modal isOpen={showRejectModal} onClose={() => !isRejecting && setShowRejectModal(false)} title="Reject Customer">
-        <div className="space-y-4">
-          <div className="bg-status-warning/10 text-status-warning p-4 rounded-xl flex gap-3 text-sm border border-status-warning/20">
-            <FileText className="w-5 h-5 shrink-0" />
-            <p>Please select a reason for rejection. This will be visible to the customer and field agents.</p>
-          </div>
-          
-          <div className="space-y-2">
-            <label className="text-sm text-ink-muted">Reason for rejection</label>
-            <select 
-              className="w-full bg-ledger border border-white/[0.1] rounded-xl px-4 py-3 text-white outline-none focus:border-signal/50"
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              disabled={isRejecting}
-            >
-              {DEFAULT_REJECTION_REASONS.map(r => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-          </div>
-
-          {rejectReason === "Other" && (
-            <div className="space-y-2">
-              <label className="text-sm text-ink-muted">Specify Reason</label>
-              <Input 
-                value={customRejectReason}
-                onChange={(e) => setCustomRejectReason(e.target.value)}
-                placeholder="Enter specific reason..."
-                disabled={isRejecting}
-              />
+      {/* Delete Modal - strictly restricted to Admins */}
+      {isAdmin && (
+        <Modal isOpen={showDeleteModal} onClose={() => !isDeleting && setShowDeleteModal(false)} title="Delete Customer">
+          <div className="space-y-4">
+            <div className="bg-status-fail/10 text-status-fail p-4 rounded-xl flex gap-3 text-sm border border-status-fail/20">
+              <ShieldAlert className="w-5 h-5 shrink-0" />
+              <p>This action cannot be undone. All personal data will be permanently deleted. Transaction records will be anonymized.</p>
             </div>
-          )}
-
-          {rejectError && <p className="text-status-fail text-sm font-medium">{rejectError}</p>}
-          <div className="flex justify-end gap-3 mt-6">
-            <Button variant="secondary" onClick={() => setShowRejectModal(false)} disabled={isRejecting}>Cancel</Button>
-            <Button onClick={handleReject} className="bg-status-warning text-ledger hover:bg-status-warning/90" disabled={isRejecting}>
-              {isRejecting ? "Rejecting..." : "Confirm Rejection"}
-            </Button>
+            {deleteError && <p className="text-status-fail text-sm font-medium">{deleteError}</p>}
+            <div className="flex justify-end gap-3 mt-6">
+              <Button variant="secondary" onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>Cancel</Button>
+              <Button onClick={handleDelete} className="bg-status-fail text-white hover:bg-status-fail/90" disabled={isDeleting}>
+                {isDeleting ? "Deleting..." : "Delete Permanently"}
+              </Button>
+            </div>
           </div>
-        </div>
-      </Modal>
+        </Modal>
+      )}
 
-      {/* Edit Customer Modal */}
-      <Modal isOpen={showEditModal} onClose={() => !isSavingEdit && setShowEditModal(false)} title="Edit Customer Details">
+      {/* Approve Modal - strictly restricted to Admins */}
+      {isAdmin && (
+        <Modal isOpen={showApproveModal} onClose={() => !isApproving && setShowApproveModal(false)} title="Approve Customer">
+          <div className="space-y-4">
+            <div className="bg-status-ok/10 text-status-ok p-4 rounded-xl flex gap-3 text-sm border border-status-ok/20">
+              <UserCheck className="w-5 h-5 shrink-0" />
+              <p>You are about to verify this customer's KYC data. This will grant them full access to the MiliPay network.</p>
+            </div>
+            {approvalError && <p className="text-status-fail text-sm font-medium">{approvalError}</p>}
+            <div className="flex justify-end gap-3 mt-6">
+              <Button variant="secondary" onClick={() => setShowApproveModal(false)} disabled={isApproving}>Cancel</Button>
+              <Button onClick={handleApprove} className="bg-status-ok text-ledger hover:bg-status-ok/90" disabled={isApproving}>
+                {isApproving ? "Approving..." : "Approve & Verify"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Reject Modal - strictly restricted to Admins */}
+      {isAdmin && (
+        <Modal isOpen={showRejectModal} onClose={() => !isRejecting && setShowRejectModal(false)} title="Reject Customer">
+          <div className="space-y-4">
+            <div className="bg-status-warning/10 text-status-warning p-4 rounded-xl flex gap-3 text-sm border border-status-warning/20">
+              <FileText className="w-5 h-5 shrink-0" />
+              <p>Please select a reason for rejection. This will be visible to the customer and field agents.</p>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm text-ink-muted">Reason for rejection</label>
+              <select 
+                className="w-full bg-ledger border border-white/[0.1] rounded-xl px-4 py-3 text-white outline-none focus:border-signal/50"
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                disabled={isRejecting}
+              >
+                {DEFAULT_REJECTION_REASONS.map(r => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </div>
+
+            {rejectReason === "Other" && (
+              <div className="space-y-2">
+                <label className="text-sm text-ink-muted">Specify Reason</label>
+                <Input 
+                  value={customRejectReason}
+                  onChange={(e) => setCustomRejectReason(e.target.value)}
+                  placeholder="Enter specific reason..."
+                  disabled={isRejecting}
+                />
+              </div>
+            )}
+
+            {rejectError && <p className="text-status-fail text-sm font-medium">{rejectError}</p>}
+            <div className="flex justify-end gap-3 mt-6">
+              <Button variant="secondary" onClick={() => setShowRejectModal(false)} disabled={isRejecting}>Cancel</Button>
+              <Button onClick={handleReject} className="bg-status-warning text-ledger hover:bg-status-warning/90" disabled={isRejecting}>
+                {isRejecting ? "Rejecting..." : "Confirm Rejection"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Edit Customer Modal - strictly restricted to Admins */}
+      {isAdmin && (
+        <Modal isOpen={showEditModal} onClose={() => !isSavingEdit && setShowEditModal(false)} title="Edit Customer Details">
         <form onSubmit={handleSaveEdit} className="space-y-4">
           <div className="bg-signal/10 border border-signal/20 rounded-xl p-3.5 flex items-start gap-3 text-xs text-ink-muted">
             <ShieldCheck className="w-4 h-4 text-signal shrink-0 mt-0.5" />
@@ -779,6 +807,7 @@ export default function CustomerDetailsPage() {
           </div>
         </form>
       </Modal>
+      )}
 
       {/* Linked Bank Account Details & Isolated Transactions Modal */}
       {selectedBank && (
@@ -913,8 +942,8 @@ export default function CustomerDetailsPage() {
 
               {isLoadingBankTx ? (
                 <div className="py-12 text-center text-ink-muted flex flex-col items-center justify-center gap-3">
-                  <div className="w-6 h-6 border-2 border-signal border-t-transparent rounded-full animate-spin" />
-                  <span className="text-xs">Loading transaction history for this account...</span>
+                  <LoadingSpinner size="md" />
+                  <span className="text-xs font-medium">Retrieving linked account ledger...</span>
                 </div>
               ) : bankTransactions.length === 0 ? (
                 <div className="text-center py-10 px-4 bg-white/[0.01] border border-dashed border-white/10 rounded-2xl">
