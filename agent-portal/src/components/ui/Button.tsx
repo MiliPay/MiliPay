@@ -42,10 +42,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
       >
         {isLoading && (
-          <span
-            className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin shrink-0"
-            aria-hidden="true"
-          />
+          <span className="relative flex items-center justify-center w-4 h-4 shrink-0 mr-1.5" aria-hidden="true">
+            <span className="absolute inset-0 rounded-full border-2 border-current opacity-25" />
+            <span className="absolute inset-0 rounded-full border-2 border-current border-t-transparent animate-spin" />
+          </span>
         )}
         {children}
       </button>

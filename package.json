@@ -5,6 +5,7 @@
     "AdminPanel",
     "agent-portal",
     "service-portal",
+    "merchant-portal",
     "website",
     "packages/*"
   ],

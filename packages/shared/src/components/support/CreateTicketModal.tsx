@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Search } from "lucide-react";
+import { X, Search, CheckCircle2, ShieldAlert, Clock } from "lucide-react";
 import { Button } from "@milipay/shared/components/ui/Button";
 import { fetchCustomers } from "@milipay/shared/features/customers/api";
 import { createTicket } from "@milipay/shared/features/support/api";
@@ -19,6 +19,7 @@ export function CreateTicketModal({ isOpen, onClose, onCreated }: Props) {
   const [searchResults, setSearchResults] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [issueDescription, setIssueDescription] = useState("");
+  const [actionType, setActionType] = useState<"solve" | "escalate" | "open">("solve");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Reset state when opened
@@ -28,6 +29,7 @@ export function CreateTicketModal({ isOpen, onClose, onCreated }: Props) {
       setSearchResults([]);
       setSelectedCustomer(null);
       setIssueDescription("");
+      setActionType("solve");
     }
   }, [isOpen]);
 
@@ -52,7 +54,11 @@ export function CreateTicketModal({ isOpen, onClose, onCreated }: Props) {
     if (!selectedCustomer || !issueDescription.trim() || !user) return;
     setIsSubmitting(true);
     try {
-      const ticket = await createTicket(selectedCustomer.id, issueDescription.trim(), user.id);
+      const ticket = await createTicket(selectedCustomer.id, issueDescription.trim(), user.id, {
+        status: actionType === "solve" ? "resolved" : "open",
+        isEscalated: actionType === "escalate",
+        subject: actionType === "escalate" ? `Walk-in Escalation: ${issueDescription.trim().slice(0, 60)}` : undefined
+      });
       onCreated(ticket.ticket_id);
     } catch (err) {
       console.error(err);
@@ -71,7 +77,10 @@ export function CreateTicketModal({ isOpen, onClose, onCreated }: Props) {
         
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-white/[0.05]">
-          <h2 className="text-xl font-display text-white">Create Support Ticket</h2>
+          <div>
+            <h2 className="text-xl font-display text-white">Log Walk-in Complaint</h2>
+            <p className="text-xs text-ink-muted mt-0.5">Record in-person customer issue and record resolution</p>
+          </div>
           <button onClick={onClose} className="text-ink-muted hover:text-white transition-colors">
             <X className="w-5 h-5" />
           </button>
@@ -129,13 +138,63 @@ export function CreateTicketModal({ isOpen, onClose, onCreated }: Props) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-ink-muted mb-2">Issue Description</label>
+                <label className="block text-sm font-medium text-ink-muted mb-2">Complaint Details</label>
                 <textarea
                   value={issueDescription}
                   onChange={(e) => setIssueDescription(e.target.value)}
-                  placeholder="Describe the problem the customer is facing..."
-                  className="w-full bg-white/[0.02] border border-white/[0.1] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-signal/50 min-h-[120px] resize-none"
+                  placeholder="Describe the complaint discussed with the customer during this walk-in..."
+                  className="w-full bg-white/[0.02] border border-white/[0.1] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-signal/50 min-h-[100px] resize-none text-sm"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-ink-muted mb-2">Resolution Action</label>
+                <div className="grid grid-cols-1 gap-2.5">
+                  <label 
+                    onClick={() => setActionType("solve")}
+                    className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                      actionType === "solve" 
+                        ? "border-status-ok/40 bg-status-ok/10 text-white" 
+                        : "border-white/[0.05] bg-white/[0.01] text-ink-muted hover:bg-white/[0.03]"
+                    }`}
+                  >
+                    <CheckCircle2 className={`w-5 h-5 mt-0.5 shrink-0 ${actionType === "solve" ? "text-status-ok" : "text-ink-muted"}`} />
+                    <div>
+                      <div className="text-sm font-medium text-white">Solve on the Spot</div>
+                      <div className="text-xs text-ink-muted mt-0.5">I resolved the customer's problem during our physical dialogue.</div>
+                    </div>
+                  </label>
+
+                  <label 
+                    onClick={() => setActionType("escalate")}
+                    className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                      actionType === "escalate" 
+                        ? "border-status-fail/40 bg-status-fail/10 text-white" 
+                        : "border-white/[0.05] bg-white/[0.01] text-ink-muted hover:bg-white/[0.03]"
+                    }`}
+                  >
+                    <ShieldAlert className={`w-5 h-5 mt-0.5 shrink-0 ${actionType === "escalate" ? "text-status-fail" : "text-ink-muted"}`} />
+                    <div>
+                      <div className="text-sm font-medium text-white">Escalate to Administration</div>
+                      <div className="text-xs text-ink-muted mt-0.5">Requires backend or administrative intervention. Moves directly to Admin Panel.</div>
+                    </div>
+                  </label>
+
+                  <label 
+                    onClick={() => setActionType("open")}
+                    className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                      actionType === "open" 
+                        ? "border-status-info/40 bg-status-info/10 text-white" 
+                        : "border-white/[0.05] bg-white/[0.01] text-ink-muted hover:bg-white/[0.03]"
+                    }`}
+                  >
+                    <Clock className={`w-5 h-5 mt-0.5 shrink-0 ${actionType === "open" ? "text-status-info" : "text-ink-muted"}`} />
+                    <div>
+                      <div className="text-sm font-medium text-white">Keep as Open Walk-in</div>
+                      <div className="text-xs text-ink-muted mt-0.5">Record the complaint now and investigate further before resolving.</div>
+                    </div>
+                  </label>
+                </div>
               </div>
             </div>
           )}
@@ -148,9 +207,17 @@ export function CreateTicketModal({ isOpen, onClose, onCreated }: Props) {
           <Button 
             disabled={!selectedCustomer || !issueDescription.trim() || isSubmitting} 
             onClick={handleSubmit} 
-            className="bg-signal text-white"
+            className={`text-white ${
+              actionType === "solve" ? "bg-status-ok hover:brightness-110" :
+              actionType === "escalate" ? "bg-status-fail hover:brightness-110" :
+              "bg-signal hover:brightness-110"
+            }`}
           >
-            {isSubmitting ? "Creating..." : "Submit Ticket"}
+            {isSubmitting ? "Processing..." : (
+              actionType === "solve" ? "Solve & Record Ticket" :
+              actionType === "escalate" ? "Escalate to Admin" :
+              "Record Complaint"
+            )}
           </Button>
         </div>
 

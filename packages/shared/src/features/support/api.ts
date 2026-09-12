@@ -6,10 +6,11 @@ interface FetchTicketsOptions {
   pageSize?: number;
   assignedTo?: string; // Filter by assigned agent
   status?: TicketStatus;
+  onlyFormal?: boolean;
 }
 
 export async function fetchSupportTickets(options: FetchTicketsOptions = {}): Promise<PaginatedResult<SupportTicket>> {
-  const { page = 1, pageSize = 15, assignedTo, status } = options;
+  const { page = 1, pageSize = 15, assignedTo, status, onlyFormal } = options;
 
   let query = supabase
     .from("support_tickets")
@@ -33,6 +34,9 @@ export async function fetchSupportTickets(options: FetchTicketsOptions = {}): Pr
   }
   if (status) {
     query = query.eq("status", status);
+  }
+  if (onlyFormal) {
+    query = query.not("ticket_id", "is", null);
   }
 
   const start = (page - 1) * pageSize;
@@ -364,31 +368,45 @@ export async function sendTicketMessage(ticketId: string, senderId: string, send
   return data;
 }
 
-export async function createTicket(customerId: string, issueDescription: string, createdById: string) {
+export interface CreateTicketOptions {
+  status?: TicketStatus;
+  isEscalated?: boolean;
+  subject?: string;
+}
+
+export async function createTicket(
+  customerId: string, 
+  issueDescription: string, 
+  createdById: string,
+  options?: CreateTicketOptions
+) {
   const ticketId = `TKT-${Math.floor(1000 + Math.random() * 9000)}`;
+  const status = options?.status || "open";
+  const isEscalated = options?.isEscalated || false;
+  const urgency = isEscalated ? "high" : "medium";
+
   const { data, error } = await supabase
     .from("support_tickets")
     .insert({
       ticket_id: ticketId,
       customer_id: customerId,
       issue_description: issueDescription,
-      created_by: customerId, // Walk-in tickets must belong to the customer to sync to their app
-      status: "open",
-      urgency: "medium"
+      created_by: customerId, // Walk-in tickets belong to the customer profile
+      status,
+      urgency,
+      is_escalated: isEscalated,
+      subject: options?.subject || (isEscalated ? "Escalated Walk-in Complaint" : null),
+      solved_by: status === "resolved" ? createdById : null,
+      resolved_at: status === "resolved" ? new Date().toISOString() : null,
+      started_at: new Date().toISOString()
     })
     .select()
     .single();
 
   if (error) throw error;
 
-  await supabase
-    .from("ticket_messages")
-    .insert({
-      ticket_id: data.id,
-      sender_id: createdById,
-      sender_type: "staff",
-      content: "Hello! We created this formal ticket for your walk-in visit. You can track our progress and reply to us directly here.",
-    });
+  // Walk-in complaints are physical in-person dialogues, not digital chat threads.
+  // No ticket_messages are created here.
 
   return data;
 }

@@ -1,13 +1,17 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@milipay/shared/features/auth/AuthContext";
 import { supabase } from "@milipay/shared/lib/supabase";
 import { Card } from "@milipay/shared/components/ui/Card";
 import { Input } from "@milipay/shared/components/ui/Input";
 import { Button } from "@milipay/shared/components/ui/Button";
-import { Check, ShieldCheck, AlertCircle, KeyRound } from "lucide-react";
+import { Check, ShieldCheck, AlertCircle, KeyRound, LogOut } from "lucide-react";
+import { LogoutModal } from "@milipay/shared/components/layout/LogoutModal";
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -49,15 +53,20 @@ export default function SettingsPage() {
     }
   };
 
+  const handleConfirmLogout = async () => {
+    await logout();
+    navigate("/login", { replace: true });
+  };
+
   return (
-    <div className="p-6 md:p-10 max-w-2xl mx-auto animate-rise-in">
-      <div className="mb-8">
-        <h1 className="text-2xl font-display font-bold text-ink">Account &amp; Security Settings</h1>
-        <p className="text-ink-muted mt-1">Manage your staff profile, credentials, and security preferences.</p>
+    <div className="p-4 sm:p-6 md:p-10 max-w-2xl mx-auto space-y-6 sm:space-y-8 animate-rise-in">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-xl sm:text-2xl font-display font-bold text-ink">Account &amp; Security Settings</h1>
+        <p className="text-ink-muted text-xs sm:text-sm mt-1">Manage your staff profile, credentials, and security preferences.</p>
       </div>
 
       <div className="space-y-6">
-        <Card raised className="p-6">
+        <Card raised className="p-4 sm:p-6">
           <h2 className="text-lg font-display font-semibold text-ink mb-4 flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-signal-bright" />
             Profile Information
@@ -142,25 +151,87 @@ export default function SettingsPage() {
           </form>
         </Card>
 
-        <Card raised className="p-6">
-          <h2 className="text-lg font-display font-semibold text-ink mb-4">About MiliPay Platform</h2>
+        <Card raised className="p-4 sm:p-6">
+          <h2 className="text-lg font-display font-semibold text-ink mb-4">Portal &amp; System Information</h2>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between py-2 border-b border-ledger-line">
-              <span className="text-ink-muted">App Name</span>
-              <span className="text-ink font-medium">MiliPay Ecosystem</span>
+              <span className="text-ink-muted">Active Portal</span>
+              <span className="text-ink font-medium">
+                {user?.role === "agent" 
+                  ? "Field Agent Portal" 
+                  : user?.role === "support" 
+                  ? "Support Service Portal" 
+                  : "Central Admin Panel"}
+              </span>
+            </div>
+            <div className="flex justify-between py-2 border-b border-ledger-line">
+              <span className="text-ink-muted">Role Clearance</span>
+              <span className="font-mono text-signal-bright font-medium capitalize">
+                {user?.role === "agent" 
+                  ? "Biometric Enrollment & Walk-ins" 
+                  : user?.role === "support" 
+                  ? "Digital Live Support Desk" 
+                  : "Executive Administrator"}
+              </span>
             </div>
             <div className="flex justify-between py-2 border-b border-ledger-line">
               <span className="text-ink-muted">Version</span>
-              <span className="font-data text-ink">1.0.0</span>
+              <span className="font-data text-ink">v1.0.0</span>
             </div>
             <div className="flex justify-between py-2">
               <span className="text-ink-muted">Environment</span>
-              <span className="font-data text-ink">Production Sandbox</span>
+              <span className="font-data text-status-ok flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-status-ok animate-pulse" />
+                Live Production
+              </span>
             </div>
           </div>
-          <p className="text-xs text-ink-faint mt-6 text-center">Built for 100M+ biometric payment transactions.</p>
+          <p className="text-xs text-ink-faint mt-6 text-center">MiliPay Ecosystem • Secured for 100M+ biometric payment transactions.</p>
+        </Card>
+
+        {/* Active Terminal Session & Sign Out Card */}
+        <Card raised className="p-4 sm:p-6 border border-status-fail/20 bg-ledger-raised/50">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+            <h2 className="text-lg font-display font-semibold text-ink flex items-center gap-2">
+              <LogOut className="w-5 h-5 text-status-fail" />
+              Active Terminal Session
+            </h2>
+            <span className="inline-flex items-center gap-1.5 text-xs font-mono text-status-ok bg-status-ok/10 px-2.5 py-1 rounded-full border border-status-ok/20 self-start sm:self-auto">
+              <span className="w-1.5 h-1.5 rounded-full bg-status-ok animate-pulse" />
+              Encrypted TLS Session
+            </span>
+          </div>
+          <p className="text-xs text-ink-muted mb-4 leading-relaxed">
+            You are actively logged into this device as <strong className="text-ink">{user?.fullName || "Staff Member"}</strong> ({user?.email}).
+            Terminating your session revokes local cryptographic tokens and purges cached biometric credentials from this terminal.
+          </p>
+          <div className="pt-1">
+            <Button
+              type="button"
+              variant="danger"
+              onClick={() => setIsLogoutModalOpen(true)}
+              className="w-full sm:w-auto py-2.5 px-5 text-xs sm:text-sm rounded-xl gap-2 font-medium"
+            >
+              <LogOut className="w-4 h-4" />
+              Sign Out of Terminal
+            </Button>
+          </div>
         </Card>
       </div>
+
+      <LogoutModal
+        isOpen={isLogoutModalOpen}
+        onClose={() => setIsLogoutModalOpen(false)}
+        onConfirm={handleConfirmLogout}
+        portalName={
+          user?.role === "agent"
+            ? "Field Agent Portal"
+            : user?.role === "support"
+            ? "Support Service Portal"
+            : "Central Admin Panel"
+        }
+        user={user}
+      />
     </div>
   );
 }

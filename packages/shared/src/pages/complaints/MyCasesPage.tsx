@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 import { Users, MoreVertical, CheckCircle2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { fetchSupportTickets } from "@milipay/shared/features/support/api";
 import type { SupportTicket } from "@milipay/shared/types";
 import { formatDate } from "@milipay/shared/lib/utils/format";
 import { useAuth } from "@milipay/shared/features/auth/AuthContext";
+import { TableSkeletonRows } from "@milipay/shared/components/ui/Skeleton";
 
 export function MyCasesPage() {
   const [complaints, setComplaints] = useState<SupportTicket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (user?.id) {
@@ -29,45 +31,44 @@ export function MyCasesPage() {
 
   return (
     <div className="flex-1 overflow-auto bg-ledger min-h-screen">
-      <div className="max-w-5xl mx-auto p-8 space-y-8 pb-32">
+      <div className="max-w-5xl mx-auto p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 pb-32">
         
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-display text-ink tracking-tight flex items-center gap-3">
-              <Users className="w-8 h-8 text-status-info" />
+            <h1 className="text-2xl sm:text-3xl font-display text-ink tracking-tight flex items-center gap-3">
+              <Users className="w-7 h-7 sm:w-8 sm:h-8 text-status-info" />
               My Assigned Cases
             </h1>
-            <p className="text-ink-muted mt-1">Manage and resolve tickets assigned directly to you.</p>
+            <p className="text-ink-muted text-xs sm:text-sm mt-1">Manage and resolve tickets assigned directly to you.</p>
           </div>
         </div>
 
-        <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl backdrop-blur-xl overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-white/[0.05] bg-white/[0.01]">
-                <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Ticket ID</th>
-                <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Customer</th>
-                <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Issue Description</th>
-                <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Status</th>
-                <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/[0.05]">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={5} className="p-8 text-center text-ink-muted">Loading your cases...</td>
+        <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl sm:rounded-3xl backdrop-blur-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-white/[0.05] bg-white/[0.01]">
+                  <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Ticket ID</th>
+                  <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Customer</th>
+                  <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Issue Description</th>
+                  <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Status</th>
+                  <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Actions</th>
                 </tr>
-              ) : complaints.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="p-8 text-center text-ink-muted">You have no active cases assigned to you.</td>
-                </tr>
-              ) : (
-                complaints.map((ticket) => (
-                  <tr 
-                    key={ticket.id} 
-                    className="hover:bg-white/[0.02] transition-colors group cursor-pointer"
-                    onClick={() => { window.location.href = `/complaints/${ticket.id}` }}
-                  >
+              </thead>
+              <tbody className="divide-y divide-white/[0.05]">
+                {isLoading ? (
+                  <TableSkeletonRows columns={5} rows={5} />
+                ) : complaints.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-ink-muted text-xs sm:text-sm">You have no active cases assigned to you.</td>
+                  </tr>
+                ) : (
+                  complaints.map((ticket) => (
+                    <tr 
+                      key={ticket.id} 
+                      className="hover:bg-white/[0.02] transition-colors group cursor-pointer"
+                      onClick={() => { navigate(`/complaints/${ticket.id}`); }}
+                    >
                     <td className="p-4 font-mono text-sm text-ink-muted">{ticket.ticketId}</td>
                     <td className="p-4">
                       {ticket.customerId ? (
@@ -102,8 +103,9 @@ export function MyCasesPage() {
             </tbody>
           </table>
         </div>
-
       </div>
+
     </div>
-  );
+  </div>
+);
 }

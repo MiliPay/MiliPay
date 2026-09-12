@@ -6,6 +6,7 @@ interface AuthContextValue {
   user: StaffUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isLoggingOut: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -15,21 +16,57 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children, allowedRoles }: { children: ReactNode, allowedRoles?: Role[] }) {
   const [user, setUser] = useState<StaffUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Initialize session and listen for auth state changes
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        mapSupabaseUser(session.user);
-      } else {
-        setIsLoading(false);
+    let isMounted = true;
+    let initialResolutionDone = false;
+
+    async function initSession() {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (!isMounted) return;
+
+        if (error) {
+          console.warn("Session retrieval warning:", error);
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
+
+        if (session?.user) {
+          await mapSupabaseUser(session.user);
+        } else {
+          setUser(null);
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.warn("Session initialization error:", err);
+        if (isMounted) {
+          setUser(null);
+          setIsLoading(false);
+        }
+      } finally {
+        if (isMounted) {
+          initialResolutionDone = true;
+        }
       }
-    });
+    }
+
+    initSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      async (event, session) => {
+        if (!isMounted) return;
+
+        // Ignore initial event to prevent pre-empting the in-flight initSession()
+        if (!initialResolutionDone && event === "INITIAL_SESSION") {
+          return;
+        }
+
         if (session?.user) {
-          mapSupabaseUser(session.user);
+          await mapSupabaseUser(session.user);
         } else {
           setUser(null);
           setIsLoading(false);
@@ -37,7 +74,10 @@ export function AuthProvider({ children, allowedRoles }: { children: ReactNode, 
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   async function mapSupabaseUser(supabaseUser: any) {
@@ -45,7 +85,22 @@ export function AuthProvider({ children, allowedRoles }: { children: ReactNode, 
     let fullName = supabaseUser.user_metadata?.full_name;
     let phone = supabaseUser.phone;
 
-    // Fallback: If role is not in app_metadata, query staff_profiles by id or email
+    const cacheKey = `milipay_staff_profile_${supabaseUser.id}`;
+
+    // 1. Check instant local cache for snappy zero-delay restoration
+    if (!role) {
+      try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed.role) role = parsed.role;
+          if (parsed.full_name) fullName = fullName || parsed.full_name;
+          if (parsed.phone) phone = phone || parsed.phone;
+        }
+      } catch (_) {}
+    }
+
+    // 2. Fallback query to staff_profiles by id or email if still not determined
     if (!role) {
       try {
         const { data: profile } = await supabase
@@ -58,10 +113,33 @@ export function AuthProvider({ children, allowedRoles }: { children: ReactNode, 
           role = profile.role as Role;
           fullName = fullName || profile.full_name;
           phone = phone || profile.phone;
+        } else {
+          // Check merchants table if this user is a store merchant
+          const { data: merchantRecord } = await supabase
+            .from('merchants')
+            .select('business_name, director_name, director_phone')
+            .or(`auth_user_id.eq.${supabaseUser.id},email.ilike.${supabaseUser.email}`)
+            .maybeSingle();
+
+          if (merchantRecord) {
+            role = 'merchant';
+            fullName = fullName || merchantRecord.director_name || merchantRecord.business_name;
+            phone = phone || merchantRecord.director_phone;
+          }
         }
       } catch (err) {
-        console.warn("Could not fetch staff profile role fallback:", err);
+        console.warn("Could not fetch profile role fallback:", err);
       }
+    }
+
+    // 3. Cache the resolved staff profile locally for instant hydration on page reloads
+    if (role) {
+      try {
+        localStorage.setItem(
+          cacheKey,
+          JSON.stringify({ role, full_name: fullName, phone })
+        );
+      } catch (_) {}
     }
 
     // STRICT SECURITY CHECK
@@ -99,13 +177,32 @@ export function AuthProvider({ children, allowedRoles }: { children: ReactNode, 
   }, [allowedRoles]);
 
   const logout = useCallback(async () => {
-    await supabase.auth.signOut();
-    setUser(null);
+    setIsLoggingOut(true);
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn("Supabase signOut error:", err);
+    } finally {
+      try {
+        for (const key of Object.keys(localStorage)) {
+          if (
+            key.startsWith("sb-") ||
+            key.includes("supabase.auth") ||
+            key.includes("milipay")
+          ) {
+            localStorage.removeItem(key);
+          }
+        }
+        sessionStorage.clear();
+      } catch (_) {}
+      setUser(null);
+      setIsLoggingOut(false);
+    }
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, isAuthenticated: user !== null, isLoading, login, logout }),
-    [user, isLoading, login, logout]
+    () => ({ user, isAuthenticated: user !== null, isLoading, isLoggingOut, login, logout }),
+    [user, isLoading, isLoggingOut, login, logout]
   );
 
   // You might want to return a full-screen loading spinner if isLoading is true

@@ -203,23 +203,23 @@ export default function StaffPage() {
   ];
 
   return (
-    <div className="p-6 md:p-10 max-w-6xl mx-auto animate-rise-in">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+    <div className="p-4 sm:p-6 md:p-10 max-w-6xl mx-auto animate-rise-in">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
         <div>
-          <h1 className="font-display text-3xl font-semibold text-white tracking-tight mb-1">
+          <h1 className="font-display text-2xl sm:text-3xl font-semibold text-white tracking-tight mb-1">
             Staff &amp; Team
           </h1>
-          <p className="text-ink-muted">Manage field agents, support staff, and administrators.</p>
+          <p className="text-ink-muted text-xs sm:text-sm">Manage field agents, support staff, and administrators.</p>
         </div>
         
-        <Button onClick={() => setIsModalOpen(true)}>
+        <Button onClick={() => setIsModalOpen(true)} className="w-full sm:w-auto">
           <UserPlus className="w-4 h-4 mr-2" />
           Add Staff Member
         </Button>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <div className="w-full sm:w-72">
+      <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 mb-6">
+        <div className="w-full lg:w-72">
           <SearchInput 
             onSearch={(val) => { setSearch(val); setPage(1); }} 
             placeholder="Search name, email, phone, or NIN..." 

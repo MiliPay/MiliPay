@@ -29,6 +29,7 @@ import { StatusBadge } from "@milipay/shared/components/ui/StatusBadge";
 import { DataTable, type Column } from "@milipay/shared/components/ui/DataTable";
 import { Button } from "@milipay/shared/components/ui/Button";
 import { Modal } from "@milipay/shared/components/ui/Modal";
+import { LoadingState } from "@milipay/shared/components/ui/LoadingState";
 import { 
   fetchStaffDetails, 
   getPortalDetails, 
@@ -153,8 +154,12 @@ export default function StaffDetailsPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 md:p-10 max-w-5xl mx-auto flex justify-center items-center h-64">
-        <div className="w-8 h-8 border-2 border-signal border-t-transparent rounded-full animate-spin" />
+      <div className="flex-1 overflow-auto bg-ledger min-h-screen flex items-center justify-center p-6">
+        <LoadingState
+          minHeight="min-h-[50vh]"
+          title="Loading Staff Profile..."
+          description="Retrieving security credentials, portal permissions, and performance records."
+        />
       </div>
     );
   }

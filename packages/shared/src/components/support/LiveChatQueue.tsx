@@ -6,6 +6,7 @@ import type { SupportTicket } from "../../types";
 import { formatDate } from "../../lib/utils/format";
 import { useAuth } from "../../features/auth/AuthContext";
 import { claimTicket } from "../../features/support/api";
+import { QueueItemSkeleton } from "../ui/Skeleton";
 
 export function LiveChatQueue({ routePrefix = "/support" }: { routePrefix?: string }) {
   const [activeChats, setActiveChats] = useState<SupportTicket[]>([]);
@@ -78,24 +79,28 @@ export function LiveChatQueue({ routePrefix = "/support" }: { routePrefix?: stri
   }, []);
 
   return (
-    <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl p-8 backdrop-blur-xl h-full flex flex-col">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-medium text-white flex items-center gap-2">
-          <MessageSquare className="w-5 h-5 text-signal" /> Live Chat Queue
+    <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 backdrop-blur-xl h-full flex flex-col">
+      <div className="flex items-center justify-between mb-4 sm:mb-6">
+        <h2 className="text-base sm:text-lg font-medium text-white flex items-center gap-2">
+          <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 text-signal" /> Live Chat Queue
         </h2>
-        <span className="text-xs text-ink-muted bg-white/[0.05] px-3 py-1 rounded-full border border-white/[0.05]">
+        <span className="text-xs text-ink-muted bg-white/[0.05] px-2.5 sm:px-3 py-1 rounded-full border border-white/[0.05]">
           {activeChats.filter(c => c.status === 'open').length} waiting
         </span>
       </div>
       
       {isLoadingChats ? (
-        <div className="text-ink-muted">Loading queue...</div>
+        <div className="space-y-3">
+          <QueueItemSkeleton />
+          <QueueItemSkeleton />
+          <QueueItemSkeleton />
+        </div>
       ) : activeChats.length === 0 ? (
-        <div className="text-ink-faint italic p-8 text-center border border-dashed border-white/[0.05] rounded-2xl">
+        <div className="text-ink-faint italic p-6 sm:p-8 text-center text-sm border border-dashed border-white/[0.05] rounded-xl sm:rounded-2xl">
           No active chats in the queue right now.
         </div>
       ) : (
-        <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+        <div className="space-y-2.5 sm:space-y-3 flex-1 overflow-y-auto pr-1 sm:pr-2 custom-scrollbar">
           {activeChats.map(chat => {
             const isAssignedToMe = chat.assignedTo === user?.id;
             const isUnassigned = !chat.assignedTo;
@@ -104,7 +109,7 @@ export function LiveChatQueue({ routePrefix = "/support" }: { routePrefix?: stri
               <div 
                 key={chat.id}
                 onClick={() => navigate(`${routePrefix}/${chat.id}`)}
-                className="group flex flex-col sm:flex-row sm:items-center justify-between p-5 rounded-2xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.05] hover:border-signal/30 cursor-pointer transition-all gap-4"
+                className="group flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-5 rounded-xl sm:rounded-2xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.05] hover:border-signal/30 cursor-pointer transition-all gap-3 sm:gap-4"
               >
                 <div className="flex flex-col gap-1 min-w-0">
                   <div className="flex items-center gap-3">

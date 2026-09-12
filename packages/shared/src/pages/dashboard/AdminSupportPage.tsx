@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Ticket, Activity, CheckCircle2, Clock, AlertTriangle, AlertCircle, ArrowRight, Search } from "lucide-react";
+import { Ticket, Activity, CheckCircle2, Clock, AlertTriangle, AlertCircle, ArrowRight } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@milipay/shared/lib/supabase";
 import { fetchSupportTicketStats, fetchEscalatedTickets, fetchSupportTickets } from "@milipay/shared/features/support/api";
 import type { SupportTicket } from "@milipay/shared/types";
 import { formatDate } from "@milipay/shared/lib/utils/format";
+import { TableSkeletonRows, Skeleton } from "@milipay/shared/components/ui/Skeleton";
 
 export function AdminSupportPage() {
   const [stats, setStats] = useState<any>(null);
@@ -57,42 +58,42 @@ export function AdminSupportPage() {
 
   return (
     <div className="flex-1 overflow-auto bg-ledger min-h-screen">
-      <div className="max-w-6xl mx-auto p-8 space-y-10 pb-32">
+      <div className="max-w-6xl mx-auto p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-10 pb-32">
         
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-display text-ink tracking-tight flex items-center gap-3">
-              <Ticket className="w-8 h-8 text-signal" />
+            <h1 className="text-2xl sm:text-3xl font-display text-ink tracking-tight flex items-center gap-3">
+              <Ticket className="w-7 h-7 sm:w-8 sm:h-8 text-signal" />
               Support & Escalations
             </h1>
-            <p className="text-ink-muted mt-1">Monitor global support health and resolve escalated tickets.</p>
+            <p className="text-ink-muted text-xs sm:text-sm mt-1">Monitor global support health and resolve escalated tickets.</p>
           </div>
-          <div className="flex flex-col items-end gap-1">
-            <form onSubmit={handleSearch} className="relative flex items-center bg-white/[0.03] border border-white/[0.1] rounded-xl p-1 focus-within:border-signal/50 focus-within:bg-white/[0.05] transition-all">
+          <div className="flex flex-col sm:items-end gap-1 w-full sm:w-auto">
+            <form onSubmit={handleSearch} className="relative flex items-center bg-white/[0.03] border border-white/[0.1] rounded-xl p-1 focus-within:border-signal/50 focus-within:bg-white/[0.05] transition-all w-full sm:w-auto">
               <input
                 type="text"
-                className="bg-transparent border-none px-3 py-1.5 text-sm text-white placeholder-ink-faint outline-none uppercase font-mono w-48"
+                className="bg-transparent border-none px-3 py-1.5 text-sm text-white placeholder-ink-faint outline-none uppercase font-mono w-full sm:w-48"
                 placeholder="Search TKT-..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
-              <button type="submit" disabled={isSearching} className="p-1.5 text-ink-muted hover:text-white transition-colors">
-                <Search className="w-4 h-4" />
+              <button type="submit" disabled={isSearching} className="px-3 py-1 bg-white/[0.08] hover:bg-white/[0.15] text-xs font-semibold rounded-lg text-white transition-colors">
+                {isSearching ? "..." : "Go"}
               </button>
             </form>
-            {errorMsg && <div className="text-status-fail text-sm">{errorMsg}</div>}
+            {errorMsg && <p className="text-status-fail text-xs mt-1">{errorMsg}</p>}
           </div>
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl p-6 backdrop-blur-xl">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6">
+          <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl sm:rounded-3xl p-4 sm:p-6 backdrop-blur-xl">
             <div className="w-10 h-10 rounded-full bg-signal/10 flex items-center justify-center mb-4 border border-signal/20">
               <Activity className="w-5 h-5 text-signal" />
             </div>
             <h3 className="text-sm font-medium text-ink-muted uppercase tracking-wider">Total Tickets</h3>
             <div className="mt-2 flex items-end gap-2">
-              <span className="text-3xl font-display text-ink">{isLoading ? "-" : stats?.totalTickets}</span>
+              {isLoading ? <Skeleton className="h-8 w-16" /> : <span className="text-3xl font-display text-ink">{stats?.totalTickets}</span>}
             </div>
           </div>
           
@@ -103,11 +104,13 @@ export function AdminSupportPage() {
             </div>
             <h3 className="text-sm font-medium text-ink-muted uppercase tracking-wider relative z-10">Resolved Tickets</h3>
             <div className="mt-2 flex items-end gap-3 relative z-10">
-              <span className="text-3xl font-display text-ink">{isLoading ? "-" : stats?.resolvedTickets}</span>
-              {!isLoading && (
-                <span className="text-sm text-status-ok font-medium mb-1">
-                  {stats?.resolvedPercentage}%
-                </span>
+              {isLoading ? <Skeleton className="h-8 w-16" /> : (
+                <>
+                  <span className="text-3xl font-display text-ink">{stats?.resolvedTickets}</span>
+                  <span className="text-sm text-status-ok font-medium mb-1">
+                    {stats?.resolvedPercentage}%
+                  </span>
+                </>
               )}
             </div>
           </div>
@@ -119,11 +122,13 @@ export function AdminSupportPage() {
             </div>
             <h3 className="text-sm font-medium text-ink-muted uppercase tracking-wider relative z-10">Pending Tickets</h3>
             <div className="mt-2 flex items-end gap-3 relative z-10">
-              <span className="text-3xl font-display text-ink">{isLoading ? "-" : stats?.pendingTickets}</span>
-              {!isLoading && (
-                <span className="text-sm text-status-info font-medium mb-1">
-                  {stats?.pendingPercentage}%
-                </span>
+              {isLoading ? <Skeleton className="h-8 w-16" /> : (
+                <>
+                  <span className="text-3xl font-display text-ink">{stats?.pendingTickets}</span>
+                  <span className="text-sm text-status-info font-medium mb-1">
+                    {stats?.pendingPercentage}%
+                  </span>
+                </>
               )}
             </div>
           </div>
@@ -134,9 +139,13 @@ export function AdminSupportPage() {
             </div>
             <h3 className="text-sm font-medium text-ink-muted uppercase tracking-wider relative z-10">Escalations</h3>
             <div className="mt-2 flex items-end gap-3 relative z-10">
-              <span className="text-3xl font-display text-status-fail">{isLoading ? "-" : stats?.escalations}</span>
-              {!isLoading && stats?.escalations > 0 && (
-                <span className="text-xs text-status-fail/80 uppercase font-bold tracking-wider mb-2">Requires Action</span>
+              {isLoading ? <Skeleton className="h-8 w-16" /> : (
+                <>
+                  <span className="text-3xl font-display text-status-fail">{stats?.escalations}</span>
+                  {stats?.escalations > 0 && (
+                    <span className="text-xs text-status-fail/80 uppercase font-bold tracking-wider mb-2">Requires Action</span>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -162,9 +171,7 @@ export function AdminSupportPage() {
               </thead>
               <tbody className="divide-y divide-white/[0.05]">
                 {isLoading ? (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center text-ink-muted">Loading escalated tickets...</td>
-                  </tr>
+                  <TableSkeletonRows columns={5} rows={4} />
                 ) : escalated.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="p-12 text-center">
@@ -240,9 +247,7 @@ export function AdminSupportPage() {
               </thead>
               <tbody className="divide-y divide-white/[0.05]">
                 {isLoading ? (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center text-ink-muted">Loading global tickets...</td>
-                  </tr>
+                  <TableSkeletonRows columns={5} rows={5} />
                 ) : allTickets.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="p-12 text-center text-ink-muted">No tickets found in the system.</td>

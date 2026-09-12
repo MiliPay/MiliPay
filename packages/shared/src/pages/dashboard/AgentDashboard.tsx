@@ -7,6 +7,7 @@ import { fetchCustomers } from "@milipay/shared/features/customers/api";
 import { formatDate } from "@milipay/shared/lib/utils/format";
 import type { Customer } from "@milipay/shared/types";
 import { useAuth } from "@milipay/shared/features/auth/AuthContext";
+import { TableSkeletonRows, Skeleton } from "@milipay/shared/components/ui/Skeleton";
 
 export function AgentDashboard() {
   const { user } = useAuth();
@@ -37,18 +38,18 @@ export function AgentDashboard() {
 
   return (
     <div className="flex-1 overflow-auto bg-ledger min-h-screen">
-      <div className="max-w-6xl mx-auto p-6 md:p-10 space-y-8 pb-32">
+      <div className="max-w-6xl mx-auto p-4 sm:p-6 md:p-10 space-y-6 sm:space-y-8 pb-32">
         
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-display font-bold text-ink tracking-tight">Agent Terminal</h1>
-            <p className="text-ink-muted text-sm mt-1">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-display font-bold text-ink tracking-tight">Agent Terminal</h1>
+            <p className="text-ink-muted text-xs sm:text-sm mt-1">
               Welcome back, <strong className="text-white">{user?.fullName || "Field Agent"}</strong>. Monitor your personal customer enrollments and KYC verifications.
             </p>
           </div>
           <Link to="/register">
-            <Button className="gap-2 bg-signal text-white hover:bg-signal-bright shadow-[0_0_20px_rgba(var(--color-signal),0.3)] border border-signal-bright/50">
+            <Button className="w-full sm:w-auto gap-2 bg-signal text-white hover:bg-signal-bright shadow-[0_0_20px_rgba(var(--color-signal),0.3)] border border-signal-bright/50">
               <Plus className="w-4 h-4" />
               New Registration
             </Button>
@@ -56,15 +57,15 @@ export function AgentDashboard() {
         </div>
 
         {/* 5-Column Stats Row: Enrolled, Pending, Approved, Rejected, Success Rate */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
           {/* Total Enrolled */}
-          <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-5 backdrop-blur-xl">
+          <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-4 sm:p-5 backdrop-blur-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Enrolled</h3>
               <Users className="w-4 h-4 text-signal-bright" />
             </div>
             <div className="mt-3 flex items-baseline gap-2">
-              <span className="text-3xl font-display text-white font-bold">{totalEnrolled}</span>
+              {isLoading ? <Skeleton className="h-8 w-12" /> : <span className="text-3xl font-display text-white font-bold">{totalEnrolled}</span>}
             </div>
             <p className="text-[11px] text-ink-faint mt-1">Total registrations</p>
           </div>
@@ -76,7 +77,7 @@ export function AgentDashboard() {
               <Clock className="w-4 h-4 text-status-warning" />
             </div>
             <div className="mt-3 flex items-baseline gap-2">
-              <span className="text-3xl font-display text-status-warning font-bold">{pendingCount}</span>
+              {isLoading ? <Skeleton className="h-8 w-12" /> : <span className="text-3xl font-display text-status-warning font-bold">{pendingCount}</span>}
             </div>
             <p className="text-[11px] text-ink-faint mt-1">Awaiting admin review</p>
           </div>
@@ -88,7 +89,7 @@ export function AgentDashboard() {
               <CheckCircle2 className="w-4 h-4 text-status-ok" />
             </div>
             <div className="mt-3 flex items-baseline gap-2">
-              <span className="text-3xl font-display text-status-ok font-bold">{activeCount}</span>
+              {isLoading ? <Skeleton className="h-8 w-12" /> : <span className="text-3xl font-display text-status-ok font-bold">{activeCount}</span>}
             </div>
             <p className="text-[11px] text-ink-faint mt-1">Active &amp; verified</p>
           </div>
@@ -100,7 +101,7 @@ export function AgentDashboard() {
               <XCircle className="w-4 h-4 text-status-fail" />
             </div>
             <div className="mt-3 flex items-baseline gap-2">
-              <span className="text-3xl font-display text-status-fail font-bold">{rejectedCount}</span>
+              {isLoading ? <Skeleton className="h-8 w-12" /> : <span className="text-3xl font-display text-status-fail font-bold">{rejectedCount}</span>}
             </div>
             <p className="text-[11px] text-ink-faint mt-1">Action required</p>
           </div>
@@ -112,7 +113,7 @@ export function AgentDashboard() {
               <TrendingUp className="w-4 h-4 text-signal-bright" />
             </div>
             <div className="mt-3 flex items-baseline gap-2">
-              <span className="text-3xl font-display text-white font-bold">{successRate}%</span>
+              {isLoading ? <Skeleton className="h-8 w-16" /> : <span className="text-3xl font-display text-white font-bold">{successRate}%</span>}
             </div>
             <p className="text-[11px] text-ink-faint mt-1">Approval accuracy</p>
           </div>
@@ -148,9 +149,7 @@ export function AgentDashboard() {
               </thead>
               <tbody className="divide-y divide-white/[0.05]">
                 {isLoading ? (
-                  <tr>
-                    <td colSpan={4} className="p-8 text-center text-ink-muted text-xs">Loading customer records...</td>
-                  </tr>
+                  <TableSkeletonRows columns={4} rows={5} />
                 ) : customers.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="p-8 text-center text-ink-muted text-xs">

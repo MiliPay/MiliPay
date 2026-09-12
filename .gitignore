@@ -16,6 +16,7 @@ dist/
 build/
 web-build/
 .expo/
+.firebase/
 
 # Logs
 logs
@@ -36,3 +37,14 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# Hardware SDKs & Vendor Demos (Large Binaries)
+palm-VP930*/
+palm-VP930 local verify/
+palm-VP930 pro server  verify/
+*.zip
+*.apk
+*.mp4
+*.pdf
+HFSECURITY*
+

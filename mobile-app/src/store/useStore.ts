@@ -27,20 +27,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isLoading: true,
   
-  initialize: () => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+  initialize: async () => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.warn('Session retrieval error in mobile app:', error);
+        set({ isLoading: false, isAuthenticated: false, user: null });
+        return;
+      }
+
       if (session?.user) {
         const meta = session.user.user_metadata || {};
         const fullName = meta.full_name || '';
         const names = fullName.split(' ');
         
-        // Fetch additional fields from customers table
-        // We select * so it won't crash before the address migration is applied
-        const { data: customerData } = await supabase
-          .from('customers')
-          .select('*')
-          .eq('auth_user_id', session.user.id)
-          .single();
+        let customerData: any = null;
+        try {
+          const { data } = await supabase
+            .from('customers')
+            .select('*')
+            .eq('auth_user_id', session.user.id)
+            .maybeSingle();
+          customerData = data;
+        } catch (err) {
+          console.warn('Could not fetch customer details:', err);
+        }
         
         set({ 
           isAuthenticated: true, 
@@ -59,20 +71,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       } else {
         set({ isLoading: false, isAuthenticated: false, user: null });
       }
-    });
+    } catch (err) {
+      console.warn('Auth initialization error:', err);
+      set({ isLoading: false, isAuthenticated: false, user: null });
+    }
 
-    supabase.auth.onAuthStateChange(async (_event, session) => {
+    // Listen for future auth state changes (sign in, sign out, token refresh)
+    supabase.auth.onAuthStateChange(async (event, session) => {
+      // Ignore INITIAL_SESSION to prevent race condition with getSession()
+      if (event === 'INITIAL_SESSION') return;
+
       if (session?.user) {
         const meta = session.user.user_metadata || {};
         const fullName = meta.full_name || '';
         const names = fullName.split(' ');
         
-        // Fetch additional fields from customers table
-        const { data: customerData } = await supabase
-          .from('customers')
-          .select('*')
-          .eq('auth_user_id', session.user.id)
-          .single();
+        let customerData: any = null;
+        try {
+          const { data } = await supabase
+            .from('customers')
+            .select('*')
+            .eq('auth_user_id', session.user.id)
+            .maybeSingle();
+          customerData = data;
+        } catch (err) {
+          console.warn('Could not fetch customer details in auth change:', err);
+        }
         
         set({ 
           isAuthenticated: true, 
@@ -85,10 +109,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             phone: session.user.phone || '',
             nin: customerData?.nin_last_4 || undefined,
             address: customerData?.address || customerData?.state || undefined
-          }
+          },
+          isLoading: false
         });
       } else {
-        set({ isAuthenticated: false, user: null });
+        set({ isAuthenticated: false, user: null, isLoading: false });
       }
     });
   },

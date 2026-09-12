@@ -5,6 +5,7 @@ import { supabase } from "@milipay/shared/lib/supabase";
 import type { SupportTicket, TicketMessage } from "@milipay/shared/types";
 import { formatDate } from "@milipay/shared/lib/utils/format";
 import { Button } from "@milipay/shared/components/ui/Button";
+import { LoadingState } from "@milipay/shared/components/ui/LoadingState";
 import { useAuth } from "@milipay/shared/features/auth/AuthContext";
 import { claimTicket, resolveTicket, escalateTicket, fetchTicketMessages, sendTicketMessage } from "@milipay/shared/features/support/api";
 import clsx from "clsx";
@@ -134,7 +135,17 @@ export function TicketDetailsPage() {
     await loadTicketAndMessages();
   };
 
-  if (isLoading) return <div className="p-8 text-ink-muted">Loading ticket...</div>;
+  if (isLoading) {
+    return (
+      <div className="flex-1 overflow-auto bg-ledger min-h-screen flex items-center justify-center p-6">
+        <LoadingState
+          minHeight="min-h-[60vh]"
+          title="Loading Ticket Workspace..."
+          description="Connecting to real-time support channels and retrieving customer case records."
+        />
+      </div>
+    );
+  }
   if (fetchError) return (
     <div className="p-8 space-y-4">
       <div className="text-status-fail font-medium text-lg">Database Error Detected:</div>
@@ -155,23 +166,23 @@ export function TicketDetailsPage() {
   return (
     <div className="flex-1 overflow-hidden bg-ledger flex flex-col h-screen">
       {/* Header */}
-      <div className="p-6 border-b border-white/[0.05] bg-ledger/95 backdrop-blur-sm z-10 flex-shrink-0">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link to={backLink} className="text-ink-muted hover:text-ink transition-colors">
+      <div className="p-4 sm:p-6 border-b border-white/[0.05] bg-ledger/95 backdrop-blur-sm z-10 flex-shrink-0">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3 sm:gap-6">
+            <Link to={backLink} className="text-ink-muted hover:text-ink transition-colors p-1 -ml-1 shrink-0 mt-0.5 sm:mt-0">
               <ArrowLeft className="w-5 h-5" />
             </Link>
             <div>
-              <h1 className="text-2xl font-display text-ink tracking-tight flex items-center gap-3">
-                <MessageSquareWarning className={clsx("w-6 h-6", ticket.urgency === "high" || ticket.urgency === "critical" ? "text-status-fail" : "text-status-warning")} />
+              <h1 className="text-xl sm:text-2xl font-display text-ink tracking-tight flex items-center gap-2 sm:gap-3">
+                <MessageSquareWarning className={clsx("w-5 h-5 sm:w-6 sm:h-6", ticket.urgency === "high" || ticket.urgency === "critical" ? "text-status-fail" : "text-status-warning")} />
                 {ticket.ticketId ? `Ticket ${ticket.ticketId}` : "Live Chat"}
               </h1>
               {ticket.subject && (
-                <div className="text-lg font-medium text-ink mt-2">
+                <div className="text-base sm:text-lg font-medium text-ink mt-1 sm:mt-2">
                   {ticket.subject}
                 </div>
               )}
-              <div className="flex items-center gap-3 mt-1 text-sm text-ink-muted">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1 text-xs sm:text-sm text-ink-muted">
                 <span className="capitalize text-ink">Status: {ticket.status.replace("_", " ")}</span>
                 <span>•</span>
                 <span className="capitalize">Urgency: {ticket.urgency}</span>
@@ -181,19 +192,19 @@ export function TicketDetailsPage() {
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {(!ticket.assignedTo || (!isAssignedToMe && isAdmin)) && ticket.status !== "resolved" && (
-              <Button onClick={handleClaim} className="bg-signal hover:brightness-110 text-white gap-2">
+              <Button onClick={handleClaim} className="bg-signal hover:brightness-110 text-ledger font-semibold gap-2 text-xs sm:text-sm">
                 Attend Ticket
               </Button>
             )}
             {!isAdmin && isAssignedToMe && ticket.status !== "resolved" && (
-              <Button onClick={handleEscalateClick} className="bg-transparent text-status-fail border border-status-fail/50 hover:bg-status-fail/10 gap-2">
+              <Button onClick={handleEscalateClick} className="bg-transparent text-status-fail border border-status-fail/50 hover:bg-status-fail/10 gap-2 text-xs sm:text-sm">
                 <AlertTriangle className="w-4 h-4" /> Escalate to Admin
               </Button>
             )}
             {(isAssignedToMe || isAdmin) && ticket.status !== "resolved" && (
-              <Button onClick={handleResolve} className="bg-status-ok hover:brightness-110 text-white gap-2">
+              <Button onClick={handleResolve} className="bg-status-ok hover:brightness-110 text-ledger font-semibold gap-2 text-xs sm:text-sm">
                 <ShieldCheck className="w-4 h-4" /> Solve Ticket
               </Button>
             )}
@@ -201,9 +212,9 @@ export function TicketDetailsPage() {
         </div>
       </div>
 
-      <div className="flex-1 flex max-w-6xl w-full mx-auto overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row max-w-6xl w-full mx-auto overflow-hidden min-h-0">
         {/* Chat Area */}
-        <div className="flex-1 flex flex-col border-r border-white/[0.05]">
+        <div className="flex-1 flex flex-col border-b lg:border-b-0 lg:border-r border-white/[0.05] min-h-0 overflow-hidden">
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             
             {/* Original Issue Bubble */}
@@ -277,8 +288,8 @@ export function TicketDetailsPage() {
         </div>
 
         {/* Sidebar Context */}
-        <div className="w-80 p-6 overflow-y-auto bg-white/[0.01]">
-          <h2 className="text-sm font-semibold text-ink-muted uppercase tracking-wider mb-4">Customer Profile</h2>
+        <div className="w-full lg:w-80 p-4 sm:p-6 overflow-y-auto bg-white/[0.01] shrink-0 border-t lg:border-t-0 border-white/[0.05]">
+          <h2 className="text-xs sm:text-sm font-semibold text-ink-muted uppercase tracking-wider mb-3 sm:mb-4">Customer Profile</h2>
           {ticket.customerId ? (
             <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-4 space-y-4">
               <div>

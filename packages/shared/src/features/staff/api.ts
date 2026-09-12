@@ -376,6 +376,19 @@ export async function toggleStaffStatus(id: string): Promise<boolean> {
 }
 
 export async function deleteStaffMember(id: string): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized: You must be authenticated to perform this operation.");
+
+  const { data: currentStaff } = await supabase
+    .from("staff_profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!currentStaff || (currentStaff.role !== "admin" && currentStaff.role !== "super_admin")) {
+    throw new Error("Forbidden: Only administrators have permission to delete staff profiles.");
+  }
+
   const { data: session } = await supabase.auth.getSession();
   const accessToken = session.session?.access_token;
 

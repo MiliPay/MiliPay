@@ -78,13 +78,13 @@ export default function TransactionsPage() {
   ];
 
   return (
-    <div className="p-6 md:p-10 max-w-6xl mx-auto animate-rise-in">
-      <div className="mb-8">
-        <h1 className="text-2xl font-display font-bold text-ink">Transactions</h1>
-        <p className="text-ink-muted mt-1">Monitor payment activity across the network.</p>
+    <div className="p-4 sm:p-6 md:p-10 max-w-6xl mx-auto animate-rise-in">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-xl sm:text-2xl font-display font-bold text-ink">Transactions</h1>
+        <p className="text-ink-muted text-xs sm:text-sm mt-1">Monitor payment activity across the network.</p>
       </div>
 
-      <div className="flex flex-col md:flex-row md:items-center gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-6">
         <FilterChips
           options={[
             { label: "All Status", value: "all" },

@@ -34,15 +34,26 @@ This project is an **npm workspace monorepo**. You must respect the boundaries a
 - **Primary Method**: Email MUST be the primary default communication method for user onboarding, password generation, and authentication to optimize operational costs during the MVP phase.
 - **Future SMS Architecture**: While SMS (e.g., via Termii) is disabled for standard onboarding to save costs, the system architecture and edge functions MUST be designed to easily toggle or re-integrate SMS in the future. Do not hardcode systems that rely exclusively on email without leaving room for a phone-based fallback.
 
-## Biometric & Hardware Strategy (VP930Pro Architecture)
-- **Palm Vein Over Fingerprint**: Due to security vulnerabilities with standard fingerprint cloning, the core POS biometric authentication MUST utilize Palm Vein Recognition targeting the HFSecurity VP930Pro.
-- **Frontend Integration (React Native)**: Because there is no official React Native SDK, the mobile app MUST use a custom Java Native Module bridge. The bridge will initialize the HFSecurity Android SDK (`PalmSdk`), capture the palm, and extract the raw `byte[]` arrays (`rgbFeature` and `irFeature`).
-- **Data Transit & Format**: 
-  - **Transit**: The Android bridge converts the raw byte arrays to **Base64 strings** to send over the network to the Node.js backend.
-  - **Storage**: Supabase MUST store the palm scan features strictly as **`BYTEA` (Binary/Byte Array)** data types. Do NOT store them as raw strings in the database to save space and maintain precision.
-- **Matching Engine (C++ Microservice)**: 1:N Biometric Matching MUST NOT be done natively in Node.js. To achieve lightning-fast in-memory looping, a dedicated **C++ Microservice** utilizing the HFSecurity Linux C++ SDK will be built. 
-  - The Node.js backend handles business logic and delegates the matching task to the C++ Microservice.
-  - The C++ Microservice loads the `BYTEA` templates into RAM as `std::vector<float>` and runs the proprietary `CompareFeaturesScore` algorithm across the dataset.
+## Biometric & Hardware Tiering Strategy (HFSecurity Ecosystem)
+- **Field Agent Device (`HF-FP08PV`)**: Rugged Android 13 handheld tablet equipped with a 10,000mAh battery, IP65 protection, 4G LTE, OCR/MRZ camera for National ID (NIN) / passport capture, and built-in palm vein scanner. Used exclusively by Field Agents (`role: 'agent'`) for roaming on-site customer and merchant enrollment without carrying separate laptops.
+- **Prototype / Development MVP (`HF-VP930Pro`)**: Multi-OS USB Type-C scanner module (Android/Windows 10+/Linux). Used for development, local testing, benchmarking the C++ matching engine, and rapid prototyping.
+- **Merchant POS Terminal (`HF-HP605PV` - Primary, `HF-MP50` - Secondary)**:
+  - **Primary (`HF-HP605PV`)**: Selected for commercial rollout due to **EMV & PCI Certification** (mandatory for financial switch/CBN regulatory compliance), larger 6.0" IPS display, 3000mAh battery (essential for Nigerian retail power stability), and ≤450ms biometric recognition.
+  - **Secondary / Budget (`HF-MP50`)**: Android 11 POS terminal (5.5" display, 1800mAh battery, 4GB RAM + 64GB ROM) as a lower-cost alternative where PCI/EMV is not strictly enforced.
+- **Future Enterprise Expansion (Desktop & Floor Kiosks)**: For high-volume supermarket chains (e.g. Shoprite, Spar, Ebeano), self-checkout Desktop Kiosks and Floor-Standing Kiosks with 58/80mm thermal receipt printers and integrated palm sensors.
+- **Local SDK Over Third-Party Cloud (Data Sovereignty STRICT)**: Under CBN and NDPA regulations, NEVER stream biometric payloads to HFSecurity's third-party test demo cloud (`13.213.52.114:8080`). All biometric extraction and matching MUST use the **Local SDK (`palm-VP930 local verify`)** to maintain 100% data sovereignty, zero latency, and bank-grade privacy.
+- **Frontend SDK Bridge (`PalmScannerModule.java`)**: Wraps `palm-android-sdk-v1.3.7.jar`:
+  - Lifecycle: `PalmSdk.initialize()` -> `Device.create()` -> `mDevice.open()` -> `createStream(StreamType.RGB_IR)` -> `start()`.
+  - Capture: `mDevice.capturePalm(ICapturePalmCallback, timeout)` extracts `CaptureFrame.irFeature` (`byte[]`), `rgbFeature` (`byte[]`), `score` (`float`), `palmType` (`0: left, 1: right`).
+  - Real-Time Guidance Hints: Map SDK hints to UI prompts: `NO_PALM_DETECTED`, `BIG_POSE`, `QUALITY_ERROR`, `LIVENESS_ERROR`, `IR_DARKNESS` (move closer), `IR_OVER_EXPOSE` (move away), `PALM_IS_MOVING` (keep still).
+  - Hardware LEDs: `setLedMode()` toggles `LED_GREEN_MODE` on approval, `LED_RED_MODE` on decline, `LED_BLUE_BREATH_MODE` during scan.
+- **Data Transit & Storage**:
+  - **Transit**: Converted to Base64 strings sent over HTTPS to Supabase Edge Functions.
+  - **Storage**: Supabase stores palm features strictly as **`BYTEA` (Binary/Byte Array)** data types.
+- **Matching Engine (C++ Microservice)**: 1:N Biometric Matching runs in a sovereign C++ Microservice utilizing the Linux SDK (`vp930-sdk-linux-x86_64-v1.3.58-P`):
+  - In-Memory RAM Matching: Loads `BYTEA` templates as `std::vector<float>` in RAM.
+  - Comparison: Executes `CompareFeaturesScore(ir_score, rgb_score, ir_src, ir_target, rgb_src, rgb_target, RecognizeMode::kRegIrVSIr)` in <200ms across the customer dataset.
+
 
 ## Scalability & Security (Enterprise Grade)
 - **Zero Exposed Keys**: NEVER hardcode API keys, Supabase Service Role keys, or third-party secrets in the frontend or public repositories. They MUST be restricted to Edge Functions, environment variables, and the Supabase Vault.
@@ -57,4 +68,31 @@ This project is an **npm workspace monorepo**. You must respect the boundaries a
 - **Strict Sandbox Usage**: During development, NEVER build manual input forms to collect mock bank account numbers or credentials. You MUST use the official @mono.co/connect-react-native SDK configured with the Mono Sandbox Public Key.
 - **Widget Flow**: The frontend must launch the Mono Connect widget in test mode, allowing users to select predefined scenarios (Success, Failed, 2FA) without typing fake credentials.
 - **Secure Token Exchange**: The frontend must NEVER handle the Mono Secret Key or fetch account data directly. The widget must return an authentication code to the frontend, which is then securely passed to a Supabase Edge Function (e.g., link-mono-account).
-- **Edge Function Responsibility**: The Edge Function uses the Secret Key to exchange the code for an ccount_id via Mono's API, fetches the real banking details, and securely inserts the record into the public.linked_accounts table.
+- **Edge Function Responsibility**: The Edge Function uses the Secret Key to exchange the code for an  ccount_id via Mono's API, fetches the real banking details, and securely inserts the record into the public.linked_accounts table.
+
+## Merchant Onboarding, Settlement & Mono Architecture
+- **Merchant Verification**: Always verify merchant settlement bank accounts using Mono's Account Lookup API (`/v2/lookup/account`) against NIBSS in real-time. Never allow unverified bank accounts to be registered.
+- **Split Payments & Sub-Accounts**: Each merchant is provisioned a Mono Sub-Account (`mono_subaccount_id`). Customer debits via Mono DirectPay automatically split the transaction (e.g., 98.5% to merchant settlement account, 1.5% platform fee to MiliPay revenue account).
+- **Automated Payouts (Disbursements)**: Disburse funds to merchant commercial bank accounts via Mono Transfers API (Instant T+0 or Daily EOD batch NIP transfers).
+- **Portal Responsibilities**:
+  - **`agent-portal`**: Field Agents register physical merchants in person, verify physical store premises, and pair VP930Pro terminal serial numbers (`TID`).
+  - **`AdminPanel`**: Admins manage KYB reviews, commission rates, merchant status (`active`, `suspended`), POS hardware allocation, and master settlement ledgers.
+
+## Merchant POS Execution & Hardware (HFSecurity VP930Pro)
+- **POS App Architecture**: The VP930Pro runs an Android POS app (React Native with custom Java SDK bridge `PalmScannerModule.java` wrapping HFSecurity `PalmSdk`).
+- **Checkout Flow**:
+  1. Cashier enters bill amount on VP930Pro touchscreen/keypad.
+  2. Customer places palm 10-15cm above the dual-lens (NIR 850nm + RGB) sensor.
+  3. Liveness check prevents spoofing (rejects photos, screens, 3D rubber hands).
+  4. Device extracts `irFeature` raw byte array, converts to Base64, and sends to `process-payment` Edge Function.
+  5. C++ Microservice matches palm in RAM (<200ms) to identify customer and linked Mono account.
+  6. Mono executes DirectPay debit & split settlement.
+  7. Built-in thermal printer produces Customer and Merchant receipts.
+
+## Transaction Safety, Error Handling & Auto-Reversal Strategy
+- **Insufficient Funds**: Mono returns `INSUFFICIENT_FUNDS`; VP930Pro screen turns RED with audible failure chime; no money moves; optional prompt to use backup linked account.
+- **Network Timeouts & Failed Transactions**:
+  - All payment requests use unique **Idempotency Keys** (`reference`) to prevent double charges.
+  - Transactions use two-way webhook handshakes. If a bank network drops midway, Mono's automatic reversal engine refunds the customer within minutes instead of standard 14-day bank dispute cycles.
+- **PIN Verification for High-Value Payments**: For transactions exceeding the customer-defined security threshold (e.g. > ₦5,000), the VP930Pro securely prompts for the customer's 4-digit MiliPay PIN on the terminal before triggering the Mono debit.
+- **Offline & Hardware Safety**: Terminals feature dual connectivity (Wi-Fi + 4G SIM fallback). If offline, the terminal refuses to initiate a scan to prevent partial/orphaned states. Lost or stolen terminals hold no funds and can be blacklisted instantly from the Admin Panel.

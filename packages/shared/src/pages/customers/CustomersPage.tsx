@@ -82,7 +82,7 @@ export default function CustomersPage() {
   }, [loadData]);
 
   const handleConfirmDelete = async () => {
-    if (!customerToDelete) return;
+    if (!isAdmin || !customerToDelete) return;
     setIsDeleting(true);
     setDeleteError(null);
     try {
@@ -97,7 +97,7 @@ export default function CustomersPage() {
   };
 
   const handleConfirmApprove = async () => {
-    if (!customerToApprove) return;
+    if (!isAdmin || !customerToApprove) return;
     setIsApproving(true);
     setApprovalError(null);
     try {
@@ -112,7 +112,7 @@ export default function CustomersPage() {
   };
 
   const handleConfirmReject = async () => {
-    if (!customerToReject) return;
+    if (!isAdmin || !customerToReject) return;
     setIsRejecting(true);
     setRejectError(null);
     try {
@@ -234,20 +234,20 @@ export default function CustomersPage() {
   ];
 
   return (
-    <div className="p-6 md:p-10 max-w-6xl mx-auto animate-rise-in">
-      <div className="mb-8">
-        <h1 className="text-2xl font-display font-bold text-ink">
+    <div className="p-4 sm:p-6 md:p-10 max-w-6xl mx-auto animate-rise-in">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-xl sm:text-2xl font-display font-bold text-ink">
           {user?.role === "agent" ? "Your Enrolled Customers" : "Customer KYC & Verification"}
         </h1>
-        <p className="text-ink-muted mt-1 text-sm">
+        <p className="text-ink-muted mt-1 text-xs sm:text-sm">
           {user?.role === "agent" 
             ? "Track and manage identity verification for customers you have enrolled." 
             : "Manage biometric identity enrollments and customer verifications."}
         </p>
       </div>
 
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        <div className="w-full md:w-80">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 mb-6">
+        <div className="w-full lg:w-80">
           <SearchInput 
             onSearch={(val) => { setSearch(val); setPage(1); }} 
             placeholder="Search by name or phone..." 
@@ -285,8 +285,8 @@ export default function CustomersPage() {
         emptyMessage="No customers found matching your criteria."
       />
 
-      {/* Approve Customer Modal */}
-      {customerToApprove && (
+      {/* Approve Customer Modal - Admin Only */}
+      {isAdmin && customerToApprove && (
         <Modal
           isOpen={!!customerToApprove}
           onClose={() => {
@@ -356,8 +356,8 @@ export default function CustomersPage() {
         </Modal>
       )}
 
-      {/* Reject Customer Modal with Standard Default Reasons */}
-      {customerToReject && (
+      {/* Reject Customer Modal with Standard Default Reasons - Admin Only */}
+      {isAdmin && customerToReject && (
         <Modal
           isOpen={!!customerToReject}
           onClose={() => {
@@ -435,8 +435,8 @@ export default function CustomersPage() {
         </Modal>
       )}
 
-      {/* Delete Customer Confirmation Modal */}
-      {customerToDelete && (
+      {/* Delete Customer Confirmation Modal - Admin Only */}
+      {isAdmin && customerToDelete && (
         <Modal
           isOpen={!!customerToDelete}
           onClose={() => {

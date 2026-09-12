@@ -7,6 +7,7 @@ import { CreateTicketModal } from "@milipay/shared/components/support/CreateTick
 import { fetchSupportTickets } from "@milipay/shared/features/support/api";
 import type { SupportTicket } from "@milipay/shared/types";
 import { formatDate } from "@milipay/shared/lib/utils/format";
+import { TableSkeletonRows } from "@milipay/shared/components/ui/Skeleton";
 
 export function AgentSupportPage() {
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
@@ -20,7 +21,7 @@ export function AgentSupportPage() {
   const loadTickets = async () => {
     setIsLoadingTickets(true);
     try {
-      const res = await fetchSupportTickets({ pageSize: 25 });
+      const res = await fetchSupportTickets({ pageSize: 50, onlyFormal: true });
       setTickets(res.items);
     } catch (err) {
       console.error("Failed to load tickets:", err);
@@ -61,26 +62,26 @@ export function AgentSupportPage() {
 
   return (
     <div className="flex-1 overflow-auto bg-ledger min-h-screen">
-      <div className="max-w-6xl mx-auto p-8 space-y-8 pb-32">
+      <div className="max-w-6xl mx-auto p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 pb-32">
         
         {/* Page Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-2 sm:mt-6">
           <div>
-            <h1 className="text-3xl font-display text-ink tracking-tight flex items-center gap-3">
-              <Ticket className="w-8 h-8 text-signal" />
+            <h1 className="text-2xl sm:text-3xl font-display text-ink tracking-tight flex items-center gap-3">
+              <Ticket className="w-7 h-7 sm:w-8 sm:h-8 text-signal" />
               Walk-in Complaints
             </h1>
-            <p className="text-ink-muted mt-1">
+            <p className="text-ink-muted text-xs sm:text-sm mt-1">
               Log in-person customer complaints, track resolution progress, and escalate unresolved issues.
             </p>
           </div>
-          <Button onClick={() => setIsModalOpen(true)} className="bg-signal text-white gap-2 shadow-[0_0_15px_rgba(var(--color-signal),0.3)]">
+          <Button onClick={() => setIsModalOpen(true)} className="w-full sm:w-auto bg-signal text-white gap-2 shadow-[0_0_15px_rgba(var(--color-signal),0.3)]">
             <Plus className="w-4 h-4" /> Log Walk-in Complaint
           </Button>
         </div>
 
         {/* Track Existing Ticket Card */}
-        <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl p-6 backdrop-blur-xl">
+        <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl sm:rounded-3xl p-4 sm:p-6 backdrop-blur-xl">
           <h2 className="text-base font-medium text-white mb-3 flex items-center gap-2">
             <Search className="w-4 h-4 text-signal" />
             Track Ticket by ID
@@ -99,8 +100,8 @@ export function AgentSupportPage() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <Button type="submit" disabled={isSearching} className="bg-white/[0.08] hover:bg-white/[0.12] text-white px-6">
-              {isSearching ? "Searching..." : "Track"}
+            <Button type="submit" isLoading={isSearching} className="bg-white/[0.08] hover:bg-white/[0.12] text-white px-6">
+              Track
             </Button>
           </form>
           {errorMsg && <p className="text-status-fail text-xs mt-2">{errorMsg}</p>}
@@ -132,9 +133,7 @@ export function AgentSupportPage() {
               </thead>
               <tbody className="divide-y divide-white/[0.05]">
                 {isLoadingTickets ? (
-                  <tr>
-                    <td colSpan={6} className="p-8 text-center text-ink-muted">Loading complaints directory...</td>
-                  </tr>
+                  <TableSkeletonRows columns={6} rows={5} />
                 ) : tickets.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="p-12 text-center text-ink-muted">
