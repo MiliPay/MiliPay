@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
-import { Search, MessageSquareWarning, Users, LogOut, UserCheck, Settings, Inbox } from "lucide-react";
+import { Search, MessageSquareWarning, Users, LogOut, UserCheck, Settings } from "lucide-react";
 import clsx from "clsx";
 import { useAuth } from "@milipay/shared/features/auth/AuthContext";
 import { MobileHeader, type MobileNavItem } from "@milipay/shared/components/layout/MobileHeader";
@@ -16,7 +16,7 @@ export function ServiceLayout() {
     { name: "Search & Lookup", path: "/dashboard", icon: Search, end: true },
     { name: "Customers", path: "/customers", icon: Users },
     { name: "Complaints Desk", path: "/complaints", icon: MessageSquareWarning },
-    { name: "My Cases", path: "/cases", icon: Inbox },
+    { name: "My Cases", path: "/cases", icon: Users },
     { name: "Settings", path: "/settings", icon: Settings },
   ];
 

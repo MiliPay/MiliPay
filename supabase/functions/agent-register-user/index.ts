@@ -35,6 +35,8 @@ serve(async (req) => {
     email: email,
     bvn: bvn,
     nin: nin,
+    kyc_tier: 2,
+    pin_threshold: 10000.00,
     is_verified: true
   })
 

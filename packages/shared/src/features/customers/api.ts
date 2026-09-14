@@ -88,6 +88,8 @@ export async function fetchCustomers(
       ninLast4: row.nin_last_4,
       state: row.state,
       status: row.status as CustomerStatus,
+      kycTier: (row.kyc_tier || 2) as 1 | 2 | 3,
+      pinThreshold: Number(row.pin_threshold) || 10000,
       palmVeinTemplate: row.palm_vein_template,
       linkedAccountCount: 0, 
       authUserId: row.auth_user_id,
@@ -160,6 +162,8 @@ export async function registerCustomer(
     nin_last_4: ninLast4,
     state: draft.state,
     status: initialStatus,
+    kyc_tier: 2,
+    pin_threshold: 10000.00,
     palm_vein_template: draft.palmVeinTemplate,
     registered_by: currentUserId || null,
     verified_by: isAdmin ? currentUserId : null,
@@ -366,6 +370,8 @@ export async function fetchCustomerById(id: string): Promise<Customer | null> {
     ninLast4: data.nin_last_4,
     state: data.state,
     status: data.status as CustomerStatus,
+    kycTier: (data.kyc_tier || 2) as 1 | 2 | 3,
+    pinThreshold: Number(data.pin_threshold) || 10000,
     palmVeinTemplate: data.palm_vein_template,
     linkedAccountCount: 0,
     authUserId: data.auth_user_id,
@@ -518,6 +524,38 @@ export async function deleteCustomer(id: string): Promise<boolean> {
   if (error) {
     console.error("Error deleting customer:", error);
     throw new Error(error.message || rpcError?.message || "Failed to delete customer");
+  }
+
+  return true;
+}
+
+export async function updateCustomerPinThreshold(
+  customerIdOrAuthId: string,
+  newThreshold: number
+): Promise<boolean> {
+  if (newThreshold < 0) {
+    throw new Error("Threshold cannot be negative.");
+  }
+
+  // Update in customers table
+  const { error: custErr } = await supabase
+    .from("customers")
+    .update({ pin_threshold: newThreshold })
+    .or(`id.eq.${customerIdOrAuthId},auth_user_id.eq.${customerIdOrAuthId}`);
+
+  if (custErr) {
+    console.error("Error updating customer pin threshold:", custErr);
+    throw new Error(custErr.message);
+  }
+
+  // Also sync to users table if auth_user_id matches
+  try {
+    await supabase
+      .from("users")
+      .update({ pin_threshold: newThreshold })
+      .eq("id", customerIdOrAuthId);
+  } catch (_) {
+    // Ignore if not present in users table
   }
 
   return true;

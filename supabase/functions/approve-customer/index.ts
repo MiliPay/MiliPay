@@ -179,6 +179,8 @@ serve(async (req) => {
       .from('customers')
       .update({
         status: 'active',
+        kyc_tier: 2,
+        pin_threshold: 10000.00,
         auth_user_id: authUserId,
         verified_by: user.id,
         verified_at: new Date().toISOString(),

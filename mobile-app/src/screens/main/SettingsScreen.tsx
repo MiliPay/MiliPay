@@ -16,7 +16,7 @@ import {
   HelpCircle,
   FileText,
   Info,
-  Palette, X, Sun, Moon, Smartphone, Check, Trash2, Landmark, Building,
+  Palette, X, Sun, Moon, Smartphone, Check, Trash2, Landmark, Building, Sliders,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useColorScheme } from 'nativewind';
@@ -206,6 +206,17 @@ export default function SettingsScreen({ navigation }: any) {
               icon={Lock} 
               label="Change PIN" 
               subtitle="Update your 4-digit transaction PIN"
+            />
+            <SectionDivider />
+            <SettingRow 
+              icon={Sliders} 
+              label="Transaction Limits & PIN Security" 
+              subtitle={`Tier ${user?.kycTier || 2} • PIN required over ₦${(user?.pinThreshold || 10000).toLocaleString()}`}
+              type="nav"
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                navigation.navigate('AccountLimits');
+              }}
             />
           </GlassCard>
         </View>

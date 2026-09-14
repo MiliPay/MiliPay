@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 
 interface User {
   id: string;
+  customerId?: string;
   firstName: string;
   lastName: string;
   initials: string;
@@ -11,6 +12,8 @@ interface User {
   phone: string;
   address?: string;
   nin?: string;
+  kycTier?: number;
+  pinThreshold?: number;
 }
 
 interface AuthState {
@@ -20,6 +23,7 @@ interface AuthState {
   initialize: () => void;
   login: (phoneOrEmail: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  updatePinThreshold: (threshold: number) => Promise<boolean>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -58,13 +62,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           isAuthenticated: true, 
           user: {
             id: session.user.id,
+            customerId: customerData?.id,
             firstName: names[0] || 'User',
             lastName: names[1] || '',
             initials: (names[0]?.[0] || 'U') + (names[1]?.[0] || ''),
             email: session.user.email || '',
             phone: session.user.phone || '',
             nin: customerData?.nin_last_4 || undefined,
-            address: customerData?.address || customerData?.state || undefined
+            address: customerData?.address || customerData?.state || undefined,
+            kycTier: customerData?.kyc_tier || 2,
+            pinThreshold: Number(customerData?.pin_threshold) || 10000,
           },
           isLoading: false
         });
@@ -102,13 +109,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           isAuthenticated: true, 
           user: {
             id: session.user.id,
+            customerId: customerData?.id,
             firstName: names[0] || 'User',
             lastName: names[1] || '',
             initials: (names[0]?.[0] || 'U') + (names[1]?.[0] || ''),
             email: session.user.email || '',
             phone: session.user.phone || '',
             nin: customerData?.nin_last_4 || undefined,
-            address: customerData?.address || customerData?.state || undefined
+            address: customerData?.address || customerData?.state || undefined,
+            kycTier: customerData?.kyc_tier || 2,
+            pinThreshold: Number(customerData?.pin_threshold) || 10000,
           },
           isLoading: false
         });
@@ -139,6 +149,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     await supabase.auth.signOut();
     set({ isAuthenticated: false, user: null });
+  },
+
+  updatePinThreshold: async (newThreshold: number) => {
+    const currentUser = get().user;
+    if (!currentUser) return false;
+    try {
+      if (currentUser.customerId) {
+        await supabase
+          .from('customers')
+          .update({ pin_threshold: newThreshold })
+          .eq('id', currentUser.customerId);
+      }
+      await supabase
+        .from('users')
+        .update({ pin_threshold: newThreshold })
+        .eq('id', currentUser.id);
+
+      set(state => ({
+        user: state.user ? { ...state.user, pinThreshold: newThreshold } : null
+      }));
+      return true;
+    } catch (err) {
+      console.error("Error updating pin threshold in store:", err);
+      return false;
+    }
   },
 }));
 

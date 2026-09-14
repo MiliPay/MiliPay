@@ -3,13 +3,17 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   KeyRound,
   Mail,
+  ShieldCheck,
   AlertTriangle,
-  Eye,
-  EyeOff,
-  HelpCircle,
+  UserCheck,
+  Headphones,
+  Building2,
+  Cpu,
+  ExternalLink,
 } from "lucide-react";
+import { Input } from "@milipay/shared/components/ui/Input";
 import { Button } from "@milipay/shared/components/ui/Button";
-import { Modal } from "@milipay/shared/components/ui/Modal";
+import { Card } from "@milipay/shared/components/ui/Card";
 import { LoadingState } from "@milipay/shared/components/ui/LoadingState";
 import { useAuth } from "@milipay/shared/features/auth/AuthContext";
 import { ROUTES } from "@milipay/shared/lib/constants";
@@ -23,51 +27,79 @@ export interface LoginPageProps {
 
 interface PortalMetadata {
   name: string;
-  badgeLabel: string;
-  badgeDot: string;
-  badgeColor: string;
+  portalBadge: string;
+  badgeClass: string;
+  iconColor: string;
+  glowColor: string;
+  title: string;
+  description: string;
   emailPlaceholder: string;
-  helpMessage: string;
+  roleNotice: string;
+  roleNoticeBg: string;
+  terminalHint: string;
 }
 
 const PORTAL_META: Record<PortalType, PortalMetadata> = {
   agent: {
-    name: "Field Agent Portal",
-    badgeLabel: "Field Agent Console",
-    badgeDot: "bg-signal",
-    badgeColor: "text-signal bg-signal/10 border-signal/20",
-    emailPlaceholder: "agent@milipay.app",
-    helpMessage:
-      "Field Agent credentials are centrally provisioned by the MiliPay Operations Admin. If you have forgotten your password or require a PIN reset for field onboarding, please reach out to your operations supervisor.",
+    name: "Agent Portal",
+    portalBadge: "FIELD AGENT PORTAL • ROAMING ID",
+    badgeClass: "bg-signal/15 text-signal-bright border-signal/30",
+    iconColor: "text-signal-bright",
+    glowColor: "rgba(0, 200, 150, 0.15)",
+    title: "Field Agent Console",
+    description: "Sign in with your Field Agent credentials to register customers, verify merchants, and formalize walk-in cases.",
+    emailPlaceholder: "agent.john@milipay.app",
+    roleNotice: "Strictly for Field Agents. Use HF-FP08PV / VP930Pro terminal hardware for biometric capture.",
+    roleNoticeBg: "bg-signal/10 border-signal/20 text-signal-bright",
+    terminalHint: "Handheld Terminal Active (HF-FP08PV / VP930Pro)",
   },
   admin: {
     name: "Admin Panel",
-    badgeLabel: "Admin Console",
-    badgeDot: "bg-status-warn",
-    badgeColor: "text-status-warn bg-status-warn/10 border-status-warn/20",
+    portalBadge: "ADMIN PANEL • MASTER CLEARANCE",
+    badgeClass: "bg-status-warn/15 text-status-warn border-status-warn/30",
+    iconColor: "text-status-warn",
+    glowColor: "rgba(255, 180, 84, 0.15)",
+    title: "Supervisory Sign In",
+    description: "Authenticate with administrative clearance to manage KYB reviews, merchant blacklisting, and master ledgers.",
     emailPlaceholder: "admin@milipay.app",
-    helpMessage:
-      "Admin Panel credentials require master supervisory clearance. If you have lost access, please contact the MiliPay Super Administrator to initiate verified credential recovery.",
+    roleNotice: "Restricted Access. All administrative actions and audit trails are logged under NDPA protocols.",
+    roleNoticeBg: "bg-status-warn/10 border-status-warn/20 text-status-warn",
+    terminalHint: "Master Financial Switch Clearance Level 1",
   },
   support: {
     name: "Service Portal",
-    badgeLabel: "Support Console",
-    badgeDot: "bg-status-info",
-    badgeColor: "text-status-info bg-status-info/10 border-status-info/20",
-    emailPlaceholder: "support@milipay.app",
-    helpMessage:
-      "Service Portal accounts are assigned to authorized customer care personnel. Please contact your support desk team lead to unlock your account or request a temporary password.",
+    portalBadge: "SERVICE PORTAL • CUSTOMER DESK",
+    badgeClass: "bg-status-info/15 text-status-info border-status-info/30",
+    iconColor: "text-status-info",
+    glowColor: "rgba(59, 130, 246, 0.15)",
+    title: "Customer Support Desk",
+    description: "Sign in to monitor live customer chat queues, resolve disputes, and manage two-tier ticket escalations.",
+    emailPlaceholder: "support.sarah@milipay.app",
+    roleNotice: "Strictly for Support Staff. Online live chats and tier-1 ticket resolutions.",
+    roleNoticeBg: "bg-status-info/10 border-status-info/20 text-status-info",
+    terminalHint: "Two-Tier Formal Dispute Switch Active",
   },
   merchant: {
     name: "Merchant Portal",
-    badgeLabel: "Merchant Hub",
-    badgeDot: "bg-status-ok",
-    badgeColor: "text-status-ok bg-status-ok/10 border-status-ok/20",
+    portalBadge: "MERCHANT PORTAL • STORE MANAGER",
+    badgeClass: "bg-status-ok/15 text-status-ok border-status-ok/30",
+    iconColor: "text-status-ok",
+    glowColor: "rgba(51, 224, 181, 0.15)",
+    title: "Merchant Store Console",
+    description: "Sign in to track real-time store transactions, monitor HFSecurity HP605PV terminals, and review Mono payouts.",
     emailPlaceholder: "store@merchant.com",
-    helpMessage:
-      "Merchant store accounts are initialized during on-site registration. If you cannot access your store console, please email merchant-support@milipay.app with your Business Name and POS Terminal ID.",
+    roleNotice: "Registered Merchant Account. Split settlements (98.5%) and terminal telemetry.",
+    roleNoticeBg: "bg-status-ok/10 border-status-ok/20 text-status-ok",
+    terminalHint: "Smart POS Fleet Connected (HP605PV / HF-MP50)",
   },
 };
+
+const PORTAL_LINKS: Array<{ type: PortalType; label: string; port: string }> = [
+  { type: "agent", label: "Field Agent", port: "3001" },
+  { type: "support", label: "Support Desk", port: "3002" },
+  { type: "admin", label: "Admin Console", port: "3000" },
+  { type: "merchant", label: "Merchant Hub", port: "3003" },
+];
 
 export default function LoginPage({ portal }: LoginPageProps) {
   const navigate = useNavigate();
@@ -75,9 +107,6 @@ export default function LoginPage({ portal }: LoginPageProps) {
   const { login, isAuthenticated, isLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
-  const [showHelpModal, setShowHelpModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -177,177 +206,194 @@ export default function LoginPage({ portal }: LoginPageProps) {
     );
   }
 
+  const renderPortalIcon = () => {
+    switch (activePortal) {
+      case "agent":
+        return <UserCheck className="w-6 h-6 text-signal-bright" />;
+      case "admin":
+        return <ShieldCheck className="w-6 h-6 text-status-warn" />;
+      case "support":
+        return <Headphones className="w-6 h-6 text-status-info" />;
+      case "merchant":
+        return <Building2 className="w-6 h-6 text-status-ok" />;
+    }
+  };
+
+  const handlePortalSwitch = (targetPort: string) => {
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.port = targetPort;
+      url.pathname = "/login";
+      window.location.href = url.toString();
+    }
+  };
+
   return (
-    <div className="min-h-screen w-full bg-[#080C0A] text-ink flex flex-col lg:grid lg:grid-cols-12 overflow-x-hidden">
-      {/* LEFT SIDE: Clean Brand Hero Showcase (7 columns on desktop) */}
-      <div className="hidden lg:block lg:col-span-7 h-full min-h-screen">
+    <div className="min-h-screen w-full bg-ledger text-ink flex flex-col lg:grid lg:grid-cols-12 overflow-x-hidden">
+      {/* LEFT SIDE: 3D Isometric Visual Showcase (7 columns on desktop) */}
+      <div className="w-full lg:col-span-7 h-[420px] sm:h-[480px] lg:h-auto min-h-full relative overflow-hidden bg-ledger-surface/40">
         <Portal3DShowcase portal={activePortal} />
       </div>
 
       {/* RIGHT SIDE: Authenticated Sign-In Console (5 columns on desktop) */}
-      <div className="w-full lg:col-span-5 min-h-screen flex flex-col justify-between p-6 sm:p-10 lg:p-12 xl:p-16 relative bg-[#080C0A]">
-        {/* Subtle Ambient Light */}
-        <div className="absolute top-0 right-0 w-80 h-80 bg-signal/[0.03] rounded-full blur-3xl pointer-events-none" />
+      <div className="w-full lg:col-span-5 flex flex-col justify-between p-6 sm:p-10 lg:p-12 xl:p-14 relative z-10 bg-ledger">
+        {/* Ambient background glow behind form */}
+        <div
+          className="absolute top-1/3 right-1/4 w-80 h-80 rounded-full blur-[120px] pointer-events-none opacity-40"
+          style={{ background: meta.glowColor }}
+        />
 
-        {/* Mobile Header: Logo & Badge */}
-        <div className="lg:hidden flex items-center justify-between pb-6 border-b border-white/[0.06] mb-8">
-          <img
-            src="/logo-white.png"
-            alt="MiliPay"
-            className="h-8 w-auto object-contain"
-          />
+        {/* Top Identification Banner */}
+        <div className="flex items-center justify-between gap-2 mb-6">
           <div
-            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${meta.badgeColor}`}
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-semibold uppercase tracking-wider border shadow-sm ${meta.badgeClass}`}
           >
-            <span className={`w-1.5 h-1.5 rounded-full ${meta.badgeDot}`} />
-            <span>{meta.badgeLabel}</span>
+            {renderPortalIcon()}
+            <span>{meta.portalBadge}</span>
           </div>
+
+          <span className="text-[11px] font-mono text-ink-faint">
+            TLS 1.3 • AES-256
+          </span>
         </div>
 
-        {/* Center Login Form Container */}
-        <div className="my-auto w-full max-w-[400px] mx-auto py-8">
-          {/* Desktop Portal Badge */}
-          <div
-            className={`hidden lg:inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border mb-6 ${meta.badgeColor}`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${meta.badgeDot}`} />
-            <span>{meta.badgeLabel}</span>
+        {/* Center Login Card Container */}
+        <div className="my-auto max-w-md w-full mx-auto">
+          {/* Mobile Brand Logo Banner */}
+          <div className="flex lg:hidden justify-center mb-5">
+            <div className="inline-flex items-center justify-center px-5 py-2.5 bg-white rounded-2xl shadow-md border border-white/20">
+              <img src="/logo.png" alt="MiliPay" className="h-8 w-auto object-contain" />
+            </div>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-display font-semibold text-white tracking-tight">
-            Sign in to your account
-          </h1>
-          <p className="text-sm text-ink-muted mt-2">
-            Enter your credentials to continue to {meta.name}.
-          </p>
-
-          {error && (
-            <div className="mt-6 flex items-start gap-3 p-3.5 rounded-xl bg-status-fail/10 border border-status-fail/20 text-status-fail text-sm">
-              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-              <p>{error}</p>
+          <Card
+            raised
+            className="p-8 sm:p-9 border border-white/[0.08] shadow-[0_20px_50px_rgba(0,0,0,0.6)] backdrop-blur-xl relative z-10"
+          >
+            {/* Header Identity */}
+            <div className="flex items-center gap-3.5 mb-5">
+              <div
+                className="w-12 h-12 rounded-xl flex items-center justify-center border shadow-inner"
+                style={{
+                  background: `${meta.glowColor}`,
+                  borderColor: "rgba(255, 255, 255, 0.12)",
+                }}
+              >
+                {renderPortalIcon()}
+              </div>
+              <div>
+                <h1 className="text-xl font-display font-bold text-white tracking-tight">
+                  {meta.title}
+                </h1>
+                <p className="text-xs text-ink-muted leading-tight">
+                  {meta.name} • Sovereign Node
+                </p>
+              </div>
             </div>
-          )}
 
-          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-ink-muted">
-                Email address
-              </label>
+            {/* Role Notice Prompt */}
+            <div
+              className={`mb-6 p-3 rounded-xl border text-xs leading-relaxed flex items-start gap-2.5 ${meta.roleNoticeBg}`}
+            >
+              <Cpu className="w-4 h-4 shrink-0 mt-0.5 opacity-80" />
+              <span>{meta.roleNotice}</span>
+            </div>
+
+            {error && (
+              <div className="mb-6 flex items-center gap-3 p-3 rounded-xl bg-status-fail/10 border border-status-fail/20 text-status-fail text-sm">
+                <AlertTriangle className="w-5 h-5 shrink-0" />
+                <p>{error}</p>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint pointer-events-none" />
-                <input
+                <Mail className="absolute left-4 top-[42px] w-[18px] h-[18px] text-ink-faint pointer-events-none" />
+                <Input
+                  label="Authorized Email"
                   type="email"
-                  required
                   placeholder={meta.emailPlaceholder}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  className="pl-11"
                   disabled={!!lockoutTime || isSubmitting}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-sm text-white placeholder:text-ink-faint/60 focus:outline-none focus:border-signal focus:ring-1 focus:ring-signal transition-all"
                 />
               </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-medium text-ink-muted">
-                  Password
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setShowHelpModal(true)}
-                  className="text-xs text-ink-faint hover:text-signal transition-colors focus:outline-none"
-                >
-                  Forgot password?
-                </button>
-              </div>
               <div className="relative">
-                <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint pointer-events-none" />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  required
+                <KeyRound className="absolute left-4 top-[42px] w-[18px] h-[18px] text-ink-faint pointer-events-none" />
+                <Input
+                  label="Password Clearance"
+                  type="password"
                   placeholder="••••••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  className="pl-11"
                   disabled={!!lockoutTime || isSubmitting}
-                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-sm text-white placeholder:text-ink-faint/60 focus:outline-none focus:border-signal focus:ring-1 focus:ring-signal transition-all"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink transition-colors p-1"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
-                </button>
               </div>
-            </div>
 
-            <div className="flex items-center justify-between pt-1">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="rounded border-white/20 bg-white/[0.04] text-signal focus:ring-signal focus:ring-offset-0 w-4 h-4"
-                />
-                <span className="text-xs text-ink-muted">Remember this device</span>
-              </label>
-            </div>
+              <Button
+                type="submit"
+                size="lg"
+                isLoading={isSubmitting}
+                disabled={!!lockoutTime}
+                className="w-full mt-2 font-semibold shadow-lg"
+              >
+                {lockoutTime ? `Locked (${lockoutCountdown}s)` : "Authenticate & Enter"}
+              </Button>
+            </form>
 
-            <Button
-              type="submit"
-              size="lg"
-              isLoading={isSubmitting}
-              disabled={!!lockoutTime}
-              className="w-full font-semibold shadow-md mt-2"
-            >
-              {lockoutTime ? `Locked (${lockoutCountdown}s)` : "Sign in"}
-            </Button>
-          </form>
+            {/* Terminal hardware hint */}
+            <div className="mt-5 pt-4 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono text-ink-muted">
+              <span className="truncate">{meta.terminalHint}</span>
+              <span className="flex items-center gap-1 text-signal shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-signal animate-ping" />
+                Online
+              </span>
+            </div>
+          </Card>
         </div>
 
-        {/* Bottom Quiet Footer */}
-        <div className="pt-6 border-t border-white/[0.06] text-center">
-          <p className="text-xs text-ink-faint">
-            Protected by bank-grade biometric encryption & verified clearance.
-          </p>
+        {/* Bottom Cross-Portal Switcher & Regulatory Footnote */}
+        <div className="mt-8 pt-6 border-t border-white/[0.06] flex flex-col gap-4">
+          <div>
+            <span className="text-[11px] font-mono uppercase tracking-wider text-ink-faint block mb-2">
+              Switch Management Console:
+            </span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {PORTAL_LINKS.map((p) => {
+                const isCurrent = p.type === activePortal;
+                return (
+                  <button
+                    key={p.type}
+                    type="button"
+                    onClick={() => handlePortalSwitch(p.port)}
+                    disabled={isCurrent}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-mono transition-all flex items-center justify-between border ${
+                      isCurrent
+                        ? "bg-white/[0.08] text-white border-white/[0.2] font-semibold cursor-default"
+                        : "bg-white/[0.02] text-ink-muted border-white/[0.05] hover:bg-white/[0.06] hover:text-white"
+                    }`}
+                  >
+                    <span>{p.label}</span>
+                    {isCurrent ? (
+                      <span className="w-1.5 h-1.5 rounded-full bg-signal" />
+                    ) : (
+                      <ExternalLink className="w-3 h-3 opacity-40" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-between text-[11px] font-mono text-ink-faint gap-2">
+            <span>NDPA Data Sovereign • Sub-200ms Biometric In-Memory Verification</span>
+            <span>MiliPay Financial Switch v2.4</span>
+          </div>
         </div>
       </div>
-
-      {/* Forgot Password Help Modal */}
-      <Modal
-        isOpen={showHelpModal}
-        onClose={() => setShowHelpModal(false)}
-        title="Account Recovery"
-        size="sm"
-      >
-        <div className="p-6 space-y-4">
-          <div className="w-10 h-10 rounded-xl bg-signal/10 border border-signal/20 flex items-center justify-center text-signal">
-            <HelpCircle className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="text-base font-medium text-white">
-              Password Reset Policy
-            </h3>
-            <p className="text-xs text-ink-muted leading-relaxed mt-2">
-              {meta.helpMessage}
-            </p>
-          </div>
-          <div className="pt-2">
-            <Button
-              variant="secondary"
-              className="w-full text-xs"
-              onClick={() => setShowHelpModal(false)}
-            >
-              Understood
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }

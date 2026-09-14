@@ -94,5 +94,36 @@ This project is an **npm workspace monorepo**. You must respect the boundaries a
 - **Network Timeouts & Failed Transactions**:
   - All payment requests use unique **Idempotency Keys** (`reference`) to prevent double charges.
   - Transactions use two-way webhook handshakes. If a bank network drops midway, Mono's automatic reversal engine refunds the customer within minutes instead of standard 14-day bank dispute cycles.
-- **PIN Verification for High-Value Payments**: For transactions exceeding the customer-defined security threshold (e.g. > ₦5,000), the VP930Pro securely prompts for the customer's 4-digit MiliPay PIN on the terminal before triggering the Mono debit.
+- **PIN Verification for High-Value Payments**: By default, transactions exceeding **₦10,000** require customer 4-digit MiliPay PIN verification on the terminal. However, the PIN security threshold is **customer-configurable** in the mobile app (can be adjusted between ₦0 and their Tier single transaction cap). If a customer raises their threshold to ₦25,000, any transaction of ₦20,000 is approved via palm scan alone without a PIN prompt; only transactions exceeding their personalized threshold will trigger a PIN challenge.
 - **Offline & Hardware Safety**: Terminals feature dual connectivity (Wi-Fi + 4G SIM fallback). If offline, the terminal refuses to initiate a scan to prevent partial/orphaned states. Lost or stolen terminals hold no funds and can be blacklisted instantly from the Admin Panel.
+
+## Customer KYC Tiers & Transaction Limits (STRICT)
+All customer profiles follow a 3-tier risk and regulatory compliance framework aligned with CBN standards:
+
+1. **Tier 1 (Basic / App Download)**:
+   - **Qualification**: Basic customer profile / phone number before full biometric enrollment.
+   - **Max Single Transaction**: ₦50,000.
+   - **Max Daily Cumulative Limit**: ₦200,000 (resets at 00:00 West Africa Time / WAT).
+   - **PIN Security**: Mandatory for transactions exceeding customer threshold (Default: ₦10,000).
+
+2. **Tier 2 (Default on Enrollment - ACTIVE)**:
+   - **Qualification**: Automatically granted the moment a customer registers with an Agent/Admin and their **NIN + Palm Vein Scan is confirmed**.
+   - **Max Single Transaction**: ₦150,000.
+   - **Max Daily Cumulative Limit**: ₦500,000 (resets at 00:00 WAT).
+   - **PIN Security**: Mandatory for transactions exceeding customer threshold (Default: ₦10,000).
+
+3. **Tier 3 (Enhanced KYC / Enterprise - COMING SOON)**:
+   - **Qualification**: Requires **BVN Verification** (via Mono Account Lookup against NIBSS) + verified proof of address/utility bill.
+   - **Max Single Transaction**: ₦250,000.
+   - **Max Daily Cumulative Limit**: ₦1,000,000 (1M) (resets at 00:00 WAT).
+   - **PIN Security**: Mandatory for transactions exceeding customer threshold (Default: ₦10,000).
+   - **Status**: Displayed with "Coming Soon" badge across customer app and admin portals.
+
+4. **Multi-Layer Enforcement Engine**:
+   - `public.customers` and `public.users` must store `kyc_tier` (`int`, default `2`) and `pin_threshold` (`numeric(12,2)`, default `10000.00`).
+   - `process-payment` Edge Function strictly validates:
+     1. `amount <= TIER_LIMITS[kyc_tier].maxSingleTxn`
+     2. If `amount > pin_threshold`, assert that `pin` was provided and valid.
+     3. `(daily_spent + amount) <= TIER_LIMITS[kyc_tier].maxDailyVolume`
+   - Mobile app allows user to configure `pin_threshold` with quick presets (₦2k, ₦5k, ₦10k Default, ₦25k, Max) guarded by biometric/PIN confirmation.
+

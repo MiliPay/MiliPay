@@ -26,7 +26,8 @@ import {
 import { formatDate, formatNaira } from "@milipay/shared/lib/utils/format";
 import { 
   DEFAULT_REJECTION_REASONS,
-  type Customer 
+  type Customer,
+  TIER_LIMITS
 } from "@milipay/shared/types";
 import { NIGERIAN_STATES } from "@milipay/shared/lib/constants";
 import { useAuth } from "@milipay/shared/features/auth/AuthContext";
@@ -471,6 +472,62 @@ export default function CustomerDetailsPage() {
                 </div>
               </div>
             </div>
+          </Card>
+
+          {/* KYC Tier & Transaction Limits Card */}
+          <Card className="lg:col-span-1 p-4 sm:p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-medium text-white flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-signal" /> KYC Tier & Limits
+              </h2>
+              <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ${
+                customer.kycTier === 1 
+                  ? 'bg-status-info/10 text-status-info border-status-info/20' 
+                  : customer.kycTier === 3 
+                  ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                  : 'bg-signal/10 text-signal border-signal/20'
+              }`}>
+                {TIER_LIMITS[customer.kycTier || 2]?.name || 'Tier 2'}
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-3 flex justify-between items-center">
+                <div>
+                  <span className="text-[11px] text-ink-faint uppercase tracking-wider font-semibold block">Max Single Transaction</span>
+                  <span className="text-sm font-semibold text-white">
+                    {formatNaira(TIER_LIMITS[customer.kycTier || 2]?.maxSingleTxn || 150000)}
+                  </span>
+                </div>
+                <span className="text-xs text-ink-muted font-mono">Per Checkout</span>
+              </div>
+
+              <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-3 flex justify-between items-center">
+                <div>
+                  <span className="text-[11px] text-ink-faint uppercase tracking-wider font-semibold block">Max Daily Cumulative</span>
+                  <span className="text-sm font-semibold text-white">
+                    {formatNaira(TIER_LIMITS[customer.kycTier || 2]?.maxDailyVolume || 500000)}
+                  </span>
+                </div>
+                <span className="text-xs text-ink-muted font-mono">00:00 WAT Reset</span>
+              </div>
+
+              <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-3 flex justify-between items-center">
+                <div>
+                  <span className="text-[11px] text-ink-faint uppercase tracking-wider font-semibold block">PIN Security Threshold</span>
+                  <span className="text-sm font-semibold text-signal">
+                    &gt; {formatNaira(customer.pinThreshold ?? 10000)}
+                  </span>
+                </div>
+                <span className="text-[10px] text-ink-muted bg-white/[0.05] px-2 py-0.5 rounded font-mono">
+                  {customer.pinThreshold && customer.pinThreshold !== 10000 ? 'Custom' : 'Default'}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-ink-muted leading-relaxed">
+              Transactions exceeding <strong className="text-white">{formatNaira(customer.pinThreshold ?? 10000)}</strong> prompt for 4-digit PIN verification on the terminal. Transactions below this threshold are approved instantly via palm vein scan alone.
+            </p>
           </Card>
 
           {/* Linked Banks & Transactions */}

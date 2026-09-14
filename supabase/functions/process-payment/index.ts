@@ -78,20 +78,92 @@ serve(async (req) => {
         .eq('id', terminalData.id);
     }
 
-    // 3. High-Value PIN Verification Threshold (> ₦5,000)
-    const pinThreshold = 5000;
-    if (amount > pinThreshold && !pin) {
+    // 3. Customer KYC Tier & Transaction Limits Validation
+    // Tier 1: Single max ₦50k, Daily ₦200k
+    // Tier 2: Single max ₦150k, Daily ₦500k (Default on enrollment)
+    // Tier 3: Single max ₦250k, Daily ₦1,000,000 (Coming Soon)
+    const TIER_LIMITS: Record<number, { tier: number; name: string; maxSingle: number; maxDaily: number }> = {
+      1: { tier: 1, name: "Tier 1", maxSingle: 50_000, maxDaily: 200_000 },
+      2: { tier: 2, name: "Tier 2", maxSingle: 150_000, maxDaily: 500_000 },
+      3: { tier: 3, name: "Tier 3", maxSingle: 250_000, maxDaily: 1_000_000 },
+    };
+
+    let customerKycTier = 2; // Default on registration (NIN + Palm scan confirmed)
+    let customerPinThreshold = 10000; // Default ₦10,000
+
+    if (userId) {
+      const { data: customerData } = await adminClient
+        .from('customers')
+        .select('id, kyc_tier, pin_threshold')
+        .or(`id.eq.${userId},auth_user_id.eq.${userId}`)
+        .maybeSingle();
+
+      if (customerData) {
+        customerKycTier = customerData.kyc_tier || 2;
+        customerPinThreshold = Number(customerData.pin_threshold) || 10000;
+      }
+    }
+
+    const currentTierLimits = TIER_LIMITS[customerKycTier] || TIER_LIMITS[2];
+
+    // A. Enforce Single Transaction Limit
+    if (amount > currentTierLimits.maxSingle) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          code: "EXCEEDS_SINGLE_LIMIT",
+          message: `Transaction of ₦${amount.toLocaleString()} exceeds your ${currentTierLimits.name} maximum limit of ₦${currentTierLimits.maxSingle.toLocaleString()} per transaction.`,
+          maxSingle: currentTierLimits.maxSingle,
+          tier: customerKycTier,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        }
+      );
+    }
+
+    // B. Enforce Customer-Configurable PIN Verification Threshold (Default: ₦10,000)
+    if (amount > customerPinThreshold && !pin) {
       return new Response(
         JSON.stringify({
           success: false,
           requirePin: true,
-          message: `Transactions exceeding ₦${pinThreshold.toLocaleString()} require 4-digit MiliPay PIN verification`,
+          code: "PIN_REQUIRED",
+          threshold: customerPinThreshold,
+          message: `Transactions exceeding your security threshold of ₦${customerPinThreshold.toLocaleString()} require 4-digit MiliPay PIN verification.`,
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 200,
         }
       );
+    }
+
+    // C. Enforce Cumulative Daily Limit (WAT: UTC+1)
+    if (userId) {
+      const { data: dailySpentData } = await adminClient
+        .rpc('get_customer_daily_spend', { p_user_id: userId });
+
+      const totalSpentToday = Number(dailySpentData || 0);
+      if (totalSpentToday + amount > currentTierLimits.maxDaily) {
+        const remainingLimit = Math.max(0, currentTierLimits.maxDaily - totalSpentToday);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            code: "EXCEEDS_DAILY_LIMIT",
+            message: `Daily transaction limit of ₦${currentTierLimits.maxDaily.toLocaleString()} reached for ${currentTierLimits.name}. Remaining today: ₦${remainingLimit.toLocaleString()}. Resets at 00:00 WAT.`,
+            dailySpent: totalSpentToday,
+            maxDaily: currentTierLimits.maxDaily,
+            remainingLimit: remainingLimit,
+            tier: customerKycTier,
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 400,
+          }
+        );
+      }
     }
 
     // 4. Split Settlement Calculations

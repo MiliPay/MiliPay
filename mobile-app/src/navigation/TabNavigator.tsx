@@ -11,6 +11,7 @@ import SettingsScreen from '../screens/main/SettingsScreen';
 import TransactionsScreen from '../screens/main/TransactionsScreen';
 import ProfileSettingsScreen from '../screens/main/ProfileSettingsScreen';
 import SupportScreen from '../screens/main/SupportScreen';
+import AccountLimitsScreen from '../screens/main/AccountLimitsScreen';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator();
@@ -34,6 +35,7 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen name="SettingsScreen" component={SettingsScreen} />
       <SettingsStack.Screen name="ProfileSettings" component={ProfileSettingsScreen} />
       <SettingsStack.Screen name="SupportScreen" component={SupportScreen} />
+      <SettingsStack.Screen name="AccountLimits" component={AccountLimitsScreen} />
     </SettingsStack.Navigator>
   );
 }
