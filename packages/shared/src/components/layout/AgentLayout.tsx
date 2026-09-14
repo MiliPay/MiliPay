@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
-import { UserPlus, History, Settings, LogOut, Users, UserCheck, Ticket, Store } from "lucide-react";
+import { UserPlus, History, Settings, LogOut, Users, UserCheck, Ticket, Store, Building2 } from "lucide-react";
 import clsx from "clsx";
 import { useAuth } from "@milipay/shared/features/auth/AuthContext";
 import { MobileHeader, type MobileNavItem } from "@milipay/shared/components/layout/MobileHeader";
@@ -15,7 +15,7 @@ export function AgentLayout() {
   const navItems: MobileNavItem[] = [
     { name: "Dashboard", path: "/dashboard", icon: History, end: true },
     { name: "Register Customer", path: "/register", icon: UserPlus },
-    { name: "Register Merchant", path: "/merchants/register", icon: Store },
+    { name: "Register Merchant", path: "/merchants/register", icon: Building2 },
     { name: "Merchants", path: "/merchants", icon: Store },
     { name: "Customers", path: "/customers", icon: Users },
     { name: "Complaints", path: "/support", icon: Ticket },

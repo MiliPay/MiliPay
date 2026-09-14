@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { LayoutGrid, Users, TrendingUp, UserPlus, Shield, Ticket, Settings } from "lucide-react";
+import { LayoutGrid, Users, TrendingUp, UserPlus, Shield, Ticket, Settings, Store, Cpu } from "lucide-react";
 import { Sidebar } from "@milipay/shared/components/layout/Sidebar";
 import { MobileNav } from "@milipay/shared/components/layout/MobileNav";
 import { MobileHeader, type MobileNavItem } from "@milipay/shared/components/layout/MobileHeader";
@@ -13,14 +13,23 @@ export default function DashboardLayout() {
   const navigate = useNavigate();
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
+  const canRegister = user?.role === "agent" || user?.role === "admin" || user?.role === "super_admin";
+  const canManageSettings = user?.role === "admin" || user?.role === "super_admin";
+
   const navItems: MobileNavItem[] = [
     { name: "Dashboard", path: ROUTES.dashboard, icon: LayoutGrid, end: true },
     { name: "Customers", path: ROUTES.customers, icon: Users },
+    { name: "Merchants", path: ROUTES.merchants, icon: Store },
+    { name: "POS Terminals", path: ROUTES.terminals, icon: Cpu },
     { name: "Transactions", path: ROUTES.transactions, icon: TrendingUp },
-    { name: "Register Customer", path: ROUTES.register, icon: UserPlus },
-    { name: "Team Management", path: ROUTES.staff, icon: Shield },
-    { name: "Support & Escalations", path: ROUTES.support, icon: Ticket },
-    { name: "Settings", path: ROUTES.settings, icon: Settings },
+    ...(canRegister ? [{ name: "Register", path: ROUTES.register, icon: UserPlus }] : []),
+    ...(canManageSettings
+      ? [
+          { name: "Team Management", path: ROUTES.staff, icon: Shield },
+          { name: "Support & Escalations", path: ROUTES.support, icon: Ticket },
+          { name: "Settings", path: ROUTES.settings, icon: Settings },
+        ]
+      : []),
   ];
 
   const handleConfirmLogout = async () => {
