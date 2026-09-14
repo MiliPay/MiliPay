@@ -1,11 +1,10 @@
 import React from "react";
 import {
-  CheckCircle2,
-  Lock,
   Smartphone,
-  Server,
+  Shield,
   Headphones,
   Store,
+  Activity,
 } from "lucide-react";
 
 export type PortalType = "agent" | "admin" | "support" | "merchant";
@@ -15,76 +14,89 @@ interface Portal3DShowcaseProps {
 }
 
 interface PortalConfig {
-  name: string;
-  badge: string;
-  tagline: string;
+  portalLabel: string;
+  badgeColor: string;
+  badgeDot: string;
+  headline: string;
   description: string;
-  accentGlow: string;
-  badgeBg: string;
-  badgeText: string;
+  cardTitle: string;
+  cardBadge: string;
+  cardBadgeColor: string;
   icon: React.ComponentType<{ className?: string }>;
-  highlights: string[];
+  metrics: Array<{ label: string; value: string }>;
 }
 
 const PORTAL_CONFIGS: Record<PortalType, PortalConfig> = {
   agent: {
-    name: "Field Agent Portal",
-    badge: "Field Agent Console",
-    tagline: "Biometric Field Enrollment",
-    description: "Secure handheld terminal interface for roaming customer registrations, merchant pairing, and walk-in support.",
-    accentGlow: "rgba(0, 200, 150, 0.18)",
-    badgeBg: "bg-signal/15",
-    badgeText: "text-signal-bright border-signal/30",
+    portalLabel: "Field Agent Network",
+    badgeColor: "text-signal bg-signal/10 border-signal/20",
+    badgeDot: "bg-signal",
+    headline: "Biometric onboarding at the point of contact.",
+    description:
+      "Equipped for handheld palm vein capture, instant identity verification, and on-site merchant terminal deployment in the field.",
+    cardTitle: "Field Terminal Telemetry",
+    cardBadge: "Ready for Scan",
+    cardBadgeColor: "text-signal bg-signal/10 border-signal/25",
     icon: Smartphone,
-    highlights: [
-      "HF-FP08PV & VP930Pro Handheld Capture",
-      "Sub-200ms Local RAM Vein Matching",
-      "CBN & NDPA Certified Biometrics",
+    metrics: [
+      { label: "Match Speed", value: "< 200ms" },
+      { label: "Vein Sensor", value: "NIR Dual-Lens" },
+      { label: "Hardware Model", value: "HF-FP08PV" },
+      { label: "Encryption", value: "Local RAM Bytea" },
     ],
   },
   admin: {
-    name: "Admin Panel",
-    badge: "Central Supervisory Console",
-    tagline: "Supervisory Governance & Risk",
-    description: "Master administrative console for KYB compliance, POS terminal fleet lockdown, and master settlement ledgers.",
-    accentGlow: "rgba(255, 180, 84, 0.18)",
-    badgeBg: "bg-status-warn/15",
-    badgeText: "text-status-warn border-status-warn/30",
-    icon: Server,
-    highlights: [
-      "Master KYB & Merchant Lifecycle Control",
-      "POS Hardware Inventory & Security Lockdown",
-      "Platform Fee (1.5%) & Master Settlement Auditing",
+    portalLabel: "Central Governance Console",
+    badgeColor: "text-status-warn bg-status-warn/10 border-status-warn/20",
+    badgeDot: "bg-status-warn",
+    headline: "Unified financial switch governance & risk.",
+    description:
+      "Supervisory oversight over merchant KYB reviews, POS hardware fleet security, and master settlement ledgers.",
+    cardTitle: "Switch Governance Telemetry",
+    cardBadge: "Operational",
+    cardBadgeColor: "text-status-warn bg-status-warn/10 border-status-warn/25",
+    icon: Shield,
+    metrics: [
+      { label: "Financial Switch", value: "Active • 99.99%" },
+      { label: "Hardware Fleet", value: "Encrypted & Paired" },
+      { label: "Settlement Split", value: "Automated 98.5 / 1.5" },
+      { label: "Audit Trails", value: "NDPA Compliant" },
     ],
   },
   support: {
-    name: "Service Portal",
-    badge: "Customer Care & Live Desk",
-    tagline: "Omnichannel Support Switch",
-    description: "Digital customer desk handling live mobile chats, dispute verification, and two-tier ticket escalations.",
-    accentGlow: "rgba(59, 130, 246, 0.18)",
-    badgeBg: "bg-status-info/15",
-    badgeText: "text-status-info border-status-info/30",
+    portalLabel: "Customer Care Switch",
+    badgeColor: "text-status-info bg-status-info/10 border-status-info/20",
+    badgeDot: "bg-status-info",
+    headline: "Omnichannel customer resolution & care.",
+    description:
+      "Dedicated support console for handling real-time mobile customer chat queues and two-tier ticket escalations.",
+    cardTitle: "Live Support Telemetry",
+    cardBadge: "Queue Active",
+    cardBadgeColor: "text-status-info bg-status-info/10 border-status-info/25",
     icon: Headphones,
-    highlights: [
-      "Real-Time Mobile Customer Chat Queue",
-      "Two-Tier Formal Dispute Architecture",
-      "NIN & Linked Account Verification",
+    metrics: [
+      { label: "Live Chat Switch", value: "Connected" },
+      { label: "Dispute Flow", value: "Two-Tier Formal" },
+      { label: "Escalations", value: "Direct to Admin" },
+      { label: "Account Lookup", value: "Verified NIBSS" },
     ],
   },
   merchant: {
-    name: "Merchant Portal",
-    badge: "Merchant Store Manager",
-    tagline: "Smart POS & Settlements",
-    description: "Retail store portal for tracking customer transactions, monitoring HP605PV terminals, and reviewing payouts.",
-    accentGlow: "rgba(51, 224, 181, 0.18)",
-    badgeBg: "bg-status-ok/15",
-    badgeText: "text-status-ok border-status-ok/30",
+    portalLabel: "Merchant Store Console",
+    badgeColor: "text-status-ok bg-status-ok/10 border-status-ok/20",
+    badgeDot: "bg-status-ok",
+    headline: "Real-time store sales & smart POS telemetry.",
+    description:
+      "Track daily customer transactions, monitor connected smart terminal health, and audit automated Mono DirectPay settlements.",
+    cardTitle: "Store POS Telemetry",
+    cardBadge: "Terminal Online",
+    cardBadgeColor: "text-status-ok bg-status-ok/10 border-status-ok/25",
     icon: Store,
-    highlights: [
-      "Live 98.5% Split Settlement Tracking",
-      "HFSecurity HP605PV Terminal Telemetry",
-      "Automated Mono DirectPay Disbursements",
+    metrics: [
+      { label: "Settlement Rate", value: "98.5% Split" },
+      { label: "Disbursement", value: "Instant T+0 / EOD" },
+      { label: "POS Terminal", value: "HF-HP605PV" },
+      { label: "Direct Debit", value: "Mono DirectPay" },
     ],
   },
 };
@@ -94,78 +106,78 @@ export function Portal3DShowcase({ portal }: Portal3DShowcaseProps) {
   const IconComponent = cfg.icon;
 
   return (
-    <div className="relative w-full h-full flex flex-col justify-between p-8 sm:p-12 lg:p-14 bg-ledger-raised/50 border-r border-white/[0.06] overflow-hidden">
-      {/* Subtle Ambient Radial Glow */}
-      <div
-        className="absolute top-1/3 left-1/3 w-[450px] h-[450px] rounded-full blur-[140px] pointer-events-none opacity-50"
-        style={{
-          background: `radial-gradient(circle, ${cfg.accentGlow} 0%, transparent 70%)`,
-        }}
-      />
+    <div className="relative w-full h-full min-h-full flex flex-col justify-between p-8 sm:p-12 lg:p-16 bg-[#070B09] border-r border-white/[0.06] overflow-hidden select-none">
+      {/* Subtle Atmospheric Gradient Light */}
+      <div className="absolute top-0 left-0 w-96 h-96 bg-signal/10 rounded-full blur-3xl pointer-events-none -translate-x-1/2 -translate-y-1/2" />
+      <div className="absolute bottom-0 right-0 w-96 h-96 bg-signal/5 rounded-full blur-3xl pointer-events-none translate-x-1/3 translate-y-1/3" />
 
-      {/* Top Bar with Status and Portal Badge */}
-      <div className="relative z-10 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-signal animate-pulse" />
-          <span className="text-xs font-mono uppercase tracking-wider text-ink-muted">
-            MiliPay Network Active
-          </span>
+      {/* Top Header: Official Brand Logo & Refined Portal Badge */}
+      <div className="relative z-10 flex items-center justify-between gap-4">
+        <div className="flex items-center">
+          <img
+            src="/logo-white.png"
+            alt="MiliPay"
+            className="h-9 sm:h-10 w-auto object-contain"
+          />
         </div>
 
         <div
-          className={`px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider border flex items-center gap-1.5 shadow-sm ${cfg.badgeBg} ${cfg.badgeText}`}
+          className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${cfg.badgeColor}`}
         >
-          <IconComponent className="w-3.5 h-3.5" />
-          <span>{cfg.badge}</span>
+          <span className={`w-1.5 h-1.5 rounded-full ${cfg.badgeDot}`} />
+          <span>{cfg.portalLabel}</span>
         </div>
       </div>
 
-      {/* Main Center Showcase */}
-      <div className="relative z-10 my-auto py-8 max-w-md mx-auto w-full">
-        {/* Crisp Card Featuring the Official MiliPay Logo Asset */}
-        <div className="mb-8">
-          <div className="inline-flex items-center justify-center px-6 py-4 bg-white rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.35)] border border-white/20">
-            <img
-              src="/logo.png"
-              alt="MiliPay - Payments in Milliseconds"
-              className="h-10 sm:h-12 w-auto object-contain"
-            />
-          </div>
-        </div>
-
-        {/* Portal Title & Clear Identity */}
-        <h1 className="text-3xl font-display font-bold text-white tracking-tight">
-          {cfg.tagline}
+      {/* Center Showcase: Clean Typography & Telemetry Card */}
+      <div className="relative z-10 my-auto py-12 max-w-lg">
+        {/* Authoritative Headline & Subtext */}
+        <h1 className="text-3xl sm:text-4xl font-display font-semibold text-white tracking-tight leading-[1.2]">
+          {cfg.headline}
         </h1>
-        <p className="mt-3 text-sm text-ink-muted leading-relaxed">
+        <p className="mt-4 text-base text-ink-muted leading-relaxed">
           {cfg.description}
         </p>
 
-        {/* 3 Simple Clean Highlights */}
-        <div className="mt-8 space-y-3">
-          {cfg.highlights.map((text, idx) => (
-            <div
-              key={idx}
-              className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]"
-            >
-              <div className="w-6 h-6 rounded-lg bg-signal/10 border border-signal/20 flex items-center justify-center shrink-0">
-                <CheckCircle2 className="w-3.5 h-3.5 text-signal-bright" />
+        {/* Bespoke Dark Telemetry Card */}
+        <div className="mt-10 rounded-2xl bg-white/[0.03] border border-white/[0.08] p-6 backdrop-blur-sm shadow-xl">
+          <div className="flex items-center justify-between pb-4 mb-4 border-b border-white/[0.06]">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-white/[0.05] border border-white/[0.1] flex items-center justify-center text-white">
+                <IconComponent className="w-4 h-4" />
               </div>
-              <span className="text-xs font-medium text-ink tracking-wide">
-                {text}
+              <span className="text-sm font-medium text-white">
+                {cfg.cardTitle}
               </span>
             </div>
-          ))}
+
+            <div
+              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-medium border ${cfg.cardBadgeColor}`}
+            >
+              <Activity className="w-3 h-3 animate-pulse" />
+              <span>{cfg.cardBadge}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            {cfg.metrics.map((m, idx) => (
+              <div key={idx} className="flex flex-col">
+                <span className="text-xs text-ink-faint font-medium">
+                  {m.label}
+                </span>
+                <span className="text-sm font-mono text-ink mt-0.5">
+                  {m.value}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Bottom Regulatory / Security Guarantee */}
-      <div className="relative z-10 pt-6 border-t border-white/[0.06] flex items-center justify-between text-xs font-mono text-ink-muted">
-        <div className="flex items-center gap-2">
-          <Lock className="w-3.5 h-3.5 text-signal" />
-          <span>NDPA Certified Local Data Sovereignty</span>
-        </div>
-        <span>v2.4</span>
+      {/* Bottom Quiet Footer */}
+      <div className="relative z-10 pt-6 border-t border-white/[0.06] flex items-center justify-between text-xs text-ink-faint">
+        <span>© 2026 MiliPay Technologies Ltd.</span>
+        <span>Secure Biometric Infrastructure</span>
       </div>
     </div>
   );
