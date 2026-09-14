@@ -142,7 +142,7 @@ export function WeeklyRegistrationsChart({
         {isLoading ? (
           <div className="h-44 flex flex-col items-center justify-center gap-2.5">
             <LoadingSpinner size="lg" />
-            <span className="text-xs text-ink-muted font-medium">Calculating biometric enrollment telemetry...</span>
+            <span className="text-xs text-ink-muted font-medium">Calculating weekly registration data...</span>
           </div>
         ) : (
           <>
