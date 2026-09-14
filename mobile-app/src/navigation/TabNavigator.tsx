@@ -2,6 +2,7 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
+import { useColorScheme } from 'nativewind';
 import { Home, Compass, Settings } from 'lucide-react-native';
 
 import HomeScreen from '../screens/main/HomeScreen';
@@ -39,8 +40,6 @@ function SettingsStackNavigator() {
     </SettingsStack.Navigator>
   );
 }
-
-import { useColorScheme } from 'nativewind';
 
 export default function TabNavigator() {
   const { colorScheme } = useColorScheme();

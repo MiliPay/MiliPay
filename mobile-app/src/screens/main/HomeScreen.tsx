@@ -429,7 +429,7 @@ function HomeScreenContent({ navigation }: any) {
           </View>
           <Pressable 
             onPress={() => navigation.navigate('Transactions')} 
-            className="px-3 py-1.5 rounded-full bg-black/5 dark:bg-white/10 border border-slate-200 dark:border-white/10 active:bg-black/5 dark:bg-white/"
+            className="px-3 py-1.5 rounded-full bg-black/5 dark:bg-white/10 border border-slate-200 dark:border-white/10 active:bg-black/10 dark:active:bg-white/20"
           >
             <Text className="text-slate-900 dark:text-white font-inter-medium text-[11px]">View All</Text>
           </Pressable>

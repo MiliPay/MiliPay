@@ -20,7 +20,7 @@ export default function TransactionsScreen({ navigation }: any) {
   const FilterButton = ({ id, label }: { id: any, label: string }) => (
     <Pressable 
       onPress={() => handleFilter(id)} 
-      className={`px-5 py-2 rounded-full mr-3 ${filter === id ? 'bg-emerald-500/20 border border-emerald-500/50' : 'bg-black/5 dark:bg-white/10 border border-slate-200 dark:border-white/10 active:bg-black/5 dark:bg-white/'}`}
+      className={`px-5 py-2 rounded-full mr-3 ${filter === id ? 'bg-emerald-500/20 border border-emerald-500/50' : 'bg-black/5 dark:bg-white/10 border border-slate-200 dark:border-white/10 active:bg-black/10 dark:active:bg-white/20'}`}
     >
       <Text className={`${filter === id ? 'text-emerald-400 font-inter-semibold' : 'text-slate-500 dark:text-white/60 font-inter-medium'} text-xs tracking-wide`}>
         {label}
@@ -36,7 +36,7 @@ export default function TransactionsScreen({ navigation }: any) {
       <View className="px-6 pt-6 pb-4 flex-row items-center">
         <Pressable 
           onPress={() => navigation.goBack()} 
-          className="w-10 h-10 items-center justify-center rounded-full bg-black/5 dark:bg-white/10 border border-slate-200 dark:border-white/10 active:bg-black/5 dark:bg-white/"
+          className="w-10 h-10 items-center justify-center rounded-full bg-black/5 dark:bg-white/10 border border-slate-200 dark:border-white/10 active:bg-black/10 dark:active:bg-white/20"
         >
           <ChevronLeft color={isDark ? "#fff" : "#000"} size={20} />
         </Pressable>
@@ -44,7 +44,7 @@ export default function TransactionsScreen({ navigation }: any) {
       </View>
 
       {/* Filters (Scrollable) */}
-      <View className="pb-4 border-b border-slate-200 dark:border-white/">
+      <View className="pb-4 border-b border-slate-200 dark:border-white/10">
         <ScrollView 
           horizontal 
           showsHorizontalScrollIndicator={false}

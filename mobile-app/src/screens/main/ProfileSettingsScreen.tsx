@@ -55,7 +55,7 @@ export default function ProfileSettingsScreen({ navigation }: any) {
         <View className="px-6 pt-6 pb-2 flex-row items-center justify-between z-10">
           <Pressable 
             onPress={() => navigation.goBack()} 
-            className="w-10 h-10 items-center justify-center rounded-full bg-black/5 dark:bg-white/10 border border-slate-200 dark:border-white/10 active:bg-black/5 dark:bg-white/"
+            className="w-10 h-10 items-center justify-center rounded-full bg-black/5 dark:bg-white/10 border border-slate-200 dark:border-white/10 active:bg-black/10 dark:active:bg-white/20"
           >
             <ChevronLeft color={isDark ? "#fff" : "#000"} size={20} />
           </Pressable>
@@ -79,7 +79,8 @@ export default function ProfileSettingsScreen({ navigation }: any) {
               
               <Pressable 
                 onPress={handlePickImage}
-                className="absolute bottom-0 right-0 w-9 h-9 bg-emerald-500 rounded-full border-[3px] border-black items-center justify-center z-20 shadow-lg"
+                className="absolute bottom-0 right-0 w-9 h-9 bg-emerald-500 rounded-full border-[3px] border-black items-center justify-center z-20"
+                style={{ shadowColor: '#10b981', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 3 }}
               >
                 <Camera color="#111827" size={14} strokeWidth={2.5} />
               </Pressable>
@@ -94,7 +95,7 @@ export default function ProfileSettingsScreen({ navigation }: any) {
             </Text>
             <View className="bg-white dark:bg-[#111318] border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden">
               {/* First Name */}
-              <View className="flex-row items-center px-4 h-14 border-b border-slate-200 dark:border-white/">
+              <View className="flex-row items-center px-4 h-14 border-b border-slate-200 dark:border-white/10">
                 <User color={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"} size={18} />
                 <TextInput
                   className="flex-1 text-slate-900 dark:text-white font-inter ml-3 text-sm"
@@ -124,7 +125,7 @@ export default function ProfileSettingsScreen({ navigation }: any) {
             </Text>
             <View className="bg-white dark:bg-[#111318] border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden">
               {/* Email */}
-              <View className="flex-row items-center px-4 h-14 border-b border-slate-200 dark:border-white/">
+              <View className="flex-row items-center px-4 h-14 border-b border-slate-200 dark:border-white/10">
                 <Mail color={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"} size={18} />
                 <TextInput
                   className="flex-1 text-slate-500 dark:text-white/60 font-inter ml-3 text-sm"
@@ -156,7 +157,7 @@ export default function ProfileSettingsScreen({ navigation }: any) {
             </Text>
             <View className="bg-white dark:bg-[#111318] border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden">
               {/* Address */}
-              <View className="flex-row items-center px-4 h-14 border-b border-slate-200 dark:border-white/">
+              <View className="flex-row items-center px-4 h-14 border-b border-slate-200 dark:border-white/10">
                 <MapPin color={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"} size={18} />
                 <TextInput
                   className="flex-1 text-slate-900 dark:text-white font-inter ml-3 text-sm"

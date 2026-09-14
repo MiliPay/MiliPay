@@ -89,10 +89,16 @@ export default function SettingsScreen({ navigation }: any) {
   const [biometricEnabled, setBiometricEnabled] = useState(true);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [isThemeModalVisible, setIsThemeModalVisible] = useState(false);
-  const [activeTheme, setActiveTheme] = useState('system');
+  const [activeTheme, setActiveTheme] = useState<'system' | 'light' | 'dark'>('system');
   const [isBankModalVisible, setIsBankModalVisible] = useState(false);
   const [accountToUnlink, setAccountToUnlink] = useState<any>(null);
   const [isUnlinking, setIsUnlinking] = useState(false);
+
+  const applyTheme = (theme: 'system' | 'light' | 'dark') => {
+    Haptics.selectionAsync();
+    setActiveTheme(theme);
+    setColorScheme(theme);
+  };
 
   const handleLogout = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -310,7 +316,16 @@ export default function SettingsScreen({ navigation }: any) {
           </Pressable>
 
           {/* The Crazy Card */}
-          <View className={`w-full rounded-[40px] overflow-hidden border ${isDark ? 'bg-[#0f172a] border-white/10' : 'bg-white border-slate-200'} shadow-[0_0_40px_rgba(0,0,0,0.15)]`}>
+          <View 
+            className={`w-full rounded-[40px] overflow-hidden border ${isDark ? 'bg-[#0f172a] border-white/10' : 'bg-white border-slate-200'}`}
+            style={{
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.2,
+              shadowRadius: 24,
+              elevation: 10,
+            }}
+          >
             <LinearGradient 
               colors={isDark ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0)'] : ['rgba(16,185,129,0.03)', 'rgba(255,255,255,0)']} 
               className="absolute inset-0" 
@@ -336,10 +351,7 @@ export default function SettingsScreen({ navigation }: any) {
 
               {/* System Option - Full Width */}
               <Pressable 
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setColorScheme('system'); setActiveTheme('system');
-                }}
+                onPress={() => applyTheme('system')}
                 style={({pressed}) => ({ transform: [{scale: pressed ? 0.97 : 1}] })}
                 className={`w-full h-24 rounded-3xl mb-4 overflow-hidden border-2 ${activeTheme === 'system' ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-500/10' : 'border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/5'}`}
               >
@@ -353,7 +365,16 @@ export default function SettingsScreen({ navigation }: any) {
                     <Text className="text-slate-500 dark:text-white/50 font-inter text-xs">Adapts to your device</Text>
                   </View>
                   {activeTheme === 'system' && (
-                    <View className="w-8 h-8 rounded-full bg-emerald-500 items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.5)]">
+                    <View 
+                      className="w-8 h-8 rounded-full bg-emerald-500 items-center justify-center"
+                      style={{
+                        shadowColor: '#10b981',
+                        shadowOffset: { width: 0, height: 0 },
+                        shadowOpacity: 0.5,
+                        shadowRadius: 8,
+                        elevation: 4,
+                      }}
+                    >
                       <Check color="#fff" size={16} />
                     </View>
                   )}
@@ -365,10 +386,7 @@ export default function SettingsScreen({ navigation }: any) {
                 
                 {/* Light Option */}
                 <Pressable 
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setColorScheme('light'); setActiveTheme('light');
-                  }}
+                  onPress={() => applyTheme('light')}
                   style={({pressed}) => ({ transform: [{scale: pressed ? 0.95 : 1}] })}
                   className={`w-[48%] h-full rounded-3xl overflow-hidden border-2 p-4 justify-between ${activeTheme === 'light' ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-500/10' : 'border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/5'}`}
                 >
@@ -378,7 +396,16 @@ export default function SettingsScreen({ navigation }: any) {
                       <Sun color="#f59e0b" size={24} fill="#f59e0b" />
                     </View>
                     {activeTheme === 'light' && (
-                      <View className="w-6 h-6 rounded-full bg-emerald-500 items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.5)]">
+                      <View 
+                        className="w-6 h-6 rounded-full bg-emerald-500 items-center justify-center"
+                        style={{
+                          shadowColor: '#10b981',
+                          shadowOffset: { width: 0, height: 0 },
+                          shadowOpacity: 0.5,
+                          shadowRadius: 6,
+                          elevation: 3,
+                        }}
+                      >
                         <Check color="#fff" size={12} />
                       </View>
                     )}
@@ -391,10 +418,7 @@ export default function SettingsScreen({ navigation }: any) {
 
                 {/* Dark Option */}
                 <Pressable 
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setColorScheme('dark'); setActiveTheme('dark');
-                  }}
+                  onPress={() => applyTheme('dark')}
                   style={({pressed}) => ({ transform: [{scale: pressed ? 0.95 : 1}] })}
                   className={`w-[48%] h-full rounded-3xl overflow-hidden border-2 p-4 justify-between ${activeTheme === 'dark' ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-500/10' : 'border-slate-200 dark:border-white/5 bg-[#020617]'}`}
                 >
@@ -405,7 +429,16 @@ export default function SettingsScreen({ navigation }: any) {
                       <Moon color="#3b82f6" size={24} fill="#3b82f6" />
                     </View>
                     {activeTheme === 'dark' && (
-                      <View className="w-6 h-6 rounded-full bg-emerald-500 items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.5)]">
+                      <View 
+                        className="w-6 h-6 rounded-full bg-emerald-500 items-center justify-center"
+                        style={{
+                          shadowColor: '#10b981',
+                          shadowOffset: { width: 0, height: 0 },
+                          shadowOpacity: 0.5,
+                          shadowRadius: 6,
+                          elevation: 3,
+                        }}
+                      >
                         <Check color="#fff" size={12} />
                       </View>
                     )}
@@ -439,7 +472,16 @@ export default function SettingsScreen({ navigation }: any) {
             <View className={`absolute inset-0 ${isDark ? 'bg-black/40' : 'bg-black/10'}`} />
           </Pressable>
 
-          <View className={`w-full rounded-t-[40px] overflow-hidden border-t ${isDark ? 'bg-[#0f172a] border-white/10' : 'bg-white border-slate-200'} shadow-[0_-10px_40px_rgba(0,0,0,0.15)] pb-10 min-h-[50%]`}>
+          <View 
+            className={`w-full rounded-t-[40px] overflow-hidden border-t ${isDark ? 'bg-[#0f172a] border-white/10' : 'bg-white border-slate-200'} pb-10 min-h-[50%]`}
+            style={{
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -8 },
+              shadowOpacity: 0.15,
+              shadowRadius: 20,
+              elevation: 8,
+            }}
+          >
             <LinearGradient 
               colors={isDark ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0)'] : ['rgba(16,185,129,0.03)', 'rgba(255,255,255,0)']} 
               className="absolute inset-0" 
@@ -474,7 +516,14 @@ export default function SettingsScreen({ navigation }: any) {
                   linkedAccounts.map((acc, index) => (
                     <Pressable 
                       key={acc.id || index.toString()} 
-                      className={`flex-row items-center justify-between p-5 mb-4 rounded-[28px] border ${isDark ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'} shadow-sm`}
+                      className={`flex-row items-center justify-between p-5 mb-4 rounded-[28px] border ${isDark ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}
+                      style={{
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.05,
+                        shadowRadius: 2,
+                        elevation: 1,
+                      }}
                     >
                       <View className="flex-row items-center flex-1">
                         <View className="w-14 h-14 rounded-2xl bg-emerald-500/10 items-center justify-center mr-4 border border-emerald-500/20">
@@ -531,7 +580,16 @@ export default function SettingsScreen({ navigation }: any) {
             <View className={`absolute inset-0 ${isDark ? 'bg-black/60' : 'bg-black/20'}`} />
           </Pressable>
 
-          <View className={`w-full rounded-[36px] overflow-hidden border ${isDark ? 'bg-[#0f172a] border-white/10' : 'bg-white border-slate-200'} shadow-[0_0_40px_rgba(0,0,0,0.2)]`}>
+          <View 
+            className={`w-full rounded-[36px] overflow-hidden border ${isDark ? 'bg-[#0f172a] border-white/10' : 'bg-white border-slate-200'}`}
+            style={{
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.2,
+              shadowRadius: 20,
+              elevation: 8,
+            }}
+          >
             <View className="p-8 items-center">
               <View className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-500/10 items-center justify-center mb-6 border border-red-100 dark:border-red-500/20">
                 <Trash2 color="#ef4444" size={32} />
@@ -569,7 +627,14 @@ export default function SettingsScreen({ navigation }: any) {
                       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                     }
                   }}
-                  className={`w-[48%] h-14 rounded-2xl bg-red-500 items-center justify-center shadow-[0_4px_12px_rgba(239,68,68,0.3)] ${isUnlinking ? 'opacity-80' : ''}`}
+                  className={`w-[48%] h-14 rounded-2xl bg-red-500 items-center justify-center ${isUnlinking ? 'opacity-80' : ''}`}
+                  style={{
+                    shadowColor: '#ef4444',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 6,
+                    elevation: 3,
+                  }}
                 >
                   {isUnlinking ? (
                     <ActivityIndicator color="#fff" size="small" />

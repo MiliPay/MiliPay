@@ -48,6 +48,8 @@ export interface Customer {
   ninLast4: string;
   state: string;
   status: CustomerStatus;
+  kycTier?: 1 | 2 | 3;
+  pinThreshold?: number;
   palmVeinTemplate?: string;
   linkedAccountCount: number;
   createdAt: string;
@@ -63,6 +65,50 @@ export interface Customer {
   verifiedAt?: string;
   rejectionReason?: string;
 }
+
+export interface TierLimitConfig {
+  tier: 1 | 2 | 3;
+  name: string;
+  badge: string;
+  maxSingleTxn: number;
+  defaultPinThreshold: number;
+  maxDailyVolume: number;
+  isAvailable: boolean;
+  qualification: string;
+}
+
+export const TIER_LIMITS: Record<number, TierLimitConfig> = {
+  1: {
+    tier: 1,
+    name: "Tier 1",
+    badge: "Basic",
+    maxSingleTxn: 50_000,
+    defaultPinThreshold: 10_000,
+    maxDailyVolume: 200_000,
+    isAvailable: true,
+    qualification: "Phone & basic profile",
+  },
+  2: {
+    tier: 2,
+    name: "Tier 2",
+    badge: "Enrolled",
+    maxSingleTxn: 150_000,
+    defaultPinThreshold: 10_000,
+    maxDailyVolume: 500_000,
+    isAvailable: true,
+    qualification: "NIN + Palm Scan Confirmed",
+  },
+  3: {
+    tier: 3,
+    name: "Tier 3",
+    badge: "Enterprise",
+    maxSingleTxn: 250_000,
+    defaultPinThreshold: 10_000,
+    maxDailyVolume: 1_000_000,
+    isAvailable: false,
+    qualification: "BVN Verification & Verified Address (Coming Soon)",
+  },
+};
 
 export interface CustomerRegistrationResult {
   customerId: string;
