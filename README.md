@@ -331,4 +331,4 @@ npx firebase-tools deploy --only hosting:admin,hosting:agent,hosting:service,hos
 
 ## License
 
-Copyright &copy; 2026 MiliPay Inc. All rights reserved. Proprietary software.
+Copyright &copy; 2026 MiliPay Ltd. All rights reserved. Proprietary software.
