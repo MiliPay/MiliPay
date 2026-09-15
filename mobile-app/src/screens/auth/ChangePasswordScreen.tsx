@@ -1,6 +1,5 @@
 import React, { useRef, useState } from 'react';
 import { View, Text, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useAnimatedStyle, withTiming, useSharedValue, interpolateColor } from 'react-native-reanimated';
@@ -10,14 +9,12 @@ import { VaultInput, VaultInputRef } from '../../components/ui/VaultInput';
 import { SecureButton } from '../../components/ui/SecureButton';
 import { GlassCard } from '../../components/ui/GlassCard';
 
-export default function ChangePasswordScreen() {
+export default function ChangePasswordScreen({ navigation }: any) {
   const [step, setStep] = useState<1 | 2>(1);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<VaultInputRef>(null);
-  
-  const navigation = useNavigation<any>();
 
   // Security ring animation logic
   const securityLevel = useSharedValue(0);

@@ -1,111 +1,195 @@
-import React, { useRef, useState } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import React, { useState } from 'react';
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  Pressable, 
+  KeyboardAvoidingView, 
+  Platform, 
+  TouchableWithoutFeedback, 
+  Keyboard, 
+  ActivityIndicator,
+  Alert,
+  Image
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Lock } from 'lucide-react-native';
+import { useColorScheme } from 'nativewind';
+import { Eye, EyeOff } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 
 import { useAuthStore } from '../../store/useStore';
-import { VaultInput, VaultInputRef } from '../../components/ui/VaultInput';
-import { SecureButton } from '../../components/ui/SecureButton';
-import { GlassCard } from '../../components/ui/GlassCard';
+
+const logoLight = require('../../../assets/logo.png');
+const logoDark = require('../../../assets/logo-white.png');
 
 export default function LoginScreen() {
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const passwordRef = useRef<VaultInputRef>(null);
-  
-  const navigation = useNavigation<any>();
+
   const login = useAuthStore((state) => state.login);
 
   const handleLogin = async () => {
-    if (!phoneNumber || !password) {
-      passwordRef.current?.shake();
-      setErrorMsg('Please enter both phone and password');
+    Keyboard.dismiss();
+    setErrorMsg('');
+
+    if (!phone.trim() || !password.trim()) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setErrorMsg('Please enter your phone number and password.');
       return;
     }
 
     setIsLoading(true);
-    setErrorMsg('');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
     try {
-      await login(phoneNumber, password);
-      // Success! useAuthStore will automatically navigate via AppNavigator listening to isAuthenticated
+      await login(phone, password);
     } catch (error: any) {
-      passwordRef.current?.shake();
-      setErrorMsg(error.message || 'Invalid login credentials');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setErrorMsg(error?.message || 'Invalid login details.');
       setIsLoading(false);
     }
   };
 
+  const handleForgotPassword = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.alert(
+      'Forgot Password',
+      'Your login password was sent to your registered email and phone number when you enrolled with an authorized Agent. Please check your messages or contact support@milipay.app.',
+      [{ text: 'OK' }]
+    );
+  };
+
   return (
-    <SafeAreaView className="flex-1 bg-black">
-      <LinearGradient
-        colors={['rgba(16, 185, 129, 0.15)', 'rgba(0,0,0,1)']}
-        className="absolute inset-0"
-      />
-      
+    <SafeAreaView 
+      className="flex-1 bg-white dark:bg-black"
+      style={{ backgroundColor: isDark ? '#000000' : '#ffffff' }}
+    >
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1"
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View className="flex-1 justify-center px-6">
-            <View className="items-center mb-12">
-              <View className="w-20 h-20 rounded-full bg-white/5 border border-white/10 items-center justify-center mb-6">
-                <Lock color="#10b981" size={36} strokeWidth={1.5} />
+          <View className="flex-1 justify-center px-8">
+            
+            {/* Centered Brand Logo & Login Header */}
+            <View className="items-center mb-8">
+              <View style={{ width: 220, height: 56, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+                <Image 
+                  source={isDark ? logoDark : logoLight}
+                  style={{ width: 220, height: 56 }}
+                  resizeMode="contain"
+                />
               </View>
-              <Text className="text-white text-3xl font-inter-bold tracking-tight mb-2">
-                Identity Gateway
+              <Text className="text-slate-900 dark:text-white text-3xl font-inter-bold tracking-tight text-center">
+                Log in
               </Text>
-              <Text className="text-white/50 text-base font-inter text-center max-w-[280px]">
-                Enter your registered phone number and secure password to authenticate.
+              <Text className="text-slate-500 dark:text-zinc-400 font-inter text-sm text-center mt-1.5">
+                Enter your phone number and password
               </Text>
             </View>
 
-            <GlassCard intensity={30} className="mb-8">
-              <Text className="text-white/60 text-sm font-inter-semibold uppercase tracking-widest mb-3 ml-1">
-                Phone Number
-              </Text>
-              <VaultInput
-                label="Phone Number"
-                placeholder="080 0000 0000"
-                keyboardType="phone-pad"
-                value={phoneNumber}
-                onChangeText={setPhoneNumber}
-              />
-
-              <Text className="text-white/60 text-sm font-inter-semibold uppercase tracking-widest mb-3 ml-1">
-                Password
-              </Text>
-              <VaultInput
-                ref={passwordRef}
-                label="Password"
-                placeholder="Enter password"
-                isPassword
-                value={password}
-                onChangeText={setPassword}
-              />
-              
-              {errorMsg ? (
-                <Text className="text-red-400 font-inter text-sm text-center mt-4">
+            {/* Error Message */}
+            {errorMsg ? (
+              <View className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/40">
+                <Text className="text-red-600 dark:text-red-400 font-inter text-sm">
                   {errorMsg}
                 </Text>
-              ) : null}
-            </GlassCard>
+              </View>
+            ) : null}
 
-            <SecureButton
-              title="Authenticate"
-              loading={isLoading}
-              onPress={handleLogin}
-            />
-            
-            <View className="mt-8 flex-row justify-center">
-              <Text className="text-white/40 font-inter text-sm">
-                Protected by MiliPay Security Infrastructure
+            {/* Inputs */}
+            <View>
+              {/* Phone Number */}
+              <View className="mb-4">
+                <Text className="text-slate-700 dark:text-slate-300 font-inter-medium text-sm mb-1.5">
+                  Phone Number
+                </Text>
+                <TextInput
+                  value={phone}
+                  onChangeText={(t) => {
+                    setPhone(t);
+                    if (errorMsg) setErrorMsg('');
+                  }}
+                  placeholder="080 0000 0000"
+                  placeholderTextColor={isDark ? '#52525b' : '#94a3b8'}
+                  keyboardType="phone-pad"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  className="h-14 px-4 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white font-inter text-base"
+                />
+              </View>
+
+              {/* Password */}
+              <View className="mb-6">
+                <View className="flex-row justify-between items-center mb-1.5">
+                  <Text className="text-slate-700 dark:text-slate-300 font-inter-medium text-sm">
+                    Password
+                  </Text>
+                  <Pressable onPress={handleForgotPassword} hitSlop={8}>
+                    <Text className="text-emerald-600 dark:text-emerald-400 font-inter-medium text-xs">
+                      Forgot password?
+                    </Text>
+                  </Pressable>
+                </View>
+                <View className="flex-row items-center h-14 px-4 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
+                  <TextInput
+                    value={password}
+                    onChangeText={(t) => {
+                      setPassword(t);
+                      if (errorMsg) setErrorMsg('');
+                    }}
+                    placeholder="Enter password"
+                    placeholderTextColor={isDark ? '#52525b' : '#94a3b8'}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    className="flex-1 text-slate-900 dark:text-white font-inter text-base"
+                  />
+                  <Pressable 
+                    onPress={() => setShowPassword(!showPassword)} 
+                    hitSlop={8}
+                    className="p-1 -mr-1"
+                  >
+                    {showPassword ? (
+                      <EyeOff color={isDark ? '#71717a' : '#94a3b8'} size={20} />
+                    ) : (
+                      <Eye color={isDark ? '#71717a' : '#94a3b8'} size={20} />
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* Submit Button */}
+              <Pressable
+                onPress={handleLogin}
+                disabled={isLoading}
+                className={`h-14 rounded-xl items-center justify-center bg-emerald-500 active:bg-emerald-600 ${
+                  isLoading ? 'opacity-70' : ''
+                }`}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#000" size="small" />
+                ) : (
+                  <Text className="text-black font-inter-bold text-base">
+                    Log in
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+
+            {/* Note on how users get their login details */}
+            <View className="mt-8 px-4 py-3.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
+              <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs text-center leading-relaxed">
+                Your login password was sent to your registered email and phone number when you enrolled with an authorized Agent.
               </Text>
             </View>
+
           </View>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>

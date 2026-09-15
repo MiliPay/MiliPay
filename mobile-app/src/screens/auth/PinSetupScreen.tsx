@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useAnimatedStyle, withSpring, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -36,14 +35,12 @@ const PinWell = ({ filled, isError }: { filled: boolean, isError: boolean }) => 
   );
 };
 
-export default function PinSetupScreen() {
+export default function PinSetupScreen({ navigation }: any) {
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [step, setStep] = useState<1 | 2>(1);
   const [isError, setIsError] = useState(false);
   const shakeOffset = useSharedValue(0);
-
-  const navigation = useNavigation<any>();
 
   const currentDisplay = step === 1 ? pin : confirmPin;
 

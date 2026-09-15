@@ -13,6 +13,7 @@ import TransactionsScreen from '../screens/main/TransactionsScreen';
 import ProfileSettingsScreen from '../screens/main/ProfileSettingsScreen';
 import SupportScreen from '../screens/main/SupportScreen';
 import AccountLimitsScreen from '../screens/main/AccountLimitsScreen';
+import QuickServiceScreen from '../screens/main/QuickServiceScreen';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator();
@@ -21,9 +22,11 @@ function HomeStackNavigator() {
   return (
     <HomeStack.Navigator screenOptions={{ headerShown: false }}>
       <HomeStack.Screen name="HomeScreen" component={HomeScreen} />
+      <HomeStack.Screen name="QuickService" component={QuickServiceScreen} />
       <HomeStack.Screen name="Services" component={ServicesScreen} />
       <HomeStack.Screen name="Transactions" component={TransactionsScreen} />
       <HomeStack.Screen name="ProfileSettings" component={ProfileSettingsScreen} />
+      <HomeStack.Screen name="AccountLimits" component={AccountLimitsScreen} />
     </HomeStack.Navigator>
   );
 }
@@ -60,9 +63,19 @@ export default function TabNavigator() {
       <Tab.Screen 
         name="HomeTab" 
         component={HomeStackNavigator} 
-        options={{
-          tabBarLabel: 'Home',
-          tabBarIcon: ({ color, size }) => <Home color={color} size={size} />
+        options={({ route }) => {
+          const routeName = getFocusedRouteNameFromRoute(route) ?? '';
+          const shouldHide = ['QuickService', 'AccountLimits', 'ProfileSettings'].includes(routeName);
+          return {
+            tabBarLabel: 'Home',
+            tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
+            tabBarStyle: shouldHide 
+              ? { display: 'none' } 
+              : {
+                  backgroundColor: isDark ? '#000' : '#fff', 
+                  borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', 
+                }
+          };
         }}
       />
       <Tab.Screen 
@@ -78,11 +91,11 @@ export default function TabNavigator() {
         component={SettingsStackNavigator} 
         options={({ route }) => {
           const routeName = getFocusedRouteNameFromRoute(route) ?? '';
-          const isSupportScreen = routeName === 'SupportScreen';
+          const shouldHide = ['SupportScreen', 'AccountLimits', 'ProfileSettings'].includes(routeName);
           return {
             tabBarLabel: 'Settings',
             tabBarIcon: ({ color, size }) => <Settings color={color} size={size} />,
-            tabBarStyle: isSupportScreen 
+            tabBarStyle: shouldHide 
               ? { display: 'none' } 
               : {
                   backgroundColor: isDark ? '#000' : '#fff', 
