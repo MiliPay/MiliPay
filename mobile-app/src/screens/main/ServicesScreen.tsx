@@ -4,11 +4,12 @@ import { View, Text, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Phone, Wifi, Droplet, Lightbulb, Tv, GraduationCap, Building, MoreHorizontal } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 
 const ServiceAction = ({ icon: Icon, label, color, onPress }: any) => (
   <Pressable 
     onPress={onPress}
-    className="items-center justify-center w-1/4 mb-6"
+    className="items-center justify-center w-1/4 mb-6 active:opacity-70"
   >
     <View className={`w-14 h-14 rounded-full items-center justify-center mb-2 bg-${color}-500/10 border border-${color}-500/20`}>
       <Icon color={color === 'emerald' ? '#10b981' : color === 'blue' ? '#3b82f6' : color === 'purple' ? '#a855f7' : color === 'orange' ? '#f97316' : '#fff'} size={24} />
@@ -17,9 +18,14 @@ const ServiceAction = ({ icon: Icon, label, color, onPress }: any) => (
   </Pressable>
 );
 
-export default function ServicesScreen() {
+export default function ServicesScreen({ navigation }: any) {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme !== 'light';
+
+  const handleOpen = (serviceType: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate('QuickService', { serviceType });
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50 dark:bg-black">
@@ -34,20 +40,20 @@ export default function ServicesScreen() {
         <View className="bg-black/5 dark:bg-white/10 rounded-3xl p-6 border border-slate-200 dark:border-white/10 mb-8">
           <Text className="text-slate-900 dark:text-white font-inter-semibold text-lg mb-6">Essentials</Text>
           <View className="flex-row flex-wrap -mx-2">
-            <ServiceAction icon={Phone} label="Airtime" color="emerald" />
-            <ServiceAction icon={Wifi} label="Data" color="blue" />
-            <ServiceAction icon={Lightbulb} label="Electricity" color="orange" />
-            <ServiceAction icon={Tv} label="Cable TV" color="purple" />
+            <ServiceAction icon={Phone} label="Airtime" color="emerald" onPress={() => handleOpen('airtime')} />
+            <ServiceAction icon={Wifi} label="Data" color="blue" onPress={() => handleOpen('data')} />
+            <ServiceAction icon={Lightbulb} label="Electricity" color="orange" onPress={() => handleOpen('power')} />
+            <ServiceAction icon={Tv} label="Cable TV" color="purple" onPress={() => handleOpen('cable')} />
           </View>
         </View>
 
         <View className="bg-black/5 dark:bg-white/10 rounded-3xl p-6 border border-slate-200 dark:border-white/10 mb-12">
           <Text className="text-slate-900 dark:text-white font-inter-semibold text-lg mb-6">Lifestyle & More</Text>
           <View className="flex-row flex-wrap -mx-2">
-            <ServiceAction icon={Droplet} label="Water" color="white" />
-            <ServiceAction icon={GraduationCap} label="Education" color="white" />
-            <ServiceAction icon={Building} label="Taxes" color="white" />
-            <ServiceAction icon={MoreHorizontal} label="More" color="white" />
+            <ServiceAction icon={Droplet} label="Water" color="white" onPress={() => handleOpen('power')} />
+            <ServiceAction icon={GraduationCap} label="Education" color="white" onPress={() => handleOpen('education')} />
+            <ServiceAction icon={Building} label="Taxes" color="white" onPress={() => handleOpen('power')} />
+            <ServiceAction icon={MoreHorizontal} label="More" color="white" onPress={() => handleOpen('airtime')} />
           </View>
         </View>
 

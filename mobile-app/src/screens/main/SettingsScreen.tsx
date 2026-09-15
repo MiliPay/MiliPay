@@ -97,7 +97,9 @@ export default function SettingsScreen({ navigation }: any) {
   const applyTheme = (theme: 'system' | 'light' | 'dark') => {
     Haptics.selectionAsync();
     setActiveTheme(theme);
-    setColorScheme(theme);
+    setTimeout(() => {
+      setColorScheme(theme);
+    }, 50);
   };
 
   const handleLogout = () => {
@@ -317,8 +319,10 @@ export default function SettingsScreen({ navigation }: any) {
 
           {/* The Crazy Card */}
           <View 
-            className={`w-full rounded-[40px] overflow-hidden border ${isDark ? 'bg-[#0f172a] border-white/10' : 'bg-white border-slate-200'}`}
+            className="w-full rounded-[40px] overflow-hidden border"
             style={{
+              backgroundColor: isDark ? '#0f172a' : '#ffffff',
+              borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#e2e8f0',
               shadowColor: '#000',
               shadowOffset: { width: 0, height: 8 },
               shadowOpacity: 0.2,
@@ -352,12 +356,23 @@ export default function SettingsScreen({ navigation }: any) {
               {/* System Option - Full Width */}
               <Pressable 
                 onPress={() => applyTheme('system')}
-                style={({pressed}) => ({ transform: [{scale: pressed ? 0.97 : 1}] })}
-                className={`w-full h-24 rounded-3xl mb-4 overflow-hidden border-2 ${activeTheme === 'system' ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-500/10' : 'border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/5'}`}
+                style={({pressed}) => [
+                  { transform: [{scale: pressed ? 0.97 : 1}] },
+                  {
+                    borderColor: activeTheme === 'system' ? '#34d399' : (isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'),
+                    backgroundColor: activeTheme === 'system' ? (isDark ? 'rgba(16,185,129,0.1)' : '#ecfdf5') : (isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc'),
+                  }
+                ]}
+                className="w-full h-24 rounded-3xl mb-4 overflow-hidden border-2"
               >
                 <LinearGradient colors={isDark ? ['#6366f1', '#a855f7'] : ['rgba(99,102,241,0.1)', 'rgba(168,85,247,0.1)']} start={{x:0,y:0}} end={{x:1,y:1}} className="absolute inset-0 opacity-20" />
                 <View className="flex-1 flex-row items-center px-6">
-                  <View className={`w-12 h-12 rounded-2xl items-center justify-center mr-4 ${activeTheme === 'system' ? 'bg-emerald-500/20' : 'bg-slate-200 dark:bg-white/10'}`}>
+                  <View 
+                    className="w-12 h-12 rounded-2xl items-center justify-center mr-4"
+                    style={{
+                      backgroundColor: activeTheme === 'system' ? 'rgba(16,185,129,0.2)' : (isDark ? 'rgba(255,255,255,0.1)' : '#e2e8f0')
+                    }}
+                  >
                     <Smartphone color={activeTheme === 'system' ? '#10b981' : (isDark ? '#fff' : '#000')} size={24} />
                   </View>
                   <View className="flex-1">
@@ -387,8 +402,14 @@ export default function SettingsScreen({ navigation }: any) {
                 {/* Light Option */}
                 <Pressable 
                   onPress={() => applyTheme('light')}
-                  style={({pressed}) => ({ transform: [{scale: pressed ? 0.95 : 1}] })}
-                  className={`w-[48%] h-full rounded-3xl overflow-hidden border-2 p-4 justify-between ${activeTheme === 'light' ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-500/10' : 'border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/5'}`}
+                  style={({pressed}) => [
+                    { transform: [{scale: pressed ? 0.95 : 1}] },
+                    {
+                      borderColor: activeTheme === 'light' ? '#34d399' : (isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'),
+                      backgroundColor: activeTheme === 'light' ? (isDark ? 'rgba(16,185,129,0.1)' : '#ecfdf5') : (isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc'),
+                    }
+                  ]}
+                  className="w-[48%] h-full rounded-3xl overflow-hidden border-2 p-4 justify-between"
                 >
                   <LinearGradient colors={['rgba(253,251,251,0.5)', 'rgba(235,237,238,0.5)']} className="absolute inset-0" />
                   <View className="flex-row items-start justify-between">
@@ -419,8 +440,14 @@ export default function SettingsScreen({ navigation }: any) {
                 {/* Dark Option */}
                 <Pressable 
                   onPress={() => applyTheme('dark')}
-                  style={({pressed}) => ({ transform: [{scale: pressed ? 0.95 : 1}] })}
-                  className={`w-[48%] h-full rounded-3xl overflow-hidden border-2 p-4 justify-between ${activeTheme === 'dark' ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-500/10' : 'border-slate-200 dark:border-white/5 bg-[#020617]'}`}
+                  style={({pressed}) => [
+                    { transform: [{scale: pressed ? 0.95 : 1}] },
+                    {
+                      borderColor: activeTheme === 'dark' ? '#34d399' : (isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'),
+                      backgroundColor: activeTheme === 'dark' ? (isDark ? 'rgba(16,185,129,0.1)' : '#ecfdf5') : (isDark ? '#020617' : '#f8fafc'),
+                    }
+                  ]}
+                  className="w-[48%] h-full rounded-3xl overflow-hidden border-2 p-4 justify-between"
                 >
                   <LinearGradient colors={['rgba(15,23,42,0.8)', 'rgba(2,6,23,0.8)']} className="absolute inset-0" />
                   <View className="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl" />

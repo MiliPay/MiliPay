@@ -3,7 +3,7 @@ import { useColorScheme } from 'nativewind';
 import { View, Text, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, Camera, User, Mail, Phone, Lock, Check, MapPin, ShieldCheck } from 'lucide-react-native';
+import { ChevronLeft, Camera, User, Mail, Phone, Lock, Check, MapPin, ShieldCheck, Sliders, ChevronRight } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
 import { useAuthStore } from '../../store/useStore';
@@ -183,6 +183,35 @@ export default function ProfileSettingsScreen({ navigation }: any) {
             <Text className="text-slate-500 dark:text-white/60 font-inter-medium text-[10px] mt-3 ml-2">
               Your National Identity Number (NIN) is verified and securely encrypted.
             </Text>
+          </View>
+
+          {/* Transaction Limits & PIN Security */}
+          <View className="mb-8">
+            <Text className="text-slate-500 dark:text-white/60 font-inter-semibold uppercase tracking-widest text-[10px] mb-3 ml-2">
+              Security & Limits
+            </Text>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                navigation.navigate('AccountLimits');
+              }}
+              className="bg-white dark:bg-[#111318] border border-slate-200 dark:border-white/10 rounded-2xl p-4 flex-row items-center justify-between active:opacity-70"
+            >
+              <View className="flex-row items-center flex-1 mr-3">
+                <View className="w-10 h-10 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 items-center justify-center mr-3 border border-emerald-500/20">
+                  <Sliders color="#10b981" size={18} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-slate-900 dark:text-white font-inter-bold text-sm">
+                    Transaction Limits & PIN Security
+                  </Text>
+                  <Text className="text-slate-500 dark:text-white/50 font-inter text-xs mt-0.5">
+                    Tier {user?.kycTier || 2} • PIN required over ₦{(user?.pinThreshold || 10000).toLocaleString()}
+                  </Text>
+                </View>
+              </View>
+              <ChevronRight color={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"} size={18} />
+            </Pressable>
           </View>
 
           {/* Save Button */}

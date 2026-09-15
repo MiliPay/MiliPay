@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useColorScheme } from 'nativewind';
 import { View, Text, ScrollView, Dimensions, Pressable, Modal, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,14 +12,15 @@ import Animated, {
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { 
-  Eye, EyeOff, Smartphone, Wifi, Zap, ArrowDownLeft, MoreHorizontal, Lightbulb, Tv, Copy, CheckCheck, Plus,
-  Globe, Bus, GraduationCap, Droplet, Plane, HeartPulse, Ticket, Landmark, X
+  Eye, EyeOff, Smartphone, Wifi, Zap, ArrowDownLeft, ArrowUpRight, MoreHorizontal, Lightbulb, Tv, Copy, CheckCheck, Plus,
+  Globe, Bus, GraduationCap, Droplet, Plane, HeartPulse, Ticket, Landmark, X, Check, Share2, FileText, CreditCard
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 
 import { MonoProvider, useMonoConnect } from '@mono.co/connect-react-native';
-import { useBankStore, useAuthStore } from '../../store/useStore';
+import { useBankStore, useAuthStore, useTransactionStore, LinkedAccount } from '../../store/useStore';
+import { shareReceiptAsPdf, shareReceiptAsImage } from '../../lib/receiptSharing';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.90;
@@ -231,7 +232,7 @@ const ActiveBankCard = ({ item, index, scrollX, isBalanceHidden, toggleBalance, 
   );
 };
 
-const BankNode = ({ item, index, scrollX, isBalanceHidden, toggleBalance, isActive }: any) => {
+const BankNode = ({ item, index, scrollX, isBalanceHidden, toggleBalance, isActive, onPress }: any) => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme !== 'light';
 
@@ -240,15 +241,17 @@ const BankNode = ({ item, index, scrollX, isBalanceHidden, toggleBalance, isActi
   }
 
   return (
-    <ActiveBankCard 
-      item={item} 
-      index={index} 
-      scrollX={scrollX} 
-      isBalanceHidden={isBalanceHidden} 
-      toggleBalance={toggleBalance} 
-      isActive={isActive} 
-      isDark={isDark} 
-    />
+    <Pressable onPress={onPress}>
+      <ActiveBankCard 
+        item={item} 
+        index={index} 
+        scrollX={scrollX} 
+        isBalanceHidden={isBalanceHidden} 
+        toggleBalance={toggleBalance} 
+        isActive={isActive} 
+        isDark={isDark} 
+      />
+    </Pressable>
   );
 };
 
@@ -258,15 +261,148 @@ function HomeScreenContent({ navigation }: any) {
 
   const user = useAuthStore((state) => state.user);
   const { linkedAccounts, activeBankIndex, isLoading, fetchAccounts, setActiveBankIndex } = useBankStore();
+  const { transactions, fetchTransactions } = useTransactionStore();
   
   const [isBalanceHidden, setIsBalanceHidden] = useState(true);
   const [isMoreServicesVisible, setIsMoreServicesVisible] = useState(false);
+  const carouselRef = useRef<any>(null);
+
+  // Receipt Modal State
+  const [selectedTx, setSelectedTx] = useState<any | null>(null);
+  const [isSharingPdf, setIsSharingPdf] = useState(false);
+  const [isSharingImage, setIsSharingImage] = useState(false);
+  const [hasCopiedRef, setHasCopiedRef] = useState(false);
+  const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
+  const txReceiptRef = useRef<View>(null);
+
+  const activeAccount = linkedAccounts && linkedAccounts.length > 0 
+    ? linkedAccounts[activeBankIndex] || linkedAccounts[0] 
+    : undefined;
+
+  const isTxFromAccount = (tx: any, account: any) => {
+    if (!account) return true;
+    if (!tx.account_used) return false;
+    if (tx.account_used === account.id) return true;
+
+    const accountUsedLower = String(tx.account_used).toLowerCase();
+    const bankNameLower = String(account.bankName).toLowerCase();
+    const last4 = String(account.accountNumber).slice(-4);
+
+    if (accountUsedLower.includes(bankNameLower)) return true;
+    if (accountUsedLower.includes(last4)) return true;
+
+    return false;
+  };
+
+  const filteredRecentTransactions = activeAccount
+    ? transactions.filter((t) => isTxFromAccount(t, activeAccount))
+    : transactions;
+
+  const formatTxDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+
+    const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+    if (isToday) return `Today, ${timeStr}`;
+    if (isYesterday) return `Yesterday`;
+    return `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${timeStr}`;
+  };
+
+  const getAccountLabel = (accountUsed?: string | null) => {
+    if (!accountUsed) return null;
+    const match = linkedAccounts.find((a) => a.id === accountUsed);
+    if (match) {
+      return `${match.bankName} (****${match.accountNumber.slice(-4)})`;
+    }
+    if (accountUsed.includes('(') || accountUsed.length < 30) {
+      return accountUsed;
+    }
+    return 'Linked Bank Account';
+  };
+
+  const getTransactionIcon = (name?: string) => {
+    const lower = (name || '').toLowerCase();
+    if (lower.includes('airtime') || lower.includes('mtn') || lower.includes('glo') || lower.includes('airtel') || lower.includes('9mobile')) {
+      return <Smartphone color="#10b981" size={18} />;
+    }
+    if (lower.includes('data')) {
+      return <Wifi color="#3b82f6" size={18} />;
+    }
+    if (lower.includes('electric') || lower.includes('power') || lower.includes('ikedc') || lower.includes('ekedc') || lower.includes('aedc')) {
+      return <Lightbulb color="#f97316" size={18} />;
+    }
+    if (lower.includes('dstv') || lower.includes('gotv') || lower.includes('cable') || lower.includes('startimes')) {
+      return <Tv color="#a855f7" size={18} />;
+    }
+    return <Zap color="#10b981" size={18} />;
+  };
+
+  const copyToken = async (id: string, token: string) => {
+    await Clipboard.setStringAsync(token);
+    Haptics.selectionAsync();
+    setCopiedTokenId(id);
+    setTimeout(() => setCopiedTokenId(null), 3000);
+  };
+
+  const handleShareSelectedPdf = async () => {
+    if (!selectedTx) return;
+    try {
+      setIsSharingPdf(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const formattedDate = new Date(selectedTx.created_at).toLocaleString('en-NG', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
+      await shareReceiptAsPdf({
+        reference: selectedTx.reference || `MP-TXN-${selectedTx.id.slice(0, 8)}`,
+        amount: Number(selectedTx.amount),
+        merchant: selectedTx.merchant_name || 'MiliPay Transaction',
+        beneficiary: selectedTx.recipient || selectedTx.merchant_name || 'Direct Service',
+        bank: getAccountLabel(selectedTx.account_used) || 'MiliPay Linked Account',
+        date: formattedDate,
+        token: selectedTx.token,
+        status: 'Successful',
+      });
+    } finally {
+      setIsSharingPdf(false);
+    }
+  };
+
+  const handleShareSelectedImage = async () => {
+    if (!txReceiptRef.current) return;
+    try {
+      setIsSharingImage(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await shareReceiptAsImage(txReceiptRef);
+    } finally {
+      setIsSharingImage(false);
+    }
+  };
+
+  const handleCopyReference = async (ref: string) => {
+    await Clipboard.setStringAsync(ref);
+    Haptics.selectionAsync();
+    setHasCopiedRef(true);
+    setTimeout(() => setHasCopiedRef(false), 3000);
+  };
 
   useEffect(() => {
     if (user?.id) {
       fetchAccounts(user.id);
+      fetchTransactions(user.id, user.customerId);
     }
-  }, [user?.id]);
+  }, [user?.id, user?.customerId]);
+
+  const handleOpenService = (serviceType: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsMoreServicesVisible(false);
+    navigation.navigate('QuickService', { serviceType });
+  };
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -281,13 +417,19 @@ function HomeScreenContent({ navigation }: any) {
     onScroll: (event) => {
       scrollX.value = event.contentOffset.x;
     },
-    onMomentumEnd: (event) => {
-      // 
-    },
   });
 
-  const handleMomentumScrollEnd = (event: any) => {
-    const index = Math.round(event.nativeEvent.contentOffset.x / SNAP_INTERVAL);
+  const handleSelectBank = (index: number) => {
+    if (index < linkedAccounts.length) {
+      Haptics.selectionAsync();
+      setActiveBankIndex(index);
+      carouselRef.current?.scrollTo({ x: index * SNAP_INTERVAL, animated: true });
+    }
+  };
+
+  const handleScrollEnd = (event: any) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    const index = Math.max(0, Math.min(Math.round(offsetX / SNAP_INTERVAL), linkedAccounts.length - 1));
     if (index !== activeBankIndex && index < linkedAccounts.length) {
       Haptics.selectionAsync();
       setActiveBankIndex(index);
@@ -317,7 +459,10 @@ function HomeScreenContent({ navigation }: any) {
             </Text>
           </View>
           <Pressable 
-            onPress={() => navigation.navigate('SettingsStack')}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              navigation.navigate('ProfileSettings');
+            }}
             className="w-12 h-12 rounded-full bg-black/5 dark:bg-white/10 items-center justify-center border border-slate-200 dark:border-white/10"
           >
             <Text className="text-slate-900 dark:text-white font-inter-bold">{user?.initials || 'ME'}</Text>
@@ -325,34 +470,56 @@ function HomeScreenContent({ navigation }: any) {
         </View>
 
         {/* Carousel */}
-        <View className="mb-8 h-64 justify-center">
-          {isLoading && linkedAccounts.length === 0 ? (
-            <View className="flex-1 justify-center items-center">
-              <ActivityIndicator color="#10b981" />
-            </View>
-          ) : (
-            <Animated.ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              snapToInterval={SNAP_INTERVAL}
-              decelerationRate="fast"
-              onScroll={scrollHandler}
-              onMomentumScrollEnd={handleMomentumScrollEnd}
-              scrollEventThrottle={16}
-              contentContainerStyle={{ paddingHorizontal: (width - CARD_WIDTH) / 2 - 8 }}
-            >
-              {carouselData.map((item: any, index: number) => (
-                <BankNode 
-                  key={item.id}
-                  item={item}
-                  index={index}
-                  scrollX={scrollX}
-                  isBalanceHidden={isBalanceHidden}
-                  toggleBalance={() => setIsBalanceHidden(!isBalanceHidden)}
-                  isActive={index === activeBankIndex && !item.isLinkCard}
+        <View className="mb-8">
+          <View className="h-64 justify-center">
+            {isLoading && linkedAccounts.length === 0 ? (
+              <View className="flex-1 justify-center items-center">
+                <ActivityIndicator color="#10b981" />
+              </View>
+            ) : (
+              <Animated.ScrollView
+                ref={carouselRef}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                snapToInterval={SNAP_INTERVAL}
+                decelerationRate="fast"
+                onScroll={scrollHandler}
+                onMomentumScrollEnd={handleScrollEnd}
+                onScrollEndDrag={handleScrollEnd}
+                scrollEventThrottle={16}
+                contentContainerStyle={{ paddingHorizontal: (width - CARD_WIDTH) / 2 - 8 }}
+              >
+                {carouselData.map((item: any, index: number) => (
+                  <BankNode 
+                    key={item.id}
+                    item={item}
+                    index={index}
+                    scrollX={scrollX}
+                    isBalanceHidden={isBalanceHidden}
+                    toggleBalance={() => setIsBalanceHidden(!isBalanceHidden)}
+                    isActive={index === activeBankIndex && !item.isLinkCard}
+                    onPress={() => handleSelectBank(index)}
+                  />
+                ))}
+              </Animated.ScrollView>
+            )}
+          </View>
+
+          {/* Indicator Dots */}
+          {linkedAccounts.length > 1 && (
+            <View className="flex-row justify-center items-center mt-3 gap-1.5">
+              {linkedAccounts.map((_, idx) => (
+                <Pressable
+                  key={`dot-${idx}`}
+                  onPress={() => handleSelectBank(idx)}
+                  className={`h-2 rounded-full transition-all ${
+                    idx === activeBankIndex 
+                      ? 'w-6 bg-emerald-500' 
+                      : 'w-2 bg-slate-300 dark:bg-zinc-700'
+                  }`}
                 />
               ))}
-            </Animated.ScrollView>
+            </View>
           )}
         </View>
 
@@ -362,44 +529,44 @@ function HomeScreenContent({ navigation }: any) {
             Quick Services
           </Text>
           <View className="flex-row flex-wrap justify-between">
-            <Pressable className="items-center w-[22%] mb-6">
+            <Pressable onPress={() => handleOpenService('airtime')} className="items-center w-[22%] mb-6 active:opacity-70">
               <View className="w-14 h-14 rounded-full bg-emerald-500/15 items-center justify-center mb-2">
                 <Smartphone color="#10b981" size={24} />
               </View>
               <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center" numberOfLines={1}>Airtime</Text>
             </Pressable>
-            <Pressable className="items-center w-[22%] mb-6">
+            <Pressable onPress={() => handleOpenService('data')} className="items-center w-[22%] mb-6 active:opacity-70">
               <View className="w-14 h-14 rounded-full bg-blue-500/15 items-center justify-center mb-2">
                 <Wifi color="#3b82f6" size={24} />
               </View>
               <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center" numberOfLines={1}>Data</Text>
             </Pressable>
-            <Pressable className="items-center w-[22%] mb-6">
+            <Pressable onPress={() => handleOpenService('power')} className="items-center w-[22%] mb-6 active:opacity-70">
               <View className="w-14 h-14 rounded-full bg-orange-500/15 items-center justify-center mb-2">
                 <Lightbulb color="#f97316" size={24} />
               </View>
               <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center" numberOfLines={1}>Power</Text>
             </Pressable>
-            <Pressable className="items-center w-[22%] mb-6">
+            <Pressable onPress={() => handleOpenService('cable')} className="items-center w-[22%] mb-6 active:opacity-70">
               <View className="w-14 h-14 rounded-full bg-purple-500/15 items-center justify-center mb-2">
                 <Tv color="#a855f7" size={24} />
               </View>
               <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center" numberOfLines={1}>Cable</Text>
             </Pressable>
             
-            <Pressable className="items-center w-[22%] mb-6">
+            <Pressable onPress={() => handleOpenService('internet')} className="items-center w-[22%] mb-6 active:opacity-70">
               <View className="w-14 h-14 rounded-full bg-cyan-500/15 items-center justify-center mb-2">
                 <Globe color="#06b6d4" size={24} />
               </View>
               <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center" numberOfLines={1}>Internet</Text>
             </Pressable>
-            <Pressable className="items-center w-[22%] mb-6">
+            <Pressable onPress={() => handleOpenService('transport')} className="items-center w-[22%] mb-6 active:opacity-70">
               <View className="w-14 h-14 rounded-full bg-rose-500/15 items-center justify-center mb-2">
                 <Bus color="#f43f5e" size={24} />
               </View>
               <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center" numberOfLines={1}>Transport</Text>
             </Pressable>
-            <Pressable className="items-center w-[22%] mb-6">
+            <Pressable onPress={() => handleOpenService('education')} className="items-center w-[22%] mb-6 active:opacity-70">
               <View className="w-14 h-14 rounded-full bg-indigo-500/15 items-center justify-center mb-2">
                 <GraduationCap color="#6366f1" size={24} />
               </View>
@@ -408,7 +575,7 @@ function HomeScreenContent({ navigation }: any) {
             <Pressable onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setIsMoreServicesVisible(true);
-            }} className="items-center w-[22%] mb-6">
+            }} className="items-center w-[22%] mb-6 active:opacity-70">
               <View className="w-14 h-14 rounded-full bg-black/5 dark:bg-white/10 border border-slate-200 dark:border-white/10 items-center justify-center mb-2">
                 <MoreHorizontal color={isDark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.7)"} size={24} />
               </View>
@@ -418,29 +585,84 @@ function HomeScreenContent({ navigation }: any) {
         </View>
 
         {/* Recent Transactions */}
-        <View className="px-6 mb-5 flex-row items-center justify-between">
-          <View className="flex-row items-center">
-            <Text className="text-slate-500 dark:text-white/60 font-inter-bold uppercase tracking-widest text-xs">
-              Recent Transactions
-            </Text>
-            <View className="ml-3 px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/30">
-              <Text className="text-emerald-400 font-inter-semibold text-[9px] uppercase tracking-wider">7 Days</Text>
-            </View>
-          </View>
+        <View className="px-6 mb-3 flex-row items-center justify-between">
+          <Text className="text-slate-500 dark:text-white/60 font-inter-bold uppercase tracking-widest text-xs">
+            Recent Transactions
+          </Text>
           <Pressable 
-            onPress={() => navigation.navigate('Transactions')} 
-            className="px-3 py-1.5 rounded-full bg-black/5 dark:bg-white/10 border border-slate-200 dark:border-white/10 active:bg-black/10 dark:active:bg-white/20"
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              navigation.navigate('Transactions');
+            }} 
+            className="px-3.5 py-1.5 rounded-full bg-black/5 dark:bg-white/10 border border-slate-200 dark:border-white/10 active:opacity-60"
           >
-            <Text className="text-slate-900 dark:text-white font-inter-medium text-[11px]">View All</Text>
+            <Text className="text-slate-900 dark:text-white font-inter-medium text-xs">View All</Text>
           </Pressable>
         </View>
         
-        <View className="px-6 pb-12 items-center justify-center py-8">
-           <View className="w-16 h-16 rounded-full bg-black/5 dark:bg-white/10 items-center justify-center mb-4">
-             <ArrowDownLeft color={isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)"} size={24} />
-           </View>
-           <Text className="text-slate-500 dark:text-white/60 font-inter text-sm">No recent MiliPay transactions</Text>
-        </View>
+        {filteredRecentTransactions.length === 0 ? (
+          <View className="px-6 pb-12 items-center justify-center py-8">
+            <View className="w-14 h-14 rounded-full bg-black/5 dark:bg-white/10 items-center justify-center mb-3">
+              <ArrowDownLeft color={isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)"} size={22} />
+            </View>
+            <Text className="text-slate-800 dark:text-zinc-200 font-inter-semibold text-sm text-center">
+              No recent transactions
+            </Text>
+            <Text className="text-slate-400 dark:text-zinc-500 font-inter text-xs text-center mt-1 px-4">
+              When you make payments or top-ups, they will appear here.
+            </Text>
+          </View>
+        ) : (
+          <View className="px-5 pb-12">
+            {filteredRecentTransactions.slice(0, 5).map((item) => {
+              const isCredit = item.category === 'received' || item.type === 'credit' || item.direction === 'inflow';
+              return (
+                <Pressable 
+                  key={item.id}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setSelectedTx(item);
+                  }}
+                  className="flex-row items-center justify-between py-3.5 px-2 rounded-2xl active:opacity-60"
+                >
+                  <View className="flex-row items-center flex-1 mr-3">
+                    {/* Circle Icon: Red ↗ for debit, Green ↙ for credit */}
+                    <View className={`w-11 h-11 rounded-full items-center justify-center mr-3.5 ${
+                      isCredit 
+                        ? 'bg-emerald-500/15 dark:bg-emerald-500/20' 
+                        : 'bg-rose-500/15 dark:bg-rose-500/20'
+                    }`}>
+                      {isCredit ? (
+                        <ArrowDownLeft color="#10b981" size={18} strokeWidth={2.5} />
+                      ) : (
+                        <ArrowUpRight color="#f43f5e" size={18} strokeWidth={2.5} />
+                      )}
+                    </View>
+
+                    <View className="flex-1">
+                      <Text className="text-slate-900 dark:text-white font-inter-semibold text-base" numberOfLines={1}>
+                        {item.merchant_name}
+                      </Text>
+                      <Text className="text-slate-400 dark:text-zinc-500 font-inter text-xs mt-0.5">
+                        {formatTxDate(item.created_at)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View className="items-end">
+                    <Text className={`font-mono-bold text-base ${
+                      isCredit 
+                        ? 'text-emerald-500 dark:text-emerald-400' 
+                        : 'text-slate-900 dark:text-white'
+                    }`}>
+                      {isCredit ? '+' : '-'}₦{Number(item.amount).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
 
       {/* More Services Modal */}
@@ -477,25 +699,25 @@ function HomeScreenContent({ navigation }: any) {
                 Daily Essentials
               </Text>
               <View className="flex-row flex-wrap justify-between">
-                <Pressable className="items-center w-[25%] mb-6">
+                <Pressable onPress={() => handleOpenService('airtime')} className="items-center w-[25%] mb-6 active:opacity-70">
                   <View className="w-14 h-14 rounded-2xl bg-emerald-500/15 items-center justify-center mb-2">
                     <Smartphone color="#10b981" size={24} />
                   </View>
                   <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Airtime</Text>
                 </Pressable>
-                <Pressable className="items-center w-[25%] mb-6">
+                <Pressable onPress={() => handleOpenService('data')} className="items-center w-[25%] mb-6 active:opacity-70">
                   <View className="w-14 h-14 rounded-2xl bg-blue-500/15 items-center justify-center mb-2">
                     <Wifi color="#3b82f6" size={24} />
                   </View>
                   <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Data</Text>
                 </Pressable>
-                <Pressable className="items-center w-[25%] mb-6">
+                <Pressable onPress={() => handleOpenService('internet')} className="items-center w-[25%] mb-6 active:opacity-70">
                   <View className="w-14 h-14 rounded-2xl bg-cyan-500/15 items-center justify-center mb-2">
                     <Globe color="#06b6d4" size={24} />
                   </View>
                   <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Internet</Text>
                 </Pressable>
-                <Pressable className="items-center w-[25%] mb-6">
+                <Pressable onPress={() => handleOpenService('transport')} className="items-center w-[25%] mb-6 active:opacity-70">
                   <View className="w-14 h-14 rounded-2xl bg-rose-500/15 items-center justify-center mb-2">
                     <Bus color="#f43f5e" size={24} />
                   </View>
@@ -508,25 +730,25 @@ function HomeScreenContent({ navigation }: any) {
                 Utilities & Bills
               </Text>
               <View className="flex-row flex-wrap justify-between">
-                <Pressable className="items-center w-[25%] mb-6">
+                <Pressable onPress={() => handleOpenService('power')} className="items-center w-[25%] mb-6 active:opacity-70">
                   <View className="w-14 h-14 rounded-2xl bg-orange-500/15 items-center justify-center mb-2">
                     <Lightbulb color="#f97316" size={24} />
                   </View>
                   <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Power</Text>
                 </Pressable>
-                <Pressable className="items-center w-[25%] mb-6">
+                <Pressable onPress={() => handleOpenService('cable')} className="items-center w-[25%] mb-6 active:opacity-70">
                   <View className="w-14 h-14 rounded-2xl bg-purple-500/15 items-center justify-center mb-2">
                     <Tv color="#a855f7" size={24} />
                   </View>
                   <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Cable TV</Text>
                 </Pressable>
-                <Pressable className="items-center w-[25%] mb-6">
+                <Pressable onPress={() => handleOpenService('power')} className="items-center w-[25%] mb-6 active:opacity-70">
                   <View className="w-14 h-14 rounded-2xl bg-teal-500/15 items-center justify-center mb-2">
                     <Droplet color="#14b8a6" size={24} />
                   </View>
                   <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Water</Text>
                 </Pressable>
-                <Pressable className="items-center w-[25%] mb-6">
+                <Pressable onPress={() => handleOpenService('power')} className="items-center w-[25%] mb-6 active:opacity-70">
                   <View className="w-14 h-14 rounded-2xl bg-slate-500/15 items-center justify-center mb-2">
                     <Landmark color="#94a3b8" size={24} />
                   </View>
@@ -539,25 +761,25 @@ function HomeScreenContent({ navigation }: any) {
                 Lifestyle & Others
               </Text>
               <View className="flex-row flex-wrap justify-start">
-                <Pressable className="items-center w-[25%] mb-6">
+                <Pressable onPress={() => handleOpenService('education')} className="items-center w-[25%] mb-6 active:opacity-70">
                   <View className="w-14 h-14 rounded-2xl bg-indigo-500/15 items-center justify-center mb-2">
                     <GraduationCap color="#6366f1" size={24} />
                   </View>
                   <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Education</Text>
                 </Pressable>
-                <Pressable className="items-center w-[25%] mb-6">
+                <Pressable onPress={() => handleOpenService('cable')} className="items-center w-[25%] mb-6 active:opacity-70">
                   <View className="w-14 h-14 rounded-2xl bg-pink-500/15 items-center justify-center mb-2">
                     <Ticket color="#ec4899" size={24} />
                   </View>
                   <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Movies</Text>
                 </Pressable>
-                <Pressable className="items-center w-[25%] mb-6">
+                <Pressable onPress={() => handleOpenService('transport')} className="items-center w-[25%] mb-6 active:opacity-70">
                   <View className="w-14 h-14 rounded-2xl bg-sky-500/15 items-center justify-center mb-2">
                     <Plane color="#0ea5e9" size={24} />
                   </View>
                   <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Flights</Text>
                 </Pressable>
-                <Pressable className="items-center w-[25%] mb-6">
+                <Pressable onPress={() => handleOpenService('education')} className="items-center w-[25%] mb-6 active:opacity-70">
                   <View className="w-14 h-14 rounded-2xl bg-red-500/15 items-center justify-center mb-2">
                     <HeartPulse color="#ef4444" size={24} />
                   </View>
@@ -566,6 +788,207 @@ function HomeScreenContent({ navigation }: any) {
               </View>
               
               <View className="h-12" />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Transaction Receipt Modal (OPay Standard) */}
+      <Modal
+        visible={!!selectedTx}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedTx(null)}
+      >
+        <View className="flex-1 justify-center items-center px-4 bg-black/70">
+          <View
+            className="w-full max-w-sm max-h-[92%] rounded-3xl bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 overflow-hidden"
+            style={{
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 12 },
+              shadowOpacity: 0.35,
+              shadowRadius: 24,
+              elevation: 14,
+            }}
+          >
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ padding: 20, alignItems: 'center' }}
+            >
+              {/* Snapshot Receipt Card */}
+              <View
+                ref={txReceiptRef}
+                collapsable={false}
+                className="w-full items-center bg-white dark:bg-zinc-900 p-1 rounded-2xl"
+              >
+                {/* Big Green Badge */}
+                <View className="w-20 h-20 rounded-full bg-emerald-500/15 items-center justify-center mb-3">
+                  <View
+                    className="w-14 h-14 rounded-full bg-emerald-500 items-center justify-center"
+                    style={{
+                      shadowColor: '#10b981',
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.35,
+                      shadowRadius: 10,
+                      elevation: 8,
+                    }}
+                  >
+                    <Check color="#000" size={28} strokeWidth={3.5} />
+                  </View>
+                </View>
+
+                {/* Enlarged Title & Amount */}
+                <Text className="text-slate-900 dark:text-white font-inter-black text-2xl text-center mb-1 tracking-tight">
+                  Payment Successful!
+                </Text>
+                <Text className="text-emerald-600 dark:text-emerald-400 font-inter-black text-3xl mb-4">
+                  ₦{selectedTx?.amount ? Number(selectedTx.amount).toLocaleString() : '0'}
+                </Text>
+
+                {/* PREPAID ELECTRICITY TOKEN CARD */}
+                {selectedTx?.token && (
+                  <View className="w-full bg-emerald-500/10 border-2 border-dashed border-emerald-500/40 rounded-2xl p-4 mb-4 items-center">
+                    <Text className="text-emerald-800 dark:text-emerald-300 font-inter-semibold text-xs mb-1 uppercase tracking-wider">
+                      20-Digit Recharge Token
+                    </Text>
+                    <Text className="text-slate-900 dark:text-white font-inter-bold text-lg tracking-wider mb-2 text-center select-all">
+                      {selectedTx.token}
+                    </Text>
+                    {selectedTx.units && (
+                      <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs mb-3">
+                        Units Credited: {selectedTx.units}
+                      </Text>
+                    )}
+                    <Pressable
+                      onPress={() => copyToken(selectedTx.id, selectedTx.token)}
+                      className="flex-row items-center bg-emerald-500 px-4 py-2 rounded-xl active:bg-emerald-600"
+                    >
+                      {copiedTokenId === selectedTx.id ? (
+                        <>
+                          <CheckCheck color="#000" size={14} className="mr-1.5" />
+                          <Text className="text-black font-inter-bold text-xs">Copied!</Text>
+                        </>
+                      ) : (
+                        <>
+                          <Copy color="#000" size={14} className="mr-1.5" />
+                          <Text className="text-black font-inter-bold text-xs">Copy Token</Text>
+                        </>
+                      )}
+                    </Pressable>
+                  </View>
+                )}
+
+                {/* Receipt Breakdown Card */}
+                <View className="w-full rounded-2xl bg-slate-50 dark:bg-zinc-800/60 p-4 border border-slate-200/80 dark:border-zinc-700/60 mb-2">
+                  <View className="flex-row justify-between mb-2.5">
+                    <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">Service</Text>
+                    <Text className="text-slate-900 dark:text-white font-inter-semibold text-xs text-right flex-1 ml-3">
+                      {selectedTx?.merchant_name}
+                    </Text>
+                  </View>
+
+                  <View className="flex-row justify-between mb-2.5">
+                    <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">Beneficiary</Text>
+                    <Text className="text-slate-900 dark:text-white font-inter-semibold text-xs text-right flex-1 ml-3">
+                      {selectedTx?.recipient || selectedTx?.merchant_name || 'Direct Service'}
+                    </Text>
+                  </View>
+
+                  <View className="flex-row justify-between mb-2.5">
+                    <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">Payment Method</Text>
+                    <Text className="text-slate-900 dark:text-white font-inter-semibold text-xs text-right flex-1 ml-3">
+                      {getAccountLabel(selectedTx?.account_used) || 'MiliPay Linked Account'}
+                    </Text>
+                  </View>
+
+                  <View className="flex-row justify-between mb-2.5">
+                    <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">Transaction Fee</Text>
+                    <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-xs text-right flex-1 ml-3">
+                      ₦0.00 (FREE)
+                    </Text>
+                  </View>
+
+                  <View className="flex-row justify-between mb-2.5">
+                    <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">Date & Time</Text>
+                    <Text className="text-slate-900 dark:text-white font-inter-semibold text-xs text-right flex-1 ml-3">
+                      {selectedTx ? new Date(selectedTx.created_at).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' }) : ''}
+                    </Text>
+                  </View>
+
+                  <View className="flex-row justify-between items-center mb-2.5">
+                    <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">Reference</Text>
+                    <Pressable
+                      onPress={() => selectedTx && handleCopyReference(selectedTx.reference || `MP-TXN-${selectedTx.id.slice(0, 8)}`)}
+                      className="flex-row items-center flex-1 justify-end ml-3"
+                    >
+                      <Text className="text-slate-900 dark:text-white font-inter-semibold text-xs mr-1.5" numberOfLines={1}>
+                        {selectedTx?.reference || `MP-TXN-${selectedTx?.id?.slice(0, 8)}`}
+                      </Text>
+                      {hasCopiedRef ? (
+                        <CheckCheck color="#10b981" size={13} />
+                      ) : (
+                        <Copy color="#64748b" size={13} />
+                      )}
+                    </Pressable>
+                  </View>
+
+                  <View className="flex-row justify-between items-center">
+                    <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">Session ID</Text>
+                    <Text className="text-slate-500 dark:text-zinc-400 font-inter text-[11px] text-right flex-1 ml-3 font-mono" numberOfLines={1}>
+                      {selectedTx ? `000013${String(selectedTx.reference || selectedTx.id).replace(/[^0-9]/g, '').padEnd(24, '9').slice(0, 24)}` : ''}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Footer compliance */}
+                <Text className="text-slate-400 dark:text-zinc-600 font-inter text-[10px] text-center mt-2">
+                  MiliPay Technologies Limited • Licensed by CBN • NDIC Insured
+                </Text>
+              </View>
+
+              {/* Share Actions (Picture & PDF) */}
+              <View className="w-full flex-row gap-2.5 mt-4 mb-3">
+                <Pressable
+                  onPress={handleShareSelectedPdf}
+                  disabled={isSharingPdf}
+                  className="flex-1 h-12 rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 flex-row items-center justify-center active:bg-slate-200 dark:active:bg-zinc-700"
+                >
+                  {isSharingPdf ? (
+                    <ActivityIndicator color="#10b981" size="small" />
+                  ) : (
+                    <>
+                      <FileText color="#10b981" size={16} className="mr-1.5" />
+                      <Text className="text-slate-800 dark:text-zinc-200 font-inter-bold text-xs">Share PDF</Text>
+                    </>
+                  )}
+                </Pressable>
+
+                <Pressable
+                  onPress={handleShareSelectedImage}
+                  disabled={isSharingImage}
+                  className="flex-1 h-12 rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 flex-row items-center justify-center active:bg-slate-200 dark:active:bg-zinc-700"
+                >
+                  {isSharingImage ? (
+                    <ActivityIndicator color="#10b981" size="small" />
+                  ) : (
+                    <>
+                      <Share2 color="#10b981" size={16} className="mr-1.5" />
+                      <Text className="text-slate-800 dark:text-zinc-200 font-inter-bold text-xs">Share Picture</Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+
+              {/* Close Button */}
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setSelectedTx(null);
+                }}
+                className="w-full h-14 rounded-2xl bg-emerald-500 active:bg-emerald-600 items-center justify-center shadow-md shadow-emerald-500/20"
+              >
+                <Text className="text-black font-inter-bold text-base tracking-wide">Close Receipt</Text>
+              </Pressable>
             </ScrollView>
           </View>
         </View>

@@ -128,8 +128,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
   },
 
-  login: async (phoneInput: string, password: string) => {
-    let phone = phoneInput.trim();
+  login: async (identifierInput: string, password: string) => {
+    const identifier = identifierInput.trim();
+    const cleanPassword = password.trim();
+
+    if (identifier.includes('@')) {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: identifier.toLowerCase(),
+        password: cleanPassword,
+      });
+      if (error) {
+        throw new Error(error.message);
+      }
+      return;
+    }
+
+    let phone = identifier;
     if (phone.startsWith('0') && phone.length === 11) {
       phone = '+234' + phone.slice(1);
     } else if (!phone.startsWith('+')) {
@@ -138,7 +152,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     const { error } = await supabase.auth.signInWithPassword({
       phone,
-      password: password.trim()
+      password: cleanPassword,
     });
     
     if (error) {
@@ -177,12 +191,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 }));
 
-interface LinkedAccount {
+export interface LinkedAccount {
   id: string;
   bankName: string;
   accountName: string;
   accountNumber: string;
-  balance: string; // We'll mock a real balance since we don't have a real banking API to check balance yet
+  balance: string; // Formatted currency string (e.g. ₦100,000.00)
+  rawBalance?: number; // Balance in kobo (e.g. 10000000)
 }
 
 interface BankState {
@@ -192,6 +207,7 @@ interface BankState {
   error: string | null;
   fetchAccounts: (userId: string) => Promise<void>;
   setActiveBankIndex: (index: number) => void;
+  deductBalance: (accountId: string, amountInNaira: number) => Promise<void>;
   linkMonoAccount: (monoCode: string) => Promise<void>;
   unlinkAccount: (id: string) => Promise<void>;
 }
@@ -214,13 +230,18 @@ export const useBankStore = create<BankState>((set, get) => ({
         
       if (error) throw error;
       
-      const accounts = (data || []).map((acc: any) => ({
-        id: acc.id,
-        bankName: acc.bank_name,
-        accountName: acc.account_name,
-        accountNumber: acc.account_number,
-        balance: `₦${((acc.balance || 0) / 100).toLocaleString('en-NG', { minimumFractionDigits: 2 })}` 
-      }));
+      const accounts = (data || []).map((acc: any) => {
+        const kobo = typeof acc.balance === 'number' ? acc.balance : 10000000;
+        const naira = kobo / 100;
+        return {
+          id: acc.id,
+          bankName: acc.bank_name,
+          accountName: acc.account_name,
+          accountNumber: acc.account_number,
+          rawBalance: kobo,
+          balance: `₦${naira.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`,
+        };
+      });
       
       set({ linkedAccounts: accounts, isLoading: false });
     } catch (err: any) {
@@ -230,6 +251,47 @@ export const useBankStore = create<BankState>((set, get) => ({
   },
 
   setActiveBankIndex: (index: number) => set({ activeBankIndex: index }),
+
+  deductBalance: async (accountId: string, amountInNaira: number) => {
+    let newKobo = 0;
+    
+    // 1. Immediately update Zustand in-memory state for instant UI responsiveness
+    set((state) => {
+      const updated = state.linkedAccounts.map((acc) => {
+        if (acc.id === accountId) {
+          const currentKobo = typeof acc.rawBalance === 'number'
+            ? acc.rawBalance
+            : Math.round((parseFloat(acc.balance.replace(/[^0-9.]/g, '')) || 100000) * 100);
+
+          const deductionKobo = Math.round(amountInNaira * 100);
+          newKobo = Math.max(0, currentKobo - deductionKobo);
+          const newNaira = newKobo / 100;
+
+          return {
+            ...acc,
+            rawBalance: newKobo,
+            balance: `₦${newNaira.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`,
+          };
+        }
+        return acc;
+      });
+      return { linkedAccounts: updated };
+    });
+
+    // 2. Persist deduction to Supabase linked_accounts table
+    try {
+      const { error } = await supabase
+        .from('linked_accounts')
+        .update({ balance: newKobo })
+        .eq('id', accountId);
+
+      if (error) {
+        console.error('Error updating bank balance in Supabase:', error);
+      }
+    } catch (err) {
+      console.error('Error in deductBalance:', err);
+    }
+  },
 
   unlinkAccount: async (id: string) => {
     try {
@@ -605,3 +667,148 @@ export const useSupportStore = create<SupportState>((set, get) => ({
     }
   }
 }));
+
+export interface AppTransaction {
+  id: string;
+  reference: string;
+  customer_id?: string | null;
+  user_id?: string | null;
+  merchant_name: string;
+  amount: number; // in Naira (e.g. 1000)
+  status: 'success' | 'failed' | 'pending';
+  account_used?: string | null;
+  created_at: string;
+  category?: 'bills' | 'pos' | 'transfer' | 'received';
+  type?: 'debit' | 'credit' | string;
+  direction?: 'inflow' | 'outflow';
+  recipient?: string | null;
+  units?: string | null;
+  token?: string | null;
+}
+
+export interface BillPaymentPayload {
+  merchantName: string;
+  amount: number;
+  accountId?: string | null;
+  accountUsed?: string | null;
+  category?: 'bills' | 'pos' | 'transfer';
+  token?: string | null;
+}
+
+interface TransactionState {
+  transactions: AppTransaction[];
+  isLoading: boolean;
+  error: string | null;
+  fetchTransactions: (userId: string, customerId?: string) => Promise<void>;
+  recordBillPayment: (payload: BillPaymentPayload) => Promise<AppTransaction | null>;
+}
+
+export const useTransactionStore = create<TransactionState>((set) => ({
+  transactions: [],
+  isLoading: false,
+  error: null,
+
+  fetchTransactions: async (userId: string, customerId?: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      let query = supabase
+        .from('transactions')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (customerId) {
+        query = query.or(`user_id.eq.${userId},customer_id.eq.${customerId}`);
+      } else {
+        query = query.eq('user_id', userId);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      set({
+        transactions: (data || []).map((row: any) => ({
+          id: row.id,
+          reference: row.reference,
+          customer_id: row.customer_id,
+          user_id: row.user_id,
+          merchant_name: row.merchant_name,
+          amount: row.amount,
+          status: row.status,
+          account_used: row.account_used,
+          created_at: row.created_at,
+          category: 'bills',
+        })),
+        isLoading: false,
+      });
+    } catch (err: any) {
+      console.error('Error fetching transactions:', err);
+      set({ error: err.message, isLoading: false });
+    }
+  },
+
+  recordBillPayment: async (payload: BillPaymentPayload) => {
+    try {
+      const user = useAuthStore.getState().user;
+      const ref = `MP-BIL-${Date.now().toString().slice(-8)}${Math.floor(1000 + Math.random() * 9000)}`;
+
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      
+      let validAccountUuid: string | null = null;
+      if (payload.accountId && UUID_REGEX.test(payload.accountId)) {
+        validAccountUuid = payload.accountId;
+      } else if (payload.accountUsed && UUID_REGEX.test(payload.accountUsed)) {
+        validAccountUuid = payload.accountUsed;
+      }
+
+      const validUserId = (user?.id && UUID_REGEX.test(user.id)) ? user.id : null;
+      const validCustomerId = (user?.customerId && UUID_REGEX.test(user.customerId)) ? user.customerId : null;
+
+      const insertData = {
+        reference: ref,
+        customer_id: validCustomerId,
+        user_id: validUserId,
+        merchant_name: payload.merchantName,
+        amount: payload.amount,
+        status: 'success',
+        account_used: validAccountUuid,
+      };
+
+      const { error } = await supabase
+        .from('transactions')
+        .insert(insertData);
+
+      if (error) {
+        console.error('Error inserting transaction into Supabase:', error);
+      }
+
+      // Automatically deduct from linked bank account
+      if (validAccountUuid) {
+        await useBankStore.getState().deductBalance(validAccountUuid, payload.amount);
+      }
+
+      const newTx: AppTransaction = {
+        id: `tx-${Date.now()}`,
+        reference: ref,
+        customer_id: validCustomerId,
+        user_id: validUserId,
+        merchant_name: payload.merchantName,
+        amount: payload.amount,
+        status: 'success',
+        account_used: validAccountUuid || payload.accountUsed || null,
+        created_at: new Date().toISOString(),
+        category: payload.category || 'bills',
+        token: payload.token || null,
+      };
+
+      set((state) => ({
+        transactions: [newTx, ...state.transactions],
+      }));
+
+      return newTx;
+    } catch (err: any) {
+      console.error('Error recording bill payment:', err);
+      return null;
+    }
+  },
+}));
+

@@ -1,0 +1,303 @@
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import { captureRef } from 'react-native-view-shot';
+import { Share, Alert } from 'react-native';
+
+export interface ReceiptInfo {
+  reference: string;
+  amount: number;
+  merchant: string;
+  beneficiary: string;
+  bank?: string;
+  date: string;
+  token?: string | null;
+  units?: string | null;
+  status?: string;
+}
+
+export function generateReceiptHtml(receipt: ReceiptInfo): string {
+  const formattedAmount = `₦${receipt.amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
+  const sessionId = `000013${receipt.reference.replace(/[^0-9]/g, '').padEnd(24, '9').slice(0, 24)}`;
+  
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MiliPay Receipt - ${receipt.reference}</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      background-color: #f8fafc;
+      color: #0f172a;
+      padding: 30px 20px;
+    }
+    .receipt-card {
+      max-width: 480px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 24px;
+      padding: 32px 24px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.06);
+      border: 1px solid #e2e8f0;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .logo-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 56px;
+      height: 56px;
+      background: #10b981;
+      border-radius: 50%;
+      color: #000;
+      font-weight: 900;
+      font-size: 24px;
+      margin-bottom: 12px;
+    }
+    .app-name {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: #0f172a;
+    }
+    .status-badge {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 4px 12px;
+      background: #d1fae5;
+      color: #065f46;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .amount-box {
+      text-align: center;
+      padding: 20px 0;
+      border-top: 1px dashed #cbd5e1;
+      border-bottom: 1px dashed #cbd5e1;
+      margin-bottom: 24px;
+    }
+    .amount-label {
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 4px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .amount-val {
+      font-size: 34px;
+      font-weight: 800;
+      color: #10b981;
+      letter-spacing: -1px;
+    }
+    .details-table {
+      width: 100%;
+      margin-bottom: 24px;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 10px 0;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 13px;
+    }
+    .row:last-child {
+      border-bottom: none;
+    }
+    .row-label {
+      color: #64748b;
+      font-weight: 500;
+      flex: 1;
+    }
+    .row-val {
+      color: #0f172a;
+      font-weight: 700;
+      text-align: right;
+      flex: 1.5;
+      word-break: break-word;
+    }
+    .token-box {
+      background: #ecfdf5;
+      border: 2px dashed #10b981;
+      border-radius: 16px;
+      padding: 16px;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .token-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #065f46;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+    .token-digits {
+      font-size: 20px;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: 1.5px;
+    }
+    .footer {
+      text-align: center;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 20px;
+      color: #94a3b8;
+      font-size: 11px;
+      line-height: 1.6;
+    }
+    .footer strong {
+      color: #475569;
+    }
+  </style>
+</head>
+<body>
+  <div class="receipt-card">
+    <div class="header">
+      <div class="logo-badge">&#10003;</div>
+      <div class="app-name">MiliPay Receipt</div>
+      <div class="status-badge">Transaction Successful</div>
+    </div>
+
+    <div class="amount-box">
+      <div class="amount-label">Amount Paid</div>
+      <div class="amount-val">${formattedAmount}</div>
+    </div>
+
+    ${receipt.token ? `
+    <div class="token-box">
+      <div class="token-title">Prepaid Electricity Token</div>
+      <div class="token-digits">${receipt.token}</div>
+      ${receipt.units ? `<div style="font-size: 12px; color: #64748b; margin-top: 4px;">Units Credited: ${receipt.units}</div>` : ''}
+    </div>
+    ` : ''}
+
+    <div class="details-table">
+      <div class="row">
+        <span class="row-label">Service / Product</span>
+        <span class="row-val">${receipt.merchant}</span>
+      </div>
+      <div class="row">
+        <span class="row-label">Beneficiary</span>
+        <span class="row-val">${receipt.beneficiary}</span>
+      </div>
+      <div class="row">
+        <span class="row-label">Payment Method</span>
+        <span class="row-val">${receipt.bank || 'MiliPay DirectPay'}</span>
+      </div>
+      <div class="row">
+        <span class="row-label">Transaction Fee</span>
+        <span class="row-val" style="color: #10b981;">₦0.00 (FREE)</span>
+      </div>
+      <div class="row">
+        <span class="row-label">Date & Time</span>
+        <span class="row-val">${receipt.date}</span>
+      </div>
+      <div class="row">
+        <span class="row-label">Transaction Reference</span>
+        <span class="row-val">${receipt.reference}</span>
+      </div>
+      <div class="row">
+        <span class="row-label">Session ID</span>
+        <span class="row-val" style="font-size: 11px;">${sessionId}</span>
+      </div>
+    </div>
+
+    <div class="footer">
+      <strong>MiliPay Technologies Limited</strong><br>
+      Licensed by the Central Bank of Nigeria (CBN). Deposits NDIC Insured.<br>
+      Support: support@milipay.ng | 24/7 Helpline
+    </div>
+  </div>
+</body>
+</html>
+`;
+}
+
+export async function shareReceiptAsPdf(receipt: ReceiptInfo): Promise<void> {
+  try {
+    const isAvailable = await Sharing.isAvailableAsync();
+    if (!isAvailable) {
+      Alert.alert('Sharing Unavailable', 'Sharing is not supported on this device.');
+      return;
+    }
+
+    const html = generateReceiptHtml(receipt);
+    const { uri } = await Print.printToFileAsync({
+      html,
+      base64: false,
+    });
+
+    await Sharing.shareAsync(uri, {
+      UTI: '.pdf',
+      mimeType: 'application/pdf',
+      dialogTitle: `MiliPay Receipt - ${receipt.reference}`,
+    });
+  } catch (err: any) {
+    console.error('Error sharing receipt as PDF:', err);
+    Alert.alert('Share Error', err.message || 'Unable to generate receipt PDF');
+  }
+}
+
+export async function shareReceiptAsImage(viewRef: React.RefObject<any>): Promise<void> {
+  try {
+    const isAvailable = await Sharing.isAvailableAsync();
+    if (!isAvailable) {
+      Alert.alert('Sharing Unavailable', 'Sharing is not supported on this device.');
+      return;
+    }
+
+    if (!viewRef.current) {
+      Alert.alert('Capture Error', 'Receipt card is not ready for image capture.');
+      return;
+    }
+
+    const uri = await captureRef(viewRef, {
+      format: 'png',
+      quality: 1.0,
+      result: 'tmpfile',
+    });
+
+    await Sharing.shareAsync(uri, {
+      mimeType: 'image/png',
+      dialogTitle: 'Share Transaction Receipt',
+    });
+  } catch (err: any) {
+    console.error('Error sharing receipt as image:', err);
+    Alert.alert('Share Error', err.message || 'Unable to capture receipt image');
+  }
+}
+
+export async function shareReceiptAsText(receipt: ReceiptInfo): Promise<void> {
+  try {
+    const text = `*MiliPay Transaction Receipt*
+Status: Successful
+Amount: ₦${receipt.amount.toLocaleString()}
+Service: ${receipt.merchant}
+Beneficiary: ${receipt.beneficiary}
+Date: ${receipt.date}
+Ref: ${receipt.reference}
+${receipt.token ? `Token: ${receipt.token}\n` : ''}Payment: ${receipt.bank || 'MiliPay Account'}`;
+
+    await Share.share({
+      message: text,
+      title: `MiliPay Receipt - ${receipt.reference}`,
+    });
+  } catch (err: any) {
+    console.error('Error sharing receipt as text:', err);
+  }
+}

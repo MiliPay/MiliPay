@@ -1,9 +1,10 @@
 import './global.css';
 import React, { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
-import { useColorScheme } from 'nativewind';
+import { NavigationContainer, DarkTheme, createNavigationContainerRef } from '@react-navigation/native';
 import AppNavigator from './src/navigation/AppNavigator';
+
+export const navigationRef = createNavigationContainerRef();
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { SpaceMono_400Regular, SpaceMono_700Bold } from '@expo-google-fonts/space-mono';
 import * as SplashScreen from 'expo-splash-screen';
@@ -22,11 +23,17 @@ LogBox.ignoreLogs([
 
 SplashScreen.preventAutoHideAsync();
 
+const appNavTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: 'transparent',
+  },
+};
+
 export default function App() {
   const initializeAuth = useAuthStore((state) => state.initialize);
   const isLoading = useAuthStore((state) => state.isLoading);
-  const { colorScheme } = useColorScheme();
-  const isDark = colorScheme === 'dark';
   
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
@@ -55,7 +62,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer theme={isDark ? DarkTheme : DefaultTheme}>
+      <NavigationContainer ref={navigationRef} theme={appNavTheme}>
         <AppNavigator />
       </NavigationContainer>
     </SafeAreaProvider>
