@@ -1,24 +1,8 @@
 {
   "projects": {
-    "default": "milipay-production"
+    "default": "aniyu-b841b"
   },
   "targets": {
-    "milipay-production": {
-      "hosting": {
-        "website": [
-          "milipay-ng"
-        ],
-        "admin": [
-          "admin-milipay-ng"
-        ],
-        "agent": [
-          "agent-milipay-ng"
-        ],
-        "service": [
-          "service-milipay-ng"
-        ]
-      }
-    },
     "aniyu-b841b": {
       "hosting": {
         "admin": [
@@ -35,6 +19,5 @@
         ]
       }
     }
-  },
-  "etags": {}
+  }
 }
