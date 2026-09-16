@@ -40,7 +40,7 @@ export default function TransactionDetailsPage() {
     if (!transaction) return null;
     const baseAmount = transaction.amountKobo;
     const rawFee = Math.floor(baseAmount * 0.015);
-    const processingFee = Math.min(rawFee, 200000); // Capped at 2000 NGN
+    const processingFee = Math.min(rawFee, 2000); // Capped at 2000 NGN
     const vat = Math.floor(processingFee * 0.075);
     const totalAmount = baseAmount + processingFee + vat;
 

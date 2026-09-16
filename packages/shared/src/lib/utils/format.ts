@@ -1,9 +1,16 @@
-export function formatNaira(amountKobo: number): string {
-  const naira = amountKobo / 100;
+export function formatNaira(
+  amount: number | string,
+  options?: { showDecimals?: boolean }
+): string {
+  const num = typeof amount === "string" ? parseFloat(amount) : Number(amount);
+  const naira = isNaN(num) ? 0 : num;
+  const showDecimals = options?.showDecimals ?? (naira % 1 !== 0);
+
   return new Intl.NumberFormat("en-NG", {
     style: "currency",
     currency: "NGN",
-    maximumFractionDigits: naira % 1 === 0 ? 0 : 2,
+    minimumFractionDigits: showDecimals ? 2 : 0,
+    maximumFractionDigits: 2,
   }).format(naira);
 }
 
