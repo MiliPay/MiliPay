@@ -94,7 +94,7 @@ async function runDiagnostics() {
 
       const res = await fetch(`${BASE_URL}/balance`, { headers });
       const json = await res.json();
-      if (json.code === '000' && json.contents) {
+      if ((json.code === 1 || json.code === '000') && json.contents) {
         console.log(`   [PASS] Sandbox Balance: ₦${Number(json.contents.balance).toLocaleString()}`);
       } else {
         console.log(`   [NOTICE] Response from VTPass:`, json);
