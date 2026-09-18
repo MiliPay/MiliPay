@@ -127,3 +127,23 @@ All customer profiles follow a 3-tier risk and regulatory compliance framework a
      3. `(daily_spent + amount) <= TIER_LIMITS[kyc_tier].maxDailyVolume`
    - Mobile app allows user to configure `pin_threshold` with quick presets (₦2k, ₦5k, ₦10k Default, ₦25k, Max) guarded by biometric/PIN confirmation.
 
+## VTU & Telecom Services Integration (VTPass & Mono Architecture)
+- **Two-Sided Transaction Flow**:
+  1. **Collection / Inflow**: Customer debits are executed via **Mono DirectPay** (or linked account balance) into MiliPay's settlement account.
+  2. **Fulfillment / Outflow**: Airtime, SME Data bundles, Electricity tokens, and Cable TV subscriptions are fulfilled strictly via **VTPass API** (`/api/pay`) deducted from MiliPay's pre-funded merchant float wallet.
+  3. **Revenue Model**: MiliPay retains the wholesale margin (e.g. 2%-3% on airtime, ₦50-₦100/GB on SME data, convenience fees on bills) in its settlement ledger.
+- **Sandbox Testing First (STRICT)**: All VTU implementations must use VTPass Sandbox credentials (`https://sandbox.vtpass.com/api`) and test phone numbers/meters before switching to production endpoints. Never risk real float balance during development.
+- **Auto-Reconciliation**: If a VTPass call fails or times out after customer debit has succeeded, the system must trigger an automatic reversal back to the customer's linked account balance with an idempotency key.
+
+## Firebase Multi-Site Hosting Strategy & Scope
+- **Active Project Context**: Deployed under Firebase project `aniyu-b841b`.
+- **Active Targets (4 Only)**:
+  - `milipay-adminportal` (`admin`) -> `AdminPanel/dist`
+  - `milipay-agentportal` (`agent`) -> `agent-portal/dist`
+  - `milipay-serviceportal` (`service`) -> `service-portal/dist`
+  - `milipay-website` (`website`) -> `website/dist`
+- **Merchant Portal Exclusion**: The merchant portal is strictly **excluded** from Firebase hosting at this phase. Do not add merchant targets to `firebase.json` or `.firebaserc`.
+
+## Currency Storage & Formatting Invariant (STRICT)
+- **Storage Standard**: All transaction amounts, wallet balances, limits, and fees across Supabase tables and Edge Functions are stored strictly in **Naira** (`numeric(12, 2)`), NOT kobo.
+- **Formatting Standard**: The `formatNaira` utility must format the amount directly as Naira. NEVER divide by 100.
