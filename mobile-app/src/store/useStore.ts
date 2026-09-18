@@ -208,6 +208,7 @@ interface BankState {
   fetchAccounts: (userId: string) => Promise<void>;
   setActiveBankIndex: (index: number) => void;
   deductBalance: (accountId: string, amountInNaira: number) => Promise<void>;
+  refundBalance: (accountId: string, amountInNaira: number) => Promise<void>;
   linkMonoAccount: (monoCode: string) => Promise<void>;
   unlinkAccount: (id: string) => Promise<void>;
 }
@@ -290,6 +291,40 @@ export const useBankStore = create<BankState>((set, get) => ({
       }
     } catch (err) {
       console.error('Error in deductBalance:', err);
+    }
+  },
+
+  refundBalance: async (accountId: string, amountInNaira: number) => {
+    let newKobo = 0;
+    set((state) => {
+      const updated = state.linkedAccounts.map((acc) => {
+        if (acc.id === accountId) {
+          const currentKobo = typeof acc.rawBalance === 'number'
+            ? acc.rawBalance
+            : Math.round((parseFloat(acc.balance.replace(/[^0-9.]/g, '')) || 0) * 100);
+
+          const refundKobo = Math.round(amountInNaira * 100);
+          newKobo = currentKobo + refundKobo;
+          const newNaira = newKobo / 100;
+
+          return {
+            ...acc,
+            rawBalance: newKobo,
+            balance: `₦${newNaira.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`,
+          };
+        }
+        return acc;
+      });
+      return { linkedAccounts: updated };
+    });
+
+    try {
+      await supabase
+        .from('linked_accounts')
+        .update({ balance: newKobo })
+        .eq('id', accountId);
+    } catch (err) {
+      console.error('Error in refundBalance:', err);
     }
   },
 
