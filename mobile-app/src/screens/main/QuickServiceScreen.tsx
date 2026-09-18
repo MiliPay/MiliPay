@@ -9,6 +9,7 @@ import {
   Modal,
   Platform,
   KeyboardAvoidingView,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -33,6 +34,7 @@ import { useColorScheme } from 'nativewind';
 
 import { useAuthStore, useBankStore, useTransactionStore } from '../../store/useStore';
 import { shareReceiptAsPdf, shareReceiptAsImage } from '../../lib/receiptSharing';
+import { supabase } from '../../lib/supabase';
 
 // Telco Configuration
 const TELCOS = [
@@ -383,67 +385,125 @@ export default function QuickServiceScreen({ route, navigation }: any) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const payable = getPayableAmount();
-    let merchantTitle = 'Airtime Top-up';
-    let beneficiary = recipientNumber;
-    let generatedToken: string | null = null;
+    let provider = selectedTelco;
+    let destination = recipientNumber;
+    let variationCode: string | undefined = undefined;
 
     if (serviceType === 'airtime') {
-      const telcoObj = TELCOS.find((t) => t.id === selectedTelco);
-      merchantTitle = `${telcoObj?.name || 'MTN'} Airtime`;
+      provider = selectedTelco;
+      destination = recipientNumber;
     } else if (serviceType === 'data') {
-      const telcoObj = TELCOS.find((t) => t.id === selectedTelco);
-      merchantTitle = `${telcoObj?.name || 'MTN'} ${selectedDataPlan?.name || 'Data'}`;
+      provider = selectedTelco;
+      destination = recipientNumber;
+      variationCode = selectedDataPlan?.id;
     } else if (serviceType === 'power') {
-      const discoObj = DISCOS.find((d) => d.id === selectedDisco);
-      merchantTitle = `${discoObj?.short || 'IKEDC'} Electricity (${meterType.toUpperCase()})`;
-      beneficiary = `Meter: ${meterNumber}`;
-      if (meterType === 'prepaid') {
-        // Generate authentic 20-digit STS Electricity token
-        const p1 = Math.floor(1000 + Math.random() * 9000);
-        const p2 = Math.floor(1000 + Math.random() * 9000);
-        const p3 = Math.floor(1000 + Math.random() * 9000);
-        const p4 = Math.floor(1000 + Math.random() * 9000);
-        const p5 = Math.floor(1000 + Math.random() * 9000);
-        generatedToken = `${p1}-${p2}-${p3}-${p4}-${p5}`;
-      }
+      provider = selectedDisco;
+      destination = meterNumber;
+      variationCode = meterType;
     } else if (serviceType === 'cable') {
-      const provObj = CABLE_PROVIDERS.find((c) => c.id === selectedCable);
-      merchantTitle = `${provObj?.name || 'DSTV'} (${selectedBouquet?.name || 'Bouquet'})`;
-      beneficiary = `IUC: ${smartcardNumber}`;
+      provider = selectedCable;
+      destination = smartcardNumber;
+      variationCode = selectedBouquet?.id;
     } else if (serviceType === 'internet') {
-      merchantTitle = 'Spectranet Broadband';
-      beneficiary = recipientNumber || 'Acc: 98124019';
+      provider = 'spectranet';
+      destination = recipientNumber || '08011111111';
     } else if (serviceType === 'transport') {
-      merchantTitle = 'Cowry Card Transit';
-      beneficiary = 'Cowry: 8940192841';
+      provider = 'cowry';
+      destination = 'Cowry: 8940192841';
     } else if (serviceType === 'education') {
-      merchantTitle = 'WAEC e-PIN Purchase';
-      beneficiary = 'WAEC Candidate PIN';
-      generatedToken = `PIN: ${Math.floor(1000000000 + Math.random() * 9000000000)}`;
+      provider = 'waec';
+      destination = recipientNumber || 'Candidate PIN';
     }
 
-    const recordedTx = await recordBillPayment({
-      merchantName: merchantTitle,
-      amount: payable,
-      accountId: activeAccount?.id || null,
-      accountUsed: `${activeAccount.bankName} (****${activeAccount.accountNumber.slice(-4)})`,
-      category: 'bills',
-      token: generatedToken,
-    });
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('vtu-service', {
+        body: {
+          serviceType,
+          provider,
+          amount: payable,
+          destination,
+          customerPhone: user?.phone || recipientNumber,
+          variationCode,
+          meterType: serviceType === 'power' ? meterType : undefined,
+          accountId: activeAccount?.id,
+          userId: user?.id,
+          pin: enteredPin || undefined,
+        },
+      });
 
-    setIsProcessing(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (fnError) {
+        throw fnError;
+      }
 
-    setSuccessReceipt({
-      reference: recordedTx?.reference || `MP-BIL-${Date.now().toString().slice(-8)}`,
-      amount: payable,
-      merchant: merchantTitle,
-      beneficiary: beneficiary,
-      bank: activeAccount.bankName,
-      date: new Date().toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' }),
-      token: generatedToken,
-      units: generatedToken ? `${(payable / 68.5).toFixed(1)} kWh` : null,
-    });
+      if (!data || data.success === false) {
+        // PIN required trigger
+        if (data?.requirePin) {
+          setIsProcessing(false);
+          setPinError(data.message || '4-digit PIN required');
+          setIsPinModalVisible(true);
+          return;
+        }
+
+        // Auto-reversal alert if VTPass failed
+        if (data?.code === 'FULFILLMENT_FAILED_AUTO_REVERSED') {
+          setIsProcessing(false);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          Alert.alert(
+            'Recharge Failed & Auto-Refunded',
+            data.message || `The telecom operator could not fulfill this transaction. Your payment of ₦${payable.toLocaleString()} was immediately refunded to your account.`
+          );
+          if (user?.id) {
+            await useBankStore.getState().fetchAccounts(user.id);
+          }
+          return;
+        }
+
+        throw new Error(data?.error || data?.message || 'Transaction could not be completed.');
+      }
+
+      // Success flow!
+      if (activeAccount?.id) {
+        await useBankStore.getState().deductBalance(activeAccount.id, payable);
+      }
+
+      // Add to in-memory transaction store
+      useTransactionStore.setState((state) => ({
+        transactions: [
+          {
+            id: data.reference,
+            reference: data.reference,
+            customer_id: user?.customerId || null,
+            user_id: user?.id || null,
+            merchant_name: data.token ? `${data.merchantTitle} [Token: ${data.token}]` : data.merchantTitle,
+            amount: payable,
+            status: 'success',
+            account_used: activeAccount?.id || null,
+            created_at: data.timestamp || new Date().toISOString(),
+            category: 'bills',
+            token: data.token || null,
+          },
+          ...state.transactions,
+        ],
+      }));
+
+      setIsProcessing(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      setSuccessReceipt({
+        reference: data.reference,
+        amount: payable,
+        merchant: data.merchantTitle,
+        beneficiary: destination,
+        bank: data.bankName || activeAccount?.bankName || 'MiliPay Linked Account',
+        date: new Date(data.timestamp || Date.now()).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' }),
+        token: data.token || null,
+        units: data.units || null,
+      });
+    } catch (err: any) {
+      setIsProcessing(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Payment Failed', err.message || 'An error occurred during payment processing.');
+    }
   };
 
   const copyToClipboard = async (text: string) => {
