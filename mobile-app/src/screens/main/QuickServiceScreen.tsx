@@ -637,16 +637,29 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                   <Text className="text-slate-500 dark:text-zinc-400 font-inter-semibold text-xs uppercase tracking-wider">
                     Recipient Phone Number
                   </Text>
-                  {user?.phone && (
+                  <View className="flex-row items-center">
                     <Pressable
-                      onPress={handleUseMyNumber}
-                      className="bg-emerald-500/15 px-2.5 py-1 rounded-full flex-row items-center"
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setRecipientNumber('08011111111');
+                      }}
+                      className="bg-amber-500/15 px-2.5 py-1 rounded-full mr-1.5"
                     >
-                      <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-[11px]">
-                        My Number
+                      <Text className="text-amber-600 dark:text-amber-400 font-inter-bold text-[11px]">
+                        Sandbox Test
                       </Text>
                     </Pressable>
-                  )}
+                    {user?.phone && (
+                      <Pressable
+                        onPress={handleUseMyNumber}
+                        className="bg-emerald-500/15 px-2.5 py-1 rounded-full flex-row items-center"
+                      >
+                        <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-[11px]">
+                          My Number
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
                 </View>
 
                 <View className="flex-row items-center h-14 px-4 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-700">
@@ -861,9 +874,22 @@ export default function QuickServiceScreen({ route, navigation }: any) {
 
               {/* Meter Number & Account Verification */}
               <View className="bg-white dark:bg-zinc-900 rounded-2xl p-4 mb-4 border border-slate-200 dark:border-zinc-800">
-                <Text className="text-slate-500 dark:text-zinc-400 font-inter-semibold text-xs uppercase tracking-wider mb-2">
-                  Meter Number
-                </Text>
+                <View className="flex-row items-center justify-between mb-2">
+                  <Text className="text-slate-500 dark:text-zinc-400 font-inter-semibold text-xs uppercase tracking-wider">
+                    Meter Number
+                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setMeterNumber(meterType === 'postpaid' ? '1010101010101' : '1111111111111');
+                    }}
+                    className="bg-amber-500/15 px-2.5 py-1 rounded-full"
+                  >
+                    <Text className="text-amber-600 dark:text-amber-400 font-inter-bold text-[11px]">
+                      Sandbox Test
+                    </Text>
+                  </Pressable>
+                </View>
                 <View className="flex-row items-center h-14 px-4 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-700 mb-2">
                   <Lightbulb color={isDark ? '#71717a' : '#94a3b8'} size={20} className="mr-2" />
                   <TextInput
@@ -971,9 +997,22 @@ export default function QuickServiceScreen({ route, navigation }: any) {
 
               {/* Smartcard Number Input */}
               <View className="bg-white dark:bg-zinc-900 rounded-2xl p-4 mb-4 border border-slate-200 dark:border-zinc-800">
-                <Text className="text-slate-500 dark:text-zinc-400 font-inter-semibold text-xs uppercase tracking-wider mb-2">
-                  Smartcard / IUC Number
-                </Text>
+                <View className="flex-row items-center justify-between mb-2">
+                  <Text className="text-slate-500 dark:text-zinc-400 font-inter-semibold text-xs uppercase tracking-wider">
+                    Smartcard / IUC Number
+                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setSmartcardNumber('1212121212');
+                    }}
+                    className="bg-amber-500/15 px-2.5 py-1 rounded-full"
+                  >
+                    <Text className="text-amber-600 dark:text-amber-400 font-inter-bold text-[11px]">
+                      Sandbox Test
+                    </Text>
+                  </Pressable>
+                </View>
                 <View className="flex-row items-center h-14 px-4 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-700 mb-2">
                   <Tv color={isDark ? '#71717a' : '#94a3b8'} size={20} className="mr-2" />
                   <TextInput

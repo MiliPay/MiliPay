@@ -67,6 +67,14 @@ export function resolveVTPassServiceId(serviceType: string, provider: string): s
   return p;
 }
 
+export function normalizeNigerianPhone(phone?: string): string {
+  if (!phone) return '';
+  const clean = phone.replace(/[^0-9+]/g, '');
+  if (clean.startsWith('+234')) return '0' + clean.slice(4);
+  if (clean.startsWith('234') && clean.length > 10) return '0' + clean.slice(3);
+  return clean;
+}
+
 let cachedMargins = {
   data_surcharge_ngn: 25.00,
   cable_surcharge_ngn: 30.00,
@@ -292,12 +300,20 @@ export async function executeVtuRecharge(payload: VtuRechargePayload): Promise<V
   const wat = new Date(now.getTime() + 1 * 60 * 60 * 1000);
   const vtpassRequestId = `${wat.getUTCFullYear()}${String(wat.getUTCMonth() + 1).padStart(2, '0')}${String(wat.getUTCDate()).padStart(2, '0')}${String(wat.getUTCHours()).padStart(2, '0')}${String(wat.getUTCMinutes()).padStart(2, '0')}${Math.random().toString(36).substring(2, 8)}`;
 
+  const isTelecom = serviceType === 'airtime' || serviceType === 'data';
+  const targetDestination = isTelecom ? normalizeNigerianPhone(destination) : destination;
+  // For airtime & data, phone MUST be the recipient's phone number!
+  // For power & cable, destination is meter/smartcard, so phone is the customer contact phone.
+  const targetPhone = isTelecom
+    ? targetDestination
+    : (normalizeNigerianPhone(customerPhone) || targetDestination);
+
   const vtpassPayload: Record<string, any> = {
     request_id: vtpassRequestId,
     serviceID: vtpassServiceId,
-    billersCode: destination,
+    billersCode: targetDestination,
     amount: baseAmount || amount,
-    phone: customerPhone || destination,
+    phone: targetPhone,
   };
 
   if (serviceType === 'data' && variationCode) {

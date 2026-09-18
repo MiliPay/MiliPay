@@ -509,12 +509,25 @@ serve(async (req) => {
 
     if (vtpassApiKey && vtpassSecretKey) {
       // Connect to Live / Sandbox VTPass Gateway
+      const isTelecom = serviceType === 'airtime' || serviceType === 'data';
+      const cleanPhone = (p?: string) => {
+        if (!p) return '';
+        const s = p.replace(/[^0-9+]/g, '');
+        if (s.startsWith('+234')) return '0' + s.slice(4);
+        if (s.startsWith('234') && s.length > 10) return '0' + s.slice(3);
+        return s;
+      };
+      const targetDestination = isTelecom ? cleanPhone(destination) : destination;
+      const targetPhone = isTelecom
+        ? targetDestination
+        : (cleanPhone(customerPhone) || targetDestination);
+
       const payload: Record<string, any> = {
         request_id: vtpassRequestId,
         serviceID: vtpassServiceId,
-        billersCode: destination,
+        billersCode: targetDestination,
         amount: baseAmount || amount,
-        phone: customerPhone || destination,
+        phone: targetPhone,
       };
 
       if (serviceType === 'data' && variationCode) {
