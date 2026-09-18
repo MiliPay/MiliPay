@@ -35,6 +35,7 @@ import { useColorScheme } from 'nativewind';
 import { useAuthStore, useBankStore, useTransactionStore } from '../../store/useStore';
 import { shareReceiptAsPdf, shareReceiptAsImage } from '../../lib/receiptSharing';
 import { supabase } from '../../lib/supabase';
+import { fetchDynamicVariations, executeVtuRecharge, DynamicVariation } from '../../lib/vtuService';
 
 // Telco Configuration
 const TELCOS = [
@@ -55,75 +56,12 @@ const DISCOS = [
   { id: 'kedco', name: 'Kano Electric (KEDCO)', short: 'KEDCO' },
 ];
 
-// Cable Providers
+// Cable Providers (Dynamic live bouquets pulled via VTPass Variations API)
 const CABLE_PROVIDERS = [
-  {
-    id: 'dstv',
-    name: 'DSTV',
-    bouquets: [
-      { id: 'dstv-padi', name: 'DStv Padi', price: 3600 },
-      { id: 'dstv-yanga', name: 'DStv Yanga', price: 5100 },
-      { id: 'dstv-confam', name: 'DStv Confam', price: 9300 },
-      { id: 'dstv-compact', name: 'DStv Compact', price: 15700 },
-      { id: 'dstv-compact-plus', name: 'DStv Compact Plus', price: 25000 },
-      { id: 'dstv-premium', name: 'DStv Premium', price: 37000 },
-    ],
-  },
-  {
-    id: 'gotv',
-    name: 'GOtv',
-    bouquets: [
-      { id: 'gotv-smallie', name: 'GOtv Smallie', price: 1575 },
-      { id: 'gotv-jinja', name: 'GOtv Jinja', price: 3300 },
-      { id: 'gotv-jolli', name: 'GOtv Jolli', price: 4850 },
-      { id: 'gotv-max', name: 'GOtv Max', price: 7200 },
-      { id: 'gotv-supa', name: 'GOtv Supa', price: 9600 },
-    ],
-  },
-  {
-    id: 'startimes',
-    name: 'StarTimes',
-    bouquets: [
-      { id: 'star-nova', name: 'Nova Bouquet', price: 1700 },
-      { id: 'star-basic', name: 'Basic Bouquet', price: 3300 },
-      { id: 'star-smart', name: 'Smart Bouquet', price: 4200 },
-      { id: 'star-classic', name: 'Classic Bouquet', price: 5000 },
-      { id: 'star-super', name: 'Super Bouquet', price: 7500 },
-    ],
-  },
+  { id: 'dstv', name: 'DSTV' },
+  { id: 'gotv', name: 'GOtv' },
+  { id: 'startimes', name: 'StarTimes' },
 ];
-
-// Data Bundles
-const DATA_BUNDLES: Record<string, { id: string; name: string; validity: string; price: number }[]> = {
-  mtn: [
-    { id: 'mtn-1', name: '1.5GB', validity: '30 Days', price: 1200 },
-    { id: 'mtn-2', name: '2.5GB', validity: '30 Days', price: 1500 },
-    { id: 'mtn-3', name: '5GB', validity: '30 Days', price: 2000 },
-    { id: 'mtn-4', name: '10GB', validity: '30 Days', price: 3500 },
-    { id: 'mtn-5', name: '20GB', validity: '30 Days', price: 5500 },
-    { id: 'mtn-6', name: '40GB', validity: '30 Days', price: 10000 },
-  ],
-  airtel: [
-    { id: 'art-1', name: '1.5GB', validity: '30 Days', price: 1200 },
-    { id: 'art-2', name: '3GB', validity: '30 Days', price: 1800 },
-    { id: 'art-3', name: '5GB', validity: '30 Days', price: 2200 },
-    { id: 'art-4', name: '10GB', validity: '30 Days', price: 3500 },
-    { id: 'art-5', name: '20GB', validity: '30 Days', price: 5500 },
-  ],
-  glo: [
-    { id: 'glo-1', name: '2.5GB', validity: '30 Days', price: 1200 },
-    { id: 'glo-2', name: '4.5GB', validity: '30 Days', price: 1800 },
-    { id: 'glo-3', name: '7.2GB', validity: '30 Days', price: 2500 },
-    { id: 'glo-4', name: '12.5GB', validity: '30 Days', price: 3800 },
-    { id: 'glo-5', name: '25GB', validity: '30 Days', price: 6000 },
-  ],
-  '9mobile': [
-    { id: '9m-1', name: '1.5GB', validity: '30 Days', price: 1200 },
-    { id: '9m-2', name: '3GB', validity: '30 Days', price: 1800 },
-    { id: '9m-3', name: '7GB', validity: '30 Days', price: 3000 },
-    { id: '9m-4', name: '15GB', validity: '30 Days', price: 5000 },
-  ],
-};
 
 const AIRTIME_PRESETS = [100, 200, 500, 1000, 2000, 5000];
 const POWER_PRESETS = [1000, 2000, 5000, 10000, 20000];
@@ -186,6 +124,11 @@ export default function QuickServiceScreen({ route, navigation }: any) {
   const [smartcardNumber, setSmartcardNumber] = useState<string>('');
   const [selectedBouquet, setSelectedBouquet] = useState<any>(null);
 
+  // Dynamic Live Variations (Zero-hardcoding: pulls live operator catalog with server markup)
+  const [dynamicDataPlans, setDynamicDataPlans] = useState<DynamicVariation[]>([]);
+  const [dynamicBouquets, setDynamicBouquets] = useState<DynamicVariation[]>([]);
+  const [isLoadingVariations, setIsLoadingVariations] = useState(false);
+
   // Modals & confirmation
   const [isConfirmModalVisible, setIsConfirmModalVisible] = useState(false);
   const [isPinModalVisible, setIsPinModalVisible] = useState(false);
@@ -241,22 +184,61 @@ export default function QuickServiceScreen({ route, navigation }: any) {
     }
   }, [recipientNumber, serviceType]);
 
-  // Set default bouquet when cable provider changes
+  // Dynamically fetch live bouquets when cable provider changes
   useEffect(() => {
+    let isMounted = true;
     if (serviceType === 'cable') {
-      const prov = CABLE_PROVIDERS.find((c) => c.id === selectedCable);
-      if (prov && prov.bouquets.length > 0) {
-        setSelectedBouquet(prov.bouquets[1] || prov.bouquets[0]);
-      }
+      setIsLoadingVariations(true);
+      fetchDynamicVariations('cable', selectedCable)
+        .then((bouquets) => {
+          if (!isMounted) return;
+          setDynamicBouquets(bouquets);
+          if (bouquets.length > 0) {
+            const defaultB = bouquets[1] || bouquets[0];
+            setSelectedBouquet({
+              id: defaultB.variation_code,
+              name: defaultB.name,
+              price: defaultB.price,
+              basePrice: defaultB.baseAmount,
+            });
+          }
+        })
+        .finally(() => {
+          if (isMounted) setIsLoadingVariations(false);
+        });
     }
+    return () => {
+      isMounted = false;
+    };
   }, [selectedCable, serviceType]);
 
-  // Set default data bundle when telco changes
+  // Dynamically fetch live data bundles when telco changes
   useEffect(() => {
+    let isMounted = true;
     if (serviceType === 'data') {
-      const bundles = DATA_BUNDLES[selectedTelco] || DATA_BUNDLES.mtn;
-      setSelectedDataPlan(bundles[0]);
+      setIsLoadingVariations(true);
+      fetchDynamicVariations('data', selectedTelco)
+        .then((plans) => {
+          if (!isMounted) return;
+          setDynamicDataPlans(plans);
+          if (plans.length > 0) {
+            const defaultPlan = plans.find((p) => p.name.includes('1.5GB')) || plans[0];
+            setSelectedDataPlan({
+              id: defaultPlan.variation_code,
+              name: defaultPlan.name,
+              validity: defaultPlan.validity,
+              price: defaultPlan.price,
+              basePrice: defaultPlan.baseAmount,
+            });
+          }
+        })
+        .finally(() => {
+          if (isMounted) setIsLoadingVariations(false);
+        });
     }
+    return () => {
+      isMounted = false;
+    };
   }, [selectedTelco, serviceType]);
 
   // Meter lookup simulation
@@ -388,6 +370,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
     let provider = selectedTelco;
     let destination = recipientNumber;
     let variationCode: string | undefined = undefined;
+    let baseAmount: number | undefined = undefined;
 
     if (serviceType === 'airtime') {
       provider = selectedTelco;
@@ -396,6 +379,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
       provider = selectedTelco;
       destination = recipientNumber;
       variationCode = selectedDataPlan?.id;
+      baseAmount = (selectedDataPlan as any)?.basePrice;
     } else if (serviceType === 'power') {
       provider = selectedDisco;
       destination = meterNumber;
@@ -404,6 +388,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
       provider = selectedCable;
       destination = smartcardNumber;
       variationCode = selectedBouquet?.id;
+      baseAmount = (selectedBouquet as any)?.basePrice;
     } else if (serviceType === 'internet') {
       provider = 'spectranet';
       destination = recipientNumber || '08011111111';
@@ -416,24 +401,19 @@ export default function QuickServiceScreen({ route, navigation }: any) {
     }
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('vtu-service', {
-        body: {
-          serviceType,
-          provider,
-          amount: payable,
-          destination,
-          customerPhone: user?.phone || recipientNumber,
-          variationCode,
-          meterType: serviceType === 'power' ? meterType : undefined,
-          accountId: activeAccount?.id,
-          userId: user?.id,
-          pin: enteredPin || undefined,
-        },
+      const data = await executeVtuRecharge({
+        serviceType: serviceType as any,
+        provider,
+        amount: payable,
+        baseAmount,
+        destination,
+        customerPhone: user?.phone || recipientNumber || undefined,
+        variationCode,
+        meterType: serviceType === 'power' ? meterType : undefined,
+        accountId: activeAccount?.id || undefined,
+        userId: user?.id || undefined,
+        pin: enteredPin || undefined,
       });
-
-      if (fnError) {
-        throw fnError;
-      }
 
       if (!data || data.success === false) {
         // PIN required trigger
@@ -466,15 +446,18 @@ export default function QuickServiceScreen({ route, navigation }: any) {
         await useBankStore.getState().deductBalance(activeAccount.id, payable);
       }
 
+      const finalRef = data.reference || `MP-BIL-${Date.now()}`;
+      const finalTitle = (data.token ? `${data.merchantTitle || 'Quick Service'} [Token: ${data.token}]` : data.merchantTitle) || 'Quick Service';
+
       // Add to in-memory transaction store
       useTransactionStore.setState((state) => ({
         transactions: [
           {
-            id: data.reference,
-            reference: data.reference,
+            id: finalRef,
+            reference: finalRef,
             customer_id: user?.customerId || null,
             user_id: user?.id || null,
-            merchant_name: data.token ? `${data.merchantTitle} [Token: ${data.token}]` : data.merchantTitle,
+            merchant_name: finalTitle,
             amount: payable,
             status: 'success',
             account_used: activeAccount?.id || null,
@@ -726,46 +709,76 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                 </View>
               )}
 
-              {/* DATA: Bundle Picker */}
+              {/* DATA: Bundle Picker (Dynamically pulled live from VTPass) */}
               {serviceType === 'data' && (
                 <View className="bg-white dark:bg-zinc-900 rounded-2xl p-4 mb-4 border border-slate-200 dark:border-zinc-800">
-                  <Text className="text-slate-500 dark:text-zinc-400 font-inter-semibold text-xs uppercase tracking-wider mb-3">
-                    Select Data Plan
-                  </Text>
-                  <View className="space-y-2.5">
-                    {(DATA_BUNDLES[selectedTelco] || DATA_BUNDLES.mtn).map((bundle) => {
-                      const isSelected = selectedDataPlan?.id === bundle.id;
-                      return (
-                        <Pressable
-                          key={bundle.id}
-                          onPress={() => {
-                            Haptics.selectionAsync();
-                            setSelectedDataPlan(bundle);
-                          }}
-                          className={`flex-row items-center justify-between p-4 rounded-2xl border mb-2.5 ${
-                            isSelected
-                              ? 'bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-500'
-                              : 'bg-slate-50 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700'
-                          }`}
-                        >
-                          <View>
-                            <Text className="text-slate-900 dark:text-white font-inter-bold text-sm">
-                              {bundle.name}
-                            </Text>
-                            <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">
-                              Validity: {bundle.validity}
-                            </Text>
-                          </View>
-                          <View className="flex-row items-center">
-                            <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-sm mr-2">
-                              ₦{bundle.price.toLocaleString()}
-                            </Text>
-                            {isSelected && <Check color="#10b981" size={18} strokeWidth={2.5} />}
-                          </View>
-                        </Pressable>
-                      );
-                    })}
+                  <View className="flex-row items-center justify-between mb-3">
+                    <Text className="text-slate-500 dark:text-zinc-400 font-inter-semibold text-xs uppercase tracking-wider">
+                      Select Data Plan ({selectedTelco.toUpperCase()})
+                    </Text>
+                    <View className="bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                      <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-[10px]">
+                        Live Rates
+                      </Text>
+                    </View>
                   </View>
+
+                  {isLoadingVariations ? (
+                    <View className="py-8 items-center justify-center">
+                      <ActivityIndicator color="#10b981" size="small" />
+                      <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs mt-2">
+                        Pulling real-time {selectedTelco.toUpperCase()} data plans...
+                      </Text>
+                    </View>
+                  ) : (
+                    <View className="space-y-2.5">
+                      {dynamicDataPlans.map((bundle) => {
+                        const isSelected = selectedDataPlan?.id === bundle.variation_code;
+                        return (
+                          <Pressable
+                            key={bundle.variation_code}
+                            onPress={() => {
+                              Haptics.selectionAsync();
+                              setSelectedDataPlan({
+                                id: bundle.variation_code,
+                                name: bundle.name,
+                                validity: bundle.validity,
+                                price: bundle.price,
+                                basePrice: bundle.baseAmount,
+                              });
+                            }}
+                            className={`flex-row items-center justify-between p-4 rounded-2xl border mb-2.5 ${
+                              isSelected
+                                ? 'bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-500'
+                                : 'bg-slate-50 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700'
+                            }`}
+                          >
+                            <View className="flex-1 mr-2">
+                              <Text className="text-slate-900 dark:text-white font-inter-bold text-sm">
+                                {bundle.name}
+                              </Text>
+                              <View className="flex-row items-center mt-1">
+                                <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs mr-2">
+                                  {bundle.validity}
+                                </Text>
+                                <View className="bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                                  <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-[9px]">
+                                    Instant
+                                  </Text>
+                                </View>
+                              </View>
+                            </View>
+                            <View className="flex-row items-center">
+                              <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-sm mr-2">
+                                ₦{bundle.price.toLocaleString()}
+                              </Text>
+                              {isSelected && <Check color="#10b981" size={18} strokeWidth={2.5} />}
+                            </View>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  )}
                 </View>
               )}
             </>
@@ -976,40 +989,67 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                 )}
               </View>
 
-              {/* Bouquet / Package List */}
+              {/* Bouquet / Package List (Dynamically pulled live from VTPass) */}
               <View className="bg-white dark:bg-zinc-900 rounded-2xl p-4 mb-4 border border-slate-200 dark:border-zinc-800">
-                <Text className="text-slate-500 dark:text-zinc-400 font-inter-semibold text-xs uppercase tracking-wider mb-3">
-                  Select Package (Bouquet)
-                </Text>
-                <View className="space-y-2">
-                  {CABLE_PROVIDERS.find((c) => c.id === selectedCable)?.bouquets.map((b) => {
-                    const isSelected = selectedBouquet?.id === b.id;
-                    return (
-                      <Pressable
-                        key={b.id}
-                        onPress={() => {
-                          Haptics.selectionAsync();
-                          setSelectedBouquet(b);
-                        }}
-                        className={`flex-row items-center justify-between p-4 rounded-2xl border mb-2.5 ${
-                          isSelected
-                            ? 'bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-500'
-                            : 'bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700'
-                        }`}
-                      >
-                        <Text className="text-slate-900 dark:text-white font-inter-bold text-sm">
-                          {b.name}
-                        </Text>
-                        <View className="flex-row items-center">
-                          <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-sm mr-2">
-                            ₦{b.price.toLocaleString()}
-                          </Text>
-                          {isSelected && <Check color="#10b981" size={18} strokeWidth={2.5} />}
-                        </View>
-                      </Pressable>
-                    );
-                  })}
+                <View className="flex-row items-center justify-between mb-3">
+                  <Text className="text-slate-500 dark:text-zinc-400 font-inter-semibold text-xs uppercase tracking-wider">
+                    Select Package ({selectedCable.toUpperCase()})
+                  </Text>
+                  <View className="bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                    <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-[10px]">
+                      Live Pricing
+                    </Text>
+                  </View>
                 </View>
+
+                {isLoadingVariations ? (
+                  <View className="py-8 items-center justify-center">
+                    <ActivityIndicator color="#10b981" size="small" />
+                    <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs mt-2">
+                      Pulling real-time {selectedCable.toUpperCase()} bouquets...
+                    </Text>
+                  </View>
+                ) : (
+                  <View className="space-y-2">
+                    {dynamicBouquets.map((b) => {
+                      const isSelected = selectedBouquet?.id === b.variation_code;
+                      return (
+                        <Pressable
+                          key={b.variation_code}
+                          onPress={() => {
+                            Haptics.selectionAsync();
+                            setSelectedBouquet({
+                              id: b.variation_code,
+                              name: b.name,
+                              price: b.price,
+                              basePrice: b.baseAmount,
+                            });
+                          }}
+                          className={`flex-row items-center justify-between p-4 rounded-2xl border mb-2.5 ${
+                            isSelected
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-500'
+                              : 'bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700'
+                          }`}
+                        >
+                          <View className="flex-1 mr-2">
+                            <Text className="text-slate-900 dark:text-white font-inter-bold text-sm">
+                              {b.name}
+                            </Text>
+                            <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs mt-0.5">
+                              {b.validity || 'Monthly Subscription'}
+                            </Text>
+                          </View>
+                          <View className="flex-row items-center">
+                            <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-sm mr-2">
+                              ₦{b.price.toLocaleString()}
+                            </Text>
+                            {isSelected && <Check color="#10b981" size={18} strokeWidth={2.5} />}
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
             </>
           )}

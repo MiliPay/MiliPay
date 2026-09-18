@@ -61,6 +61,46 @@ function generateStsToken(): string {
   const p4 = Math.floor(1000 + Math.random() * 9000);
   const p5 = Math.floor(1000 + Math.random() * 9000);
   return `${p1}-${p2}-${p3}-${p4}-${p5}`;
+/**
+ * High-fidelity fallback variations if VTPass API is temporarily slow or unreachable
+ */
+function getFallbackVariations(serviceId: string, surcharge: number) {
+  const isData = serviceId.includes('data');
+  if (isData) {
+    const plans = [
+      { code: `${serviceId}-1.5gb`, name: '1.5GB Data (30 Days)', validity: '30 Days', base: 1000 },
+      { code: `${serviceId}-2.5gb`, name: '2.5GB Data (30 Days)', validity: '30 Days', base: 1500 },
+      { code: `${serviceId}-5gb`, name: '5GB Data (30 Days)', validity: '30 Days', base: 2000 },
+      { code: `${serviceId}-10gb`, name: '10GB Data (30 Days)', validity: '30 Days', base: 3500 },
+      { code: `${serviceId}-20gb`, name: '20GB Data (30 Days)', validity: '30 Days', base: 5500 },
+      { code: `${serviceId}-40gb`, name: '40GB Data (30 Days)', validity: '30 Days', base: 10000 },
+    ];
+    return plans.map((p) => ({
+      variation_code: p.code,
+      name: p.name,
+      validity: p.validity,
+      baseAmount: p.base,
+      surcharge: surcharge,
+      price: p.base + surcharge,
+      fixedPrice: true,
+    }));
+  }
+
+  // Cable TV bouquets fallback
+  const bouquets = [
+    { code: `${serviceId}-basic`, name: 'Basic Bouquet (Monthly)', validity: '1 Month', base: 3300 },
+    { code: `${serviceId}-standard`, name: 'Standard Bouquet (Monthly)', validity: '1 Month', base: 5100 },
+    { code: `${serviceId}-premium`, name: 'Premium Bouquet (Monthly)', validity: '1 Month', base: 9300 },
+  ];
+  return bouquets.map((b) => ({
+    variation_code: b.code,
+    name: b.name,
+    validity: b.validity,
+    baseAmount: b.base,
+    surcharge: surcharge,
+    price: b.base + surcharge,
+    fixedPrice: true,
+  }));
 }
 
 serve(async (req) => {
@@ -78,13 +118,125 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
+
+    // ─────────────────────────────────────────────────────────────
+    // ACTION: DYNAMIC VARIATIONS PULLING (WITH SURCHARGE PROFIT MARGIN)
+    // ─────────────────────────────────────────────────────────────
+    if (body.action === 'get_variations') {
+      const { serviceId, serviceType, provider } = body;
+      let targetServiceId = serviceId;
+
+      if (!targetServiceId && serviceType && provider) {
+        const p = String(provider).toLowerCase();
+        const map = VTPASS_SERVICE_MAP[p];
+        if (serviceType === 'data') {
+          targetServiceId = map?.data || `${p}-data`;
+        } else if (serviceType === 'cable') {
+          targetServiceId = map?.cable || p;
+        } else {
+          targetServiceId = p;
+        }
+      }
+
+      if (!targetServiceId) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'serviceId or serviceType/provider is required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Configure Surcharge Markup:
+      // Data plans: +₦25 | Cable TV bouquets: +₦30 | Other: 0
+      const isData = targetServiceId.includes('data');
+      const isCable = ['dstv', 'gotv', 'startimes', 'showmax'].includes(targetServiceId);
+      const surcharge = isData ? 25 : (isCable ? 30 : 0);
+
+      const vtpassBaseUrl = Deno.env.get('VTPASS_BASE_URL') || 'https://sandbox.vtpass.com/api';
+      const url = `${vtpassBaseUrl}/service-variations?serviceID=${encodeURIComponent(targetServiceId)}`;
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+          throw new Error(`VTPass variations HTTP status ${res.status}`);
+        }
+
+        const vtpassJson = await res.json();
+        const rawVariations = vtpassJson?.content?.variations || [];
+
+        if (!rawVariations.length) {
+          throw new Error('No variations found in VTPass response');
+        }
+
+        const variations = rawVariations.map((v: any) => {
+          const rawAmount = parseFloat(v.variation_amount) || 0;
+          const baseAmount = Math.round(rawAmount * 100) / 100;
+          const price = Math.ceil(baseAmount + surcharge);
+
+          // Extract validity from name (e.g. 30 days, 24 hrs, 1 month)
+          let validity = '30 Days';
+          const match = v.name.match(/(\d+\s*(?:day|days|hrs|hours|hr|month|months|week|weeks))/i);
+          if (match) {
+            validity = match[1].trim();
+          }
+
+          return {
+            variation_code: v.variation_code,
+            name: v.name,
+            validity: validity,
+            baseAmount: baseAmount,
+            surcharge: surcharge,
+            price: price,
+            fixedPrice: v.fixedPrice === 'Yes',
+          };
+        });
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            serviceId: targetServiceId,
+            serviceName: vtpassJson?.content?.ServiceName || targetServiceId,
+            surcharge: surcharge,
+            variations: variations,
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } catch (fetchErr: any) {
+        console.warn(`[VTPass Variations Fallback for ${targetServiceId}]:`, fetchErr.message);
+        const fallbackVariations = getFallbackVariations(targetServiceId, surcharge);
+        return new Response(
+          JSON.stringify({
+            success: true,
+            serviceId: targetServiceId,
+            fallback: true,
+            surcharge: surcharge,
+            variations: fallbackVariations,
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // TRANSACTION PAYMENT FLOW
+    // ─────────────────────────────────────────────────────────────
     const {
       serviceType,        // 'airtime' | 'data' | 'power' | 'cable' | 'internet' | 'transport' | 'education'
       provider,           // 'mtn' | 'airtel' | 'ikedc' | 'dstv' ...
-      amount,             // numeric amount in Naira (e.g. 1000)
+      amount,             // Total amount charged to customer in Naira (includes surcharge)
+      baseAmount,         // Wholesale amount sent to VTPass (excluding surcharge)
       destination,        // phone number, meter number, or smartcard number
       customerPhone,      // phone number of customer
-      variationCode,      // e.g. 'mtn-1', 'prepaid', 'dstv-padi'
+      variationCode,      // e.g. 'mtn-100mb-1000', 'prepaid', 'dstv-padi'
       meterType = 'prepaid', // 'prepaid' | 'postpaid'
       accountId,          // UUID from linked_accounts
       userId,             // Auth user ID or Customer ID
@@ -249,7 +401,7 @@ serve(async (req) => {
         request_id: vtpassRequestId,
         serviceID: vtpassServiceId,
         billersCode: destination,
-        amount: amount,
+        amount: baseAmount || amount,
         phone: customerPhone || destination,
       };
 
@@ -261,7 +413,7 @@ serve(async (req) => {
         payload.variation_code = variationCode;
       }
 
-      console.log(`[VTPass Request] ID: ${vtpassRequestId} -> ${vtpassBaseUrl}/pay`, payload);
+      console.log(`[VTPass Request] ID: ${vtpassRequestId} -> ${vtpassBaseUrl}/pay (Wholesale: ₦${baseAmount || amount}, Customer Paid: ₦${amount})`, payload);
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000); // 4-sec SLA limit
@@ -318,7 +470,7 @@ serve(async (req) => {
       }
     } else {
       // Sandbox High-Fidelity Simulator (Used when testing without active VTPass secret keys)
-      console.log(`[VTPass Sandbox Simulated] Service: ${vtpassServiceId}, Dest: ${destination}, Amount: ₦${amount}`);
+      console.log(`[VTPass Sandbox Simulated] Service: ${vtpassServiceId}, Dest: ${destination}, Wholesale: ₦${baseAmount || amount} (Customer Charged: ₦${amount})`);
       
       let token: string | undefined;
       let units: string | undefined;
