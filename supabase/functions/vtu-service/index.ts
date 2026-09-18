@@ -77,7 +77,8 @@ function getFallbackVariations(serviceId: string, surcharge: number) {
       { code: `${serviceId}-20gb`, name: '20GB Data (30 Days)', validity: '30 Days', base: 5500 },
       { code: `${serviceId}-40gb`, name: '40GB Data (30 Days)', validity: '30 Days', base: 10000 },
     ];
-    return plans.map((p) => ({
+    return plans.map((p, idx) => ({
+      id: `${p.code}_${p.base}_${idx}`,
       variation_code: p.code,
       name: p.name,
       validity: p.validity,
@@ -94,7 +95,8 @@ function getFallbackVariations(serviceId: string, surcharge: number) {
     { code: `${serviceId}-standard`, name: 'Standard Bouquet (Monthly)', validity: '1 Month', base: 5100 },
     { code: `${serviceId}-premium`, name: 'Premium Bouquet (Monthly)', validity: '1 Month', base: 9300 },
   ];
-  return bouquets.map((b) => ({
+  return bouquets.map((b, idx) => ({
+    id: `${b.code}_${b.base}_${idx}`,
     variation_code: b.code,
     name: b.name,
     validity: b.validity,
@@ -286,7 +288,7 @@ serve(async (req) => {
           throw new Error('No variations found in VTPass response');
         }
 
-        const variations = rawVariations.map((v: any) => {
+        const variations = rawVariations.map((v: any, idx: number) => {
           const rawAmount = parseFloat(v.variation_amount) || 0;
           const baseAmount = Math.round(rawAmount * 100) / 100;
           const price = Math.ceil(baseAmount + surcharge);
@@ -299,6 +301,7 @@ serve(async (req) => {
           }
 
           return {
+            id: `${v.variation_code}_${baseAmount}_${idx}`,
             variation_code: v.variation_code,
             name: v.name,
             validity: validity,

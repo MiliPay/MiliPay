@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { useBankStore, useAuthStore, useTransactionStore } from '../store/useStore';
 
 export interface DynamicVariation {
+  id?: string;
   variation_code: string;
   name: string;
   validity: string;
@@ -152,7 +153,7 @@ export async function fetchDynamicVariations(
     const rawList = json?.content?.variations || [];
 
     if (rawList.length > 0) {
-      const processed: DynamicVariation[] = rawList.map((v: any) => {
+      const processed: DynamicVariation[] = rawList.map((v: any, idx: number) => {
         const base = parseFloat(v.variation_amount) || 0;
         const price = Math.ceil(base + surcharge);
 
@@ -161,6 +162,7 @@ export async function fetchDynamicVariations(
         if (m) validity = m[1].trim();
 
         return {
+          id: `${v.variation_code}_${base}_${idx}`,
           variation_code: v.variation_code,
           name: v.name,
           validity: validity,
@@ -181,16 +183,16 @@ export async function fetchDynamicVariations(
   // 3. Resilient Offline Baseline
   const fallbackList: DynamicVariation[] = isData
     ? [
-        { variation_code: `${serviceId}-1.5gb`, name: '1.5GB Data (30 Days)', validity: '30 Days', baseAmount: 1000, surcharge, price: 1000 + surcharge },
-        { variation_code: `${serviceId}-2.5gb`, name: '2.5GB Data (30 Days)', validity: '30 Days', baseAmount: 1500, surcharge, price: 1500 + surcharge },
-        { variation_code: `${serviceId}-5gb`, name: '5GB Data (30 Days)', validity: '30 Days', baseAmount: 2000, surcharge, price: 2000 + surcharge },
-        { variation_code: `${serviceId}-10gb`, name: '10GB Data (30 Days)', validity: '30 Days', baseAmount: 3500, surcharge, price: 3500 + surcharge },
-        { variation_code: `${serviceId}-20gb`, name: '20GB Data (30 Days)', validity: '30 Days', baseAmount: 5500, surcharge, price: 5500 + surcharge },
+        { id: `${serviceId}-1.5gb_0`, variation_code: `${serviceId}-1.5gb`, name: '1.5GB Data (30 Days)', validity: '30 Days', baseAmount: 1000, surcharge, price: 1000 + surcharge },
+        { id: `${serviceId}-2.5gb_1`, variation_code: `${serviceId}-2.5gb`, name: '2.5GB Data (30 Days)', validity: '30 Days', baseAmount: 1500, surcharge, price: 1500 + surcharge },
+        { id: `${serviceId}-5gb_2`, variation_code: `${serviceId}-5gb`, name: '5GB Data (30 Days)', validity: '30 Days', baseAmount: 2000, surcharge, price: 2000 + surcharge },
+        { id: `${serviceId}-10gb_3`, variation_code: `${serviceId}-10gb`, name: '10GB Data (30 Days)', validity: '30 Days', baseAmount: 3500, surcharge, price: 3500 + surcharge },
+        { id: `${serviceId}-20gb_4`, variation_code: `${serviceId}-20gb`, name: '20GB Data (30 Days)', validity: '30 Days', baseAmount: 5500, surcharge, price: 5500 + surcharge },
       ]
     : [
-        { variation_code: `${serviceId}-padi`, name: 'Padi / Smallie Bouquet', validity: '1 Month', baseAmount: 1850, surcharge, price: 1850 + surcharge },
-        { variation_code: `${serviceId}-yanga`, name: 'Yanga / Jinja Bouquet', validity: '1 Month', baseAmount: 5100, surcharge, price: 5100 + surcharge },
-        { variation_code: `${serviceId}-compact`, name: 'Compact / Max Bouquet', validity: '1 Month', baseAmount: 9300, surcharge, price: 9300 + surcharge },
+        { id: `${serviceId}-padi_0`, variation_code: `${serviceId}-padi`, name: 'Padi / Smallie Bouquet', validity: '1 Month', baseAmount: 1850, surcharge, price: 1850 + surcharge },
+        { id: `${serviceId}-yanga_1`, variation_code: `${serviceId}-yanga`, name: 'Yanga / Jinja Bouquet', validity: '1 Month', baseAmount: 5100, surcharge, price: 5100 + surcharge },
+        { id: `${serviceId}-compact_2`, variation_code: `${serviceId}-compact`, name: 'Compact / Max Bouquet', validity: '1 Month', baseAmount: 9300, surcharge, price: 9300 + surcharge },
       ];
 
   variationsCache.set(cacheKey, { data: fallbackList, timestamp: Date.now() });

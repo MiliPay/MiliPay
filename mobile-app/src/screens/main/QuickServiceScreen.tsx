@@ -195,8 +195,10 @@ export default function QuickServiceScreen({ route, navigation }: any) {
           setDynamicBouquets(bouquets);
           if (bouquets.length > 0) {
             const defaultB = bouquets[1] || bouquets[0];
+            const defaultId = defaultB.id || `${defaultB.variation_code}_0`;
             setSelectedBouquet({
-              id: defaultB.variation_code,
+              id: defaultId,
+              variationCode: defaultB.variation_code,
               name: defaultB.name,
               price: defaultB.price,
               basePrice: defaultB.baseAmount,
@@ -223,8 +225,11 @@ export default function QuickServiceScreen({ route, navigation }: any) {
           setDynamicDataPlans(plans);
           if (plans.length > 0) {
             const defaultPlan = plans.find((p) => p.name.includes('1.5GB')) || plans[0];
+            const defaultIdx = plans.indexOf(defaultPlan);
+            const defaultId = defaultPlan.id || `${defaultPlan.variation_code}_${defaultIdx >= 0 ? defaultIdx : 0}`;
             setSelectedDataPlan({
-              id: defaultPlan.variation_code,
+              id: defaultId,
+              variationCode: defaultPlan.variation_code,
               name: defaultPlan.name,
               validity: defaultPlan.validity,
               price: defaultPlan.price,
@@ -378,7 +383,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
     } else if (serviceType === 'data') {
       provider = selectedTelco;
       destination = recipientNumber;
-      variationCode = selectedDataPlan?.id;
+      variationCode = (selectedDataPlan as any)?.variationCode || selectedDataPlan?.id;
       baseAmount = (selectedDataPlan as any)?.basePrice;
     } else if (serviceType === 'power') {
       provider = selectedDisco;
@@ -387,7 +392,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
     } else if (serviceType === 'cable') {
       provider = selectedCable;
       destination = smartcardNumber;
-      variationCode = selectedBouquet?.id;
+      variationCode = (selectedBouquet as any)?.variationCode || selectedBouquet?.id;
       baseAmount = (selectedBouquet as any)?.basePrice;
     } else if (serviceType === 'internet') {
       provider = 'spectranet';
@@ -732,15 +737,17 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                     </View>
                   ) : (
                     <View className="space-y-2.5">
-                      {dynamicDataPlans.map((bundle) => {
-                        const isSelected = selectedDataPlan?.id === bundle.variation_code;
+                      {dynamicDataPlans.map((bundle, idx) => {
+                        const planKey = bundle.id || `${bundle.variation_code}_${bundle.baseAmount}_${idx}`;
+                        const isSelected = selectedDataPlan?.id === planKey;
                         return (
                           <Pressable
-                            key={bundle.variation_code}
+                            key={planKey}
                             onPress={() => {
                               Haptics.selectionAsync();
                               setSelectedDataPlan({
-                                id: bundle.variation_code,
+                                id: planKey,
+                                variationCode: bundle.variation_code,
                                 name: bundle.name,
                                 validity: bundle.validity,
                                 price: bundle.price,
@@ -1011,15 +1018,17 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                   </View>
                 ) : (
                   <View className="space-y-2">
-                    {dynamicBouquets.map((b) => {
-                      const isSelected = selectedBouquet?.id === b.variation_code;
+                    {dynamicBouquets.map((b, idx) => {
+                      const bouquetKey = b.id || `${b.variation_code}_${b.baseAmount}_${idx}`;
+                      const isSelected = selectedBouquet?.id === bouquetKey;
                       return (
                         <Pressable
-                          key={b.variation_code}
+                          key={bouquetKey}
                           onPress={() => {
                             Haptics.selectionAsync();
                             setSelectedBouquet({
-                              id: b.variation_code,
+                              id: bouquetKey,
+                              variationCode: b.variation_code,
                               name: b.name,
                               price: b.price,
                               basePrice: b.baseAmount,
