@@ -66,6 +66,38 @@ export function resolveVTPassServiceId(serviceType: string, provider: string): s
   return p;
 }
 
+let cachedMargins = {
+  data_surcharge_ngn: 25.00,
+  cable_surcharge_ngn: 30.00,
+  power_convenience_fee_ngn: 0.00,
+  airtime_surcharge_percent: 0.00,
+  timestamp: 0,
+};
+
+export async function getActiveVtuMargins() {
+  if (Date.now() - cachedMargins.timestamp < 10 * 60 * 1000 && cachedMargins.timestamp > 0) {
+    return cachedMargins;
+  }
+  try {
+    const { data, error } = await supabase
+      .from('vtu_settings')
+      .select('*')
+      .eq('id', 'default')
+      .maybeSingle();
+
+    if (!error && data) {
+      cachedMargins = {
+        data_surcharge_ngn: Number(data.data_surcharge_ngn) || 25.00,
+        cable_surcharge_ngn: Number(data.cable_surcharge_ngn) || 30.00,
+        power_convenience_fee_ngn: Number(data.power_convenience_fee_ngn) || 0.00,
+        airtime_surcharge_percent: Number(data.airtime_surcharge_percent) || 0.00,
+        timestamp: Date.now(),
+      };
+    }
+  } catch (_) {}
+  return cachedMargins;
+}
+
 /**
  * Dynamically fetch real-time variations from VTPass with configurable server markup.
  * Guaranteed zero-hardcoding: pulls live operator catalog and attaches healthy profit margins.
@@ -83,9 +115,12 @@ export async function fetchDynamicVariations(
     return cached.data;
   }
 
+  const activeMargins = await getActiveVtuMargins();
   const isData = serviceId.includes('data');
   const isCable = ['dstv', 'gotv', 'startimes', 'showmax'].includes(serviceId);
-  const surcharge = isData ? 25 : (isCable ? 30 : 0);
+  const surcharge = isData
+    ? activeMargins.data_surcharge_ngn
+    : (isCable ? activeMargins.cable_surcharge_ngn : 0);
 
   // 1. Try Supabase Edge Function first
   try {

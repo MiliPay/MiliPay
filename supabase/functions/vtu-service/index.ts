@@ -61,6 +61,8 @@ function generateStsToken(): string {
   const p4 = Math.floor(1000 + Math.random() * 9000);
   const p5 = Math.floor(1000 + Math.random() * 9000);
   return `${p1}-${p2}-${p3}-${p4}-${p5}`;
+}
+
 /**
  * High-fidelity fallback variations if VTPass API is temporarily slow or unreachable
  */
@@ -103,6 +105,43 @@ function getFallbackVariations(serviceId: string, surcharge: number) {
   }));
 }
 
+interface VtuSettings {
+  data_surcharge_ngn: number;
+  cable_surcharge_ngn: number;
+  power_convenience_fee_ngn: number;
+  airtime_surcharge_percent: number;
+}
+
+let cachedVtuSettings: VtuSettings = {
+  data_surcharge_ngn: 25.00,
+  cable_surcharge_ngn: 30.00,
+  power_convenience_fee_ngn: 0.00,
+  airtime_surcharge_percent: 0.00,
+};
+
+async function getActiveVtuSettings(adminClient: any): Promise<VtuSettings> {
+  try {
+    const { data, error } = await adminClient
+      .from('vtu_settings')
+      .select('*')
+      .eq('id', 'default')
+      .maybeSingle();
+
+    if (!error && data) {
+      cachedVtuSettings = {
+        data_surcharge_ngn: Number(data.data_surcharge_ngn) || 25.00,
+        cable_surcharge_ngn: Number(data.cable_surcharge_ngn) || 30.00,
+        power_convenience_fee_ngn: Number(data.power_convenience_fee_ngn) || 0.00,
+        airtime_surcharge_percent: Number(data.airtime_surcharge_percent) || 0.00,
+      };
+      return cachedVtuSettings;
+    }
+  } catch (err) {
+    console.warn('[vtu-service] Could not query vtu_settings, using cached:', err);
+  }
+  return cachedVtuSettings;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -120,7 +159,75 @@ serve(async (req) => {
     const body = await req.json();
 
     // ─────────────────────────────────────────────────────────────
-    // ACTION: DYNAMIC VARIATIONS PULLING (WITH SURCHARGE PROFIT MARGIN)
+    // ACTION: GET ACTIVE MARGIN SETTINGS
+    // ─────────────────────────────────────────────────────────────
+    if (body.action === 'get_settings') {
+      const settings = await getActiveVtuSettings(adminClient);
+      return new Response(
+        JSON.stringify({ success: true, settings }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // ACTION: UPDATE MARGIN SETTINGS (ADMIN ONLY)
+    // ─────────────────────────────────────────────────────────────
+    if (body.action === 'update_settings') {
+      const {
+        data_surcharge_ngn,
+        cable_surcharge_ngn,
+        power_convenience_fee_ngn,
+        airtime_surcharge_percent,
+        adminUser,
+      } = body;
+
+      const updatePayload: Record<string, any> = {
+        id: 'default',
+        updated_at: new Date().toISOString(),
+        updated_by: adminUser || 'admin',
+      };
+
+      if (typeof data_surcharge_ngn === 'number') updatePayload.data_surcharge_ngn = data_surcharge_ngn;
+      if (typeof cable_surcharge_ngn === 'number') updatePayload.cable_surcharge_ngn = cable_surcharge_ngn;
+      if (typeof power_convenience_fee_ngn === 'number') updatePayload.power_convenience_fee_ngn = power_convenience_fee_ngn;
+      if (typeof airtime_surcharge_percent === 'number') updatePayload.airtime_surcharge_percent = airtime_surcharge_percent;
+
+      cachedVtuSettings = {
+        data_surcharge_ngn: typeof data_surcharge_ngn === 'number' ? data_surcharge_ngn : cachedVtuSettings.data_surcharge_ngn,
+        cable_surcharge_ngn: typeof cable_surcharge_ngn === 'number' ? cable_surcharge_ngn : cachedVtuSettings.cable_surcharge_ngn,
+        power_convenience_fee_ngn: typeof power_convenience_fee_ngn === 'number' ? power_convenience_fee_ngn : cachedVtuSettings.power_convenience_fee_ngn,
+        airtime_surcharge_percent: typeof airtime_surcharge_percent === 'number' ? airtime_surcharge_percent : cachedVtuSettings.airtime_surcharge_percent,
+      };
+
+      let settingsResult = { ...cachedVtuSettings };
+      try {
+        const { data: updated, error: upsertErr } = await adminClient
+          .from('vtu_settings')
+          .upsert(updatePayload)
+          .select()
+          .maybeSingle();
+
+        if (!upsertErr && updated) {
+          settingsResult = {
+            data_surcharge_ngn: Number(updated.data_surcharge_ngn),
+            cable_surcharge_ngn: Number(updated.cable_surcharge_ngn),
+            power_convenience_fee_ngn: Number(updated.power_convenience_fee_ngn),
+            airtime_surcharge_percent: Number(updated.airtime_surcharge_percent),
+          };
+          cachedVtuSettings = { ...settingsResult };
+        }
+      } catch (dbErr: any) {
+        console.warn('[vtu-service] Could not persist to vtu_settings:', dbErr.message);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, settings: settingsResult }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // ACTION: DYNAMIC VARIATIONS PULLING (WITH DYNAMIC PROFIT MARGIN)
     // ─────────────────────────────────────────────────────────────
     if (body.action === 'get_variations') {
       const { serviceId, serviceType, provider } = body;
@@ -145,11 +252,13 @@ serve(async (req) => {
         );
       }
 
-      // Configure Surcharge Markup:
-      // Data plans: +₦25 | Cable TV bouquets: +₦30 | Other: 0
+      // Fetch dynamic active margins from database / memory
+      const activeSettings = await getActiveVtuSettings(adminClient);
       const isData = targetServiceId.includes('data');
       const isCable = ['dstv', 'gotv', 'startimes', 'showmax'].includes(targetServiceId);
-      const surcharge = isData ? 25 : (isCable ? 30 : 0);
+      const surcharge = isData
+        ? activeSettings.data_surcharge_ngn
+        : (isCable ? activeSettings.cable_surcharge_ngn : 0);
 
       const vtpassBaseUrl = Deno.env.get('VTPASS_BASE_URL') || 'https://sandbox.vtpass.com/api';
       const url = `${vtpassBaseUrl}/service-variations?serviceID=${encodeURIComponent(targetServiceId)}`;
