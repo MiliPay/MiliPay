@@ -6,11 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon-black.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/icon-white.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#111827"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.alashabeeb.biopay"
@@ -26,7 +21,14 @@
       "favicon": "./assets/icon-white.png"
     },
     "plugins": [
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/icon-white.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#111827"
+        }
+      ],
       "expo-status-bar",
       "expo-sharing"
     ],
