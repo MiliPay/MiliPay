@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "mobile-app",
-    "slug": "mobile-app",
+    "name": "BioPay",
+    "slug": "biopay",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon-black.png",
@@ -12,9 +12,11 @@
       "backgroundColor": "#111827"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.alashabeeb.biopay"
     },
     "android": {
+      "package": "com.alashabeeb.biopay",
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/icon-black.png"
@@ -27,6 +29,12 @@
       "expo-splash-screen",
       "expo-status-bar",
       "expo-sharing"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "4b20c2a7-4c6e-4f04-8f8a-143b6edb139c"
+      }
+    },
+    "owner": "b.stallon"
   }
 }
