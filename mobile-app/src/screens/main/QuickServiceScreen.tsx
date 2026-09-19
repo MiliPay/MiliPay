@@ -446,11 +446,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
         throw new Error(data?.error || data?.message || 'Transaction could not be completed.');
       }
 
-      // Success flow!
-      if (activeAccount?.id) {
-        await useBankStore.getState().deductBalance(activeAccount.id, payable);
-      }
-
+      // Success flow! (Balance was already debited in executeVtuRecharge)
       const finalRef = data.reference || `MP-BIL-${Date.now()}`;
       const finalTitle = (data.token ? `${data.merchantTitle || 'Quick Service'} [Token: ${data.token}]` : data.merchantTitle) || 'Quick Service';
 
@@ -1339,6 +1335,23 @@ export default function QuickServiceScreen({ route, navigation }: any) {
             >
               <Text className="text-black font-inter-bold text-base">Authorize Payment</Text>
             </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Full-Screen Processing Modal (OPay Standard) */}
+      <Modal visible={isProcessing} transparent animationType="fade">
+        <View className="flex-1 justify-center items-center px-6 bg-black/70">
+          <View className="w-full max-w-xs rounded-3xl p-6 bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 items-center">
+            <View className="w-16 h-16 rounded-full bg-emerald-500/15 items-center justify-center mb-4">
+              <ActivityIndicator size="large" color="#10b981" />
+            </View>
+            <Text className="text-slate-900 dark:text-white font-inter-bold text-base text-center mb-1">
+              Processing Top-Up...
+            </Text>
+            <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs text-center">
+              Connecting with carrier network
+            </Text>
           </View>
         </View>
       </Modal>

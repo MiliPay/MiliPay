@@ -225,32 +225,7 @@ export async function executeVtuRecharge(payload: VtuRechargePayload): Promise<V
     pin,
   } = payload;
 
-  // 1. Attempt invocation via Supabase Edge Function
-  try {
-    const { data, error: fnError } = await supabase.functions.invoke('vtu-service', {
-      body: {
-        serviceType,
-        provider,
-        amount,
-        baseAmount: baseAmount || amount,
-        destination,
-        customerPhone,
-        variationCode,
-        meterType,
-        accountId,
-        userId,
-        pin,
-      },
-    });
-
-    if (!fnError && data) {
-      return data;
-    }
-  } catch (err: any) {
-    console.warn('[executeVtuRecharge] Edge function call failed, initiating resilient client fallback:', err.message);
-  }
-
-  // 2. Resilient Client Fallback: Debit first from linked account
+  // 1. Direct Gateway Execution: Debit first from linked account
   if (!accountId) {
     return { success: false, error: 'Linked bank account is required' };
   }
@@ -377,20 +352,24 @@ export async function executeVtuRecharge(payload: VtuRechargePayload): Promise<V
   const user = useAuthStore.getState().user;
   const validCustomerUuid = user?.customerId && UUID_REGEX.test(user.customerId) ? user.customerId : null;
 
-  try {
-    await supabase.from('transactions').insert({
-      reference: txRef,
-      user_id: validUserUuid,
-      customer_id: validCustomerUuid,
-      merchant_name: generatedToken ? `${merchantTitle} [Token: ${generatedToken}]` : merchantTitle,
-      amount: amount,
-      status: 'success',
-      account_used: accountId,
-      created_at: new Date().toISOString(),
-    });
-  } catch (txErr) {
-    console.warn('Transaction record warning:', txErr);
-  }
+  // Insert into public.transactions asynchronously (non-blocking for sub-second UI response)
+  (async () => {
+    try {
+      const { error } = await supabase.from('transactions').insert({
+        reference: txRef,
+        user_id: validUserUuid,
+        customer_id: validCustomerUuid,
+        merchant_name: generatedToken ? `${merchantTitle} [Token: ${generatedToken}]` : merchantTitle,
+        amount: amount,
+        status: 'success',
+        account_used: accountId,
+        created_at: new Date().toISOString(),
+      });
+      if (error) console.warn('Transaction record warning:', error);
+    } catch (txErr: any) {
+      console.warn('Transaction record error:', txErr?.message);
+    }
+  })();
 
   return {
     success: true,
