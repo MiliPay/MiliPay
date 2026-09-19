@@ -50,7 +50,6 @@
   },
   "private": true,
   "overrides": {
-    "expo-modules-core": "3.0.29",
     "undici": "^6.20.0"
   }
 }
