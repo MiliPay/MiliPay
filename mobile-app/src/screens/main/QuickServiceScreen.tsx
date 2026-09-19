@@ -35,7 +35,7 @@ import { useColorScheme } from 'nativewind';
 import { useAuthStore, useBankStore, useTransactionStore } from '../../store/useStore';
 import { shareReceiptAsPdf, shareReceiptAsImage } from '../../lib/receiptSharing';
 import { supabase } from '../../lib/supabase';
-import { fetchDynamicVariations, executeVtuRecharge, DynamicVariation } from '../../lib/vtuService';
+import { fetchDynamicVariations, fetchSmeDataPlans, executeVtuRecharge, DynamicVariation } from '../../lib/vtuService';
 
 // Telco Configuration
 const TELCOS = [
@@ -112,6 +112,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
 
   // Data bundle state
   const [selectedDataPlan, setSelectedDataPlan] = useState<any>(null);
+  const [dataCategory, setDataCategory] = useState<'sme' | 'direct'>('sme');
 
   // Power state
   const [selectedDisco, setSelectedDisco] = useState<string>('ikedc');
@@ -214,17 +215,21 @@ export default function QuickServiceScreen({ route, navigation }: any) {
     };
   }, [selectedCable, serviceType]);
 
-  // Dynamically fetch live data bundles when telco changes
+  // Dynamically fetch live data bundles when telco or category changes
   useEffect(() => {
     let isMounted = true;
     if (serviceType === 'data') {
       setIsLoadingVariations(true);
-      fetchDynamicVariations('data', selectedTelco)
+      const fetcher = dataCategory === 'sme'
+        ? fetchSmeDataPlans(selectedTelco)
+        : fetchDynamicVariations('data', selectedTelco);
+
+      fetcher
         .then((plans) => {
           if (!isMounted) return;
           setDynamicDataPlans(plans);
           if (plans.length > 0) {
-            const defaultPlan = plans.find((p) => p.name.includes('1.5GB')) || plans[0];
+            const defaultPlan = plans.find((p) => p.name.includes('1.0GB') || p.name.includes('1.5GB') || p.name.includes('1GB')) || plans[0];
             const defaultIdx = plans.indexOf(defaultPlan);
             const defaultId = defaultPlan.id || `${defaultPlan.variation_code}_${defaultIdx >= 0 ? defaultIdx : 0}`;
             setSelectedDataPlan({
@@ -244,7 +249,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
     return () => {
       isMounted = false;
     };
-  }, [selectedTelco, serviceType]);
+  }, [selectedTelco, serviceType, dataCategory]);
 
   // Meter lookup simulation
   useEffect(() => {
@@ -415,6 +420,8 @@ export default function QuickServiceScreen({ route, navigation }: any) {
         customerPhone: user?.phone || recipientNumber || undefined,
         variationCode,
         meterType: serviceType === 'power' ? meterType : undefined,
+        dataCategory: serviceType === 'data' ? dataCategory : undefined,
+        planId: serviceType === 'data' && dataCategory === 'sme' && variationCode ? parseInt(variationCode, 10) : undefined,
         accountId: activeAccount?.id || undefined,
         userId: user?.id || undefined,
         pin: enteredPin || undefined,
@@ -723,16 +730,77 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                 </View>
               )}
 
-              {/* DATA: Bundle Picker (Dynamically pulled live from VTPass) */}
+              {/* DATA: Bundle Picker (BigiSub SME Data vs VTPass Direct Data) */}
               {serviceType === 'data' && (
                 <View className="bg-white dark:bg-zinc-900 rounded-2xl p-4 mb-4 border border-slate-200 dark:border-zinc-800">
+                  {/* Category Segmented Toggle */}
+                  <View className="flex-row bg-slate-100 dark:bg-zinc-800/90 p-1 rounded-xl mb-3.5 border border-slate-200/50 dark:border-zinc-700/50">
+                    <Pressable
+                      onPress={() => {
+                        if (dataCategory !== 'sme') {
+                          Haptics.selectionAsync();
+                          setDataCategory('sme');
+                        }
+                      }}
+                      className={`flex-1 py-2 rounded-lg flex-row items-center justify-center ${
+                        dataCategory === 'sme'
+                          ? 'bg-white dark:bg-zinc-700 shadow-sm'
+                          : ''
+                      }`}
+                    >
+                      <Text
+                        className={`text-xs font-inter-bold ${
+                          dataCategory === 'sme'
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-slate-500 dark:text-zinc-400'
+                        }`}
+                      >
+                        SME Data (Budget)
+                      </Text>
+                      <View className="ml-1.5 bg-emerald-500/15 px-1.5 py-0.5 rounded">
+                        <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-[9px]">
+                          Save 60%
+                        </Text>
+                      </View>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => {
+                        if (dataCategory !== 'direct') {
+                          Haptics.selectionAsync();
+                          setDataCategory('direct');
+                        }
+                      }}
+                      className={`flex-1 py-2 rounded-lg flex-row items-center justify-center ${
+                        dataCategory === 'direct'
+                          ? 'bg-white dark:bg-zinc-700 shadow-sm'
+                          : ''
+                      }`}
+                    >
+                      <Text
+                        className={`text-xs font-inter-bold ${
+                          dataCategory === 'direct'
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-slate-500 dark:text-zinc-400'
+                        }`}
+                      >
+                        Direct Data (Official)
+                      </Text>
+                      <View className="ml-1.5 bg-slate-200 dark:bg-zinc-600 px-1.5 py-0.5 rounded">
+                        <Text className="text-slate-600 dark:text-zinc-300 font-inter-bold text-[9px]">
+                          Official
+                        </Text>
+                      </View>
+                    </Pressable>
+                  </View>
+
                   <View className="flex-row items-center justify-between mb-3">
                     <Text className="text-slate-500 dark:text-zinc-400 font-inter-semibold text-xs uppercase tracking-wider">
-                      Select Data Plan ({selectedTelco.toUpperCase()})
+                      Select {dataCategory === 'sme' ? 'SME Data' : 'Official Data'} ({selectedTelco.toUpperCase()})
                     </Text>
                     <View className="bg-emerald-500/10 px-2 py-0.5 rounded-full">
                       <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-[10px]">
-                        Live Rates
+                        {dataCategory === 'sme' ? 'Wholesale SME' : 'Direct Retail'}
                       </Text>
                     </View>
                   </View>
@@ -741,7 +809,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                     <View className="py-8 items-center justify-center">
                       <ActivityIndicator color="#10b981" size="small" />
                       <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs mt-2">
-                        Pulling real-time {selectedTelco.toUpperCase()} data plans...
+                        Pulling real-time {selectedTelco.toUpperCase()} {dataCategory === 'sme' ? 'SME bundles' : 'data plans'}...
                       </Text>
                     </View>
                   ) : (
@@ -779,7 +847,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                                 </Text>
                                 <View className="bg-emerald-500/10 px-1.5 py-0.5 rounded">
                                   <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-[9px]">
-                                    Instant
+                                    {dataCategory === 'sme' ? 'SME Instant' : 'Instant'}
                                   </Text>
                                 </View>
                               </View>
@@ -1242,6 +1310,14 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                   {getServiceTitle()}
                 </Text>
               </View>
+              {serviceType === 'data' && (
+                <View className="flex-row justify-between mb-2">
+                  <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">Plan Type</Text>
+                  <Text className="text-slate-900 dark:text-white font-inter-semibold text-xs">
+                    {dataCategory === 'sme' ? 'SME Data (Budget)' : 'Direct Data (Official)'}
+                  </Text>
+                </View>
+              )}
               <View className="flex-row justify-between mb-2">
                 <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">Beneficiary</Text>
                 <Text className="text-slate-900 dark:text-white font-inter-semibold text-xs">
