@@ -6,6 +6,7 @@ import type {
   CustomerRegistrationResult, 
   PaginatedResult 
 } from "@milipay/shared/types";
+import { isSimulatedTemplate, isSimulationEnabled } from "@milipay/shared/features/biometrics/palmScanner";
 
 interface FetchCustomersOptions {
   page?: number;
@@ -134,6 +135,15 @@ export async function registerCustomer(
 ): Promise<CustomerRegistrationResult> {
   if (!draft.palmVeinTemplate) {
     throw new Error("Palm vein scan is required before registration.");
+  }
+
+  // A simulated template belongs to nobody, so it must never reach a real
+  // customer record outside an explicitly simulation-enabled environment.
+  if (isSimulatedTemplate(draft.palmVeinTemplate) && !isSimulationEnabled()) {
+    throw new Error(
+      "This palm capture was simulated and cannot be used to enrol a customer. " +
+        "Connect an HFSecurity scanner and capture again."
+    );
   }
 
   // Get current staff session

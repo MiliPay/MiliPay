@@ -9,6 +9,7 @@ import { NIGERIAN_STATES } from "@milipay/shared/lib/constants";
 import { validateCustomerDraft, type FieldError } from "@milipay/shared/lib/utils/validation";
 import { registerCustomer } from "@milipay/shared/features/customers/api";
 import { EMPTY_CUSTOMER_DRAFT, type CustomerDraft, type CustomerRegistrationResult } from "@milipay/shared/types";
+import { capturePalmTemplate, PalmCaptureError } from "@milipay/shared/features/biometrics/palmScanner";
 
 const STEPS = [
   { id: 1, label: "Personal" },
@@ -408,14 +409,23 @@ function PalmVeinScanner({
   error?: string;
 }) {
   const [isScanning, setIsScanning] = useState(false);
+  const [captureError, setCaptureError] = useState<string | null>(null);
+  const [wasSimulated, setWasSimulated] = useState(false);
 
-  const startScan = () => {
+  const startScan = async () => {
     setIsScanning(true);
-    // Simulate a 3-second hardware scan (HFSecurity SDK)
-    setTimeout(() => {
+    setCaptureError(null);
+    try {
+      const capture = await capturePalmTemplate();
+      setWasSimulated(capture.simulated);
+      onCapture(capture.template);
+    } catch (err) {
+      setCaptureError(
+        err instanceof PalmCaptureError ? err.message : "Palm capture failed. Please try again."
+      );
+    } finally {
       setIsScanning(false);
-      onCapture("PVT-mock-hash-" + Date.now().toString(16));
-    }, 3000);
+    }
   };
 
   return (
@@ -580,13 +590,20 @@ function PalmVeinScanner({
           {isScanning ? "Scanning Infrared..." : template ? "Recapture Palm" : "Start Hardware Scan"}
         </Button>
         
-        <div className="h-4">
-          {error && !isScanning && (
-            <p className="text-xs text-status-fail font-semibold uppercase tracking-wide">{error}</p>
+        <div className="min-h-[1rem] space-y-2">
+          {(captureError || error) && !isScanning && (
+            <p className="text-xs text-status-fail font-semibold uppercase tracking-wide">
+              {captureError ?? error}
+            </p>
           )}
           {isScanning && (
             <p className="text-xs text-signal-bright animate-pulse font-data uppercase tracking-widest">
               Connecting to VP930Pro...
+            </p>
+          )}
+          {wasSimulated && !isScanning && (
+            <p className="text-xs text-status-warn font-semibold uppercase tracking-wide">
+              Simulated capture — no scanner attached. Not valid for a live enrollment.
             </p>
           )}
         </div>
