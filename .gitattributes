@@ -1,0 +1,35 @@
+# Normalise line endings so an editor or a sed/script edit cannot turn a
+# one-line change into a whole-file diff. Without this, a tool that rewrites a
+# CRLF file as LF produces a diff nobody can review.
+* text=auto eol=lf
+
+# Windows-native files keep CRLF.
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+
+# Shell scripts and git hooks must stay LF or they will not execute.
+*.sh        text eol=lf
+.githooks/* text eol=lf
+
+# Binaries: never touch, never diff as text.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.pdf   binary
+*.zip   binary
+*.apk   binary
+*.mp4   binary
+*.ttf   binary
+*.otf   binary
+*.woff  binary
+*.woff2 binary
+*.docx  binary
+*.xlsx  binary
+*.jar   binary
+
+# Generated: collapse in reviews.
+package-lock.json linguist-generated=true -diff

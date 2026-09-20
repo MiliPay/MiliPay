@@ -57,6 +57,14 @@ This project is an **npm workspace monorepo**. You must respect the boundaries a
 
 ## Scalability & Security (Enterprise Grade)
 - **Zero Exposed Keys**: NEVER hardcode API keys, Supabase Service Role keys, or third-party secrets in the frontend or public repositories. They MUST be restricted to Edge Functions, environment variables, and the Supabase Vault.
+  - **A `VITE_` / `EXPO_PUBLIC_` prefix means "compiled into the client bundle and readable by anyone who unzips the app."** Never put an operator secret behind one. If a value must not be public, it is an Edge Function secret (`supabase secrets set`), and the client reaches it by calling the function.
+  - **The Supabase `anon` key is not a secret** — it ships in every client by design and is only as strong as the RLS behind it. The `service_role` key is the opposite: it bypasses RLS entirely and must never leave an Edge Function.
+  - **Enforcement, not just policy.** `scripts/scan-secrets.mjs` blocks credential-shaped strings at commit time via `.githooks/pre-commit`, and CI re-runs it on every push and PR. Enable the hook once per clone:
+    ```bash
+    git config core.hooksPath .githooks
+    ```
+    Audit the whole repository at any time with `node scripts/scan-secrets.mjs --history`. If the scanner flags a genuinely safe value, append `// secret-scan: allow` to that line and justify it in review — do not weaken the rules.
+  - **If a secret does reach a commit, rotating it is the fix.** Rewriting history does not un-leak it: clones, forks, CI logs and GitHub's own object store may retain it. Rotate first, then clean history.
 - **Massive Scale Preparation**: All database queries, APIs, and Edge Functions must be designed to support millions of concurrent users without crashing.
 - **Mandatory Defenses**: Every backend integration MUST include:
   1. Strict **Input Validation** (e.g., using Zod).
