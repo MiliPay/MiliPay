@@ -1,111 +1,42 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-// KYC Tier Limits in Naira
-const TIER_LIMITS: Record<number, { tier: number; name: string; maxSingle: number; maxDaily: number }> = {
-  1: { tier: 1, name: "Tier 1", maxSingle: 50_000, maxDaily: 200_000 },
-  2: { tier: 2, name: "Tier 2", maxSingle: 150_000, maxDaily: 500_000 },
-  3: { tier: 3, name: "Tier 3", maxSingle: 250_000, maxDaily: 1_000_000 },
-};
-
-// Provider & Service ID Mappings to VTPass Service IDs
-const VTPASS_SERVICE_MAP: Record<string, { airtime?: string; data?: string; power?: string; cable?: string }> = {
-  // Telcos
-  mtn: { airtime: 'mtn', data: 'mtn-data' },
-  airtel: { airtime: 'airtel', data: 'airtel-data' },
-  glo: { airtime: 'glo', data: 'glo-data' },
-  '9mobile': { airtime: 'etisalat', data: 'etisalat-data' },
-  // Electricity Discos
-  ikedc: { power: 'ikeja-electric' },
-  ekedc: { power: 'eko-electric' },
-  aedc: { power: 'abuja-electric' },
-  ibedc: { power: 'ibadan-electric' },
-  phed: { power: 'portharcourt-electric' },
-  eedc: { power: 'enugu-electric' },
-  kedco: { power: 'kano-electric' },
-  // Cable Providers
-  dstv: { cable: 'dstv' },
-  gotv: { cable: 'gotv' },
-  startimes: { cable: 'startimes' },
-};
+import { z } from "https://esm.sh/zod@3.23.8";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import {
+  ApiError,
+  adminClient,
+  handler,
+  json,
+  loadCustomerProfile,
+  requireCaller,
+  requireStaffRole,
+  type Caller,
+} from "../_shared/auth.ts";
+import { enforceTransactionLimits } from "../_shared/limits.ts";
+import {
+  bigisubNetworkId,
+  fetchSmePlans,
+  fetchVtpassVariations,
+  FulfilmentError,
+  isBigisubConfigured,
+  normalizeNigerianPhone,
+  payWithVtpass,
+  purchaseSmeData,
+  resolveVtpassServiceId,
+  type Fulfilment,
+  type Variation,
+} from "../_shared/providers.ts";
 
 /**
- * Generate VTPass compliant Request ID.
- * Must start with Nigerian Time (WAT / UTC+1) in format: YYYYMMDDHHII followed by alphanumeric chars.
+ * VTU vending: airtime, data (retail + SME), electricity and cable.
+ *
+ * The client never prices a transaction and never moves money. It names the
+ * bundle it wants; this function resolves the operator price, adds the
+ * configured margin, debits, fulfils, and reverses on failure.
  */
-function generateVTPassRequestId(): string {
-  const now = new Date();
-  // WAT is UTC + 1 hour
-  const wat = new Date(now.getTime() + 1 * 60 * 60 * 1000);
-  const yyyy = wat.getUTCFullYear().toString();
-  const mm = String(wat.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(wat.getUTCDate()).padStart(2, '0');
-  const hh = String(wat.getUTCHours()).padStart(2, '0');
-  const ii = String(wat.getUTCMinutes()).padStart(2, '0');
-  const rand = Math.random().toString(36).substring(2, 10);
-  return `${yyyy}${mm}${dd}${hh}${ii}${rand}`;
-}
 
-/**
- * Generate 20-digit STS Standard Electricity Token (XXXX-XXXX-XXXX-XXXX-XXXX)
- */
-function generateStsToken(): string {
-  const p1 = Math.floor(1000 + Math.random() * 9000);
-  const p2 = Math.floor(1000 + Math.random() * 9000);
-  const p3 = Math.floor(1000 + Math.random() * 9000);
-  const p4 = Math.floor(1000 + Math.random() * 9000);
-  const p5 = Math.floor(1000 + Math.random() * 9000);
-  return `${p1}-${p2}-${p3}-${p4}-${p5}`;
-}
-
-/**
- * High-fidelity fallback variations if VTPass API is temporarily slow or unreachable
- */
-function getFallbackVariations(serviceId: string, surcharge: number) {
-  const isData = serviceId.includes('data');
-  if (isData) {
-    const plans = [
-      { code: `${serviceId}-1.5gb`, name: '1.5GB Data (30 Days)', validity: '30 Days', base: 1000 },
-      { code: `${serviceId}-2.5gb`, name: '2.5GB Data (30 Days)', validity: '30 Days', base: 1500 },
-      { code: `${serviceId}-5gb`, name: '5GB Data (30 Days)', validity: '30 Days', base: 2000 },
-      { code: `${serviceId}-10gb`, name: '10GB Data (30 Days)', validity: '30 Days', base: 3500 },
-      { code: `${serviceId}-20gb`, name: '20GB Data (30 Days)', validity: '30 Days', base: 5500 },
-      { code: `${serviceId}-40gb`, name: '40GB Data (30 Days)', validity: '30 Days', base: 10000 },
-    ];
-    return plans.map((p, idx) => ({
-      id: `${p.code}_${p.base}_${idx}`,
-      variation_code: p.code,
-      name: p.name,
-      validity: p.validity,
-      baseAmount: p.base,
-      surcharge: surcharge,
-      price: p.base + surcharge,
-      fixedPrice: true,
-    }));
-  }
-
-  // Cable TV bouquets fallback
-  const bouquets = [
-    { code: `${serviceId}-basic`, name: 'Basic Bouquet (Monthly)', validity: '1 Month', base: 3300 },
-    { code: `${serviceId}-standard`, name: 'Standard Bouquet (Monthly)', validity: '1 Month', base: 5100 },
-    { code: `${serviceId}-premium`, name: 'Premium Bouquet (Monthly)', validity: '1 Month', base: 9300 },
-  ];
-  return bouquets.map((b, idx) => ({
-    id: `${b.code}_${b.base}_${idx}`,
-    variation_code: b.code,
-    name: b.name,
-    validity: b.validity,
-    baseAmount: b.base,
-    surcharge: surcharge,
-    price: b.base + surcharge,
-    fixedPrice: true,
-  }));
-}
+// ─────────────────────────────────────────────────────────────
+// Margin settings
+// ─────────────────────────────────────────────────────────────
 
 interface VtuSettings {
   data_surcharge_ngn: number;
@@ -114,608 +45,420 @@ interface VtuSettings {
   airtime_surcharge_percent: number;
 }
 
-let cachedVtuSettings: VtuSettings = {
-  data_surcharge_ngn: 25.00,
-  cable_surcharge_ngn: 30.00,
-  power_convenience_fee_ngn: 0.00,
-  airtime_surcharge_percent: 0.00,
+const DEFAULT_SETTINGS: VtuSettings = {
+  data_surcharge_ngn: 25,
+  cable_surcharge_ngn: 30,
+  power_convenience_fee_ngn: 0,
+  airtime_surcharge_percent: 0,
 };
 
-async function getActiveVtuSettings(adminClient: any): Promise<VtuSettings> {
-  try {
-    const { data, error } = await adminClient
-      .from('vtu_settings')
-      .select('*')
-      .eq('id', 'default')
-      .maybeSingle();
+async function loadSettings(admin: SupabaseClient): Promise<VtuSettings> {
+  const { data, error } = await admin
+    .from("vtu_settings")
+    .select("*")
+    .eq("id", "default")
+    .maybeSingle();
 
-    if (!error && data) {
-      cachedVtuSettings = {
-        data_surcharge_ngn: Number(data.data_surcharge_ngn) || 25.00,
-        cable_surcharge_ngn: Number(data.cable_surcharge_ngn) || 30.00,
-        power_convenience_fee_ngn: Number(data.power_convenience_fee_ngn) || 0.00,
-        airtime_surcharge_percent: Number(data.airtime_surcharge_percent) || 0.00,
-      };
-      return cachedVtuSettings;
-    }
-  } catch (err) {
-    console.warn('[vtu-service] Could not query vtu_settings, using cached:', err);
-  }
-  return cachedVtuSettings;
+  if (error || !data) return { ...DEFAULT_SETTINGS };
+
+  return {
+    data_surcharge_ngn: Number(data.data_surcharge_ngn) || 0,
+    cable_surcharge_ngn: Number(data.cable_surcharge_ngn) || 0,
+    power_convenience_fee_ngn: Number(data.power_convenience_fee_ngn) || 0,
+    airtime_surcharge_percent: Number(data.airtime_surcharge_percent) || 0,
+  };
 }
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
-
-  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-  const supabaseServiceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-  const adminClient = createClient(supabaseUrl, supabaseServiceRole);
-
-  let deductionKobo = 0;
-  let accountToDebit: any = null;
-  let hasDebited = false;
-
-  try {
-    const body = await req.json();
-
-    // ─────────────────────────────────────────────────────────────
-    // ACTION: GET ACTIVE MARGIN SETTINGS
-    // ─────────────────────────────────────────────────────────────
-    if (body.action === 'get_settings') {
-      const settings = await getActiveVtuSettings(adminClient);
-      return new Response(
-        JSON.stringify({ success: true, settings }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // ACTION: UPDATE MARGIN SETTINGS (ADMIN ONLY)
-    // ─────────────────────────────────────────────────────────────
-    if (body.action === 'update_settings') {
-      const {
-        data_surcharge_ngn,
-        cable_surcharge_ngn,
-        power_convenience_fee_ngn,
-        airtime_surcharge_percent,
-        adminUser,
-      } = body;
-
-      const updatePayload: Record<string, any> = {
-        id: 'default',
-        updated_at: new Date().toISOString(),
-        updated_by: adminUser || 'admin',
-      };
-
-      if (typeof data_surcharge_ngn === 'number') updatePayload.data_surcharge_ngn = data_surcharge_ngn;
-      if (typeof cable_surcharge_ngn === 'number') updatePayload.cable_surcharge_ngn = cable_surcharge_ngn;
-      if (typeof power_convenience_fee_ngn === 'number') updatePayload.power_convenience_fee_ngn = power_convenience_fee_ngn;
-      if (typeof airtime_surcharge_percent === 'number') updatePayload.airtime_surcharge_percent = airtime_surcharge_percent;
-
-      cachedVtuSettings = {
-        data_surcharge_ngn: typeof data_surcharge_ngn === 'number' ? data_surcharge_ngn : cachedVtuSettings.data_surcharge_ngn,
-        cable_surcharge_ngn: typeof cable_surcharge_ngn === 'number' ? cable_surcharge_ngn : cachedVtuSettings.cable_surcharge_ngn,
-        power_convenience_fee_ngn: typeof power_convenience_fee_ngn === 'number' ? power_convenience_fee_ngn : cachedVtuSettings.power_convenience_fee_ngn,
-        airtime_surcharge_percent: typeof airtime_surcharge_percent === 'number' ? airtime_surcharge_percent : cachedVtuSettings.airtime_surcharge_percent,
-      };
-
-      let settingsResult = { ...cachedVtuSettings };
-      try {
-        const { data: updated, error: upsertErr } = await adminClient
-          .from('vtu_settings')
-          .upsert(updatePayload)
-          .select()
-          .maybeSingle();
-
-        if (!upsertErr && updated) {
-          settingsResult = {
-            data_surcharge_ngn: Number(updated.data_surcharge_ngn),
-            cable_surcharge_ngn: Number(updated.cable_surcharge_ngn),
-            power_convenience_fee_ngn: Number(updated.power_convenience_fee_ngn),
-            airtime_surcharge_percent: Number(updated.airtime_surcharge_percent),
-          };
-          cachedVtuSettings = { ...settingsResult };
-        }
-      } catch (dbErr: any) {
-        console.warn('[vtu-service] Could not persist to vtu_settings:', dbErr.message);
-      }
-
-      return new Response(
-        JSON.stringify({ success: true, settings: settingsResult }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // ACTION: DYNAMIC VARIATIONS PULLING (WITH DYNAMIC PROFIT MARGIN)
-    // ─────────────────────────────────────────────────────────────
-    if (body.action === 'get_variations') {
-      const { serviceId, serviceType, provider } = body;
-      let targetServiceId = serviceId;
-
-      if (!targetServiceId && serviceType && provider) {
-        const p = String(provider).toLowerCase();
-        const map = VTPASS_SERVICE_MAP[p];
-        if (serviceType === 'data') {
-          targetServiceId = map?.data || `${p}-data`;
-        } else if (serviceType === 'cable') {
-          targetServiceId = map?.cable || p;
-        } else {
-          targetServiceId = p;
-        }
-      }
-
-      if (!targetServiceId) {
-        return new Response(
-          JSON.stringify({ success: false, error: 'serviceId or serviceType/provider is required' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      // Fetch dynamic active margins from database / memory
-      const activeSettings = await getActiveVtuSettings(adminClient);
-      const isData = targetServiceId.includes('data');
-      const isCable = ['dstv', 'gotv', 'startimes', 'showmax'].includes(targetServiceId);
-      const surcharge = isData
-        ? activeSettings.data_surcharge_ngn
-        : (isCable ? activeSettings.cable_surcharge_ngn : 0);
-
-      const vtpassBaseUrl = Deno.env.get('VTPASS_BASE_URL') || 'https://sandbox.vtpass.com/api';
-      const url = `${vtpassBaseUrl}/service-variations?serviceID=${encodeURIComponent(targetServiceId)}`;
-
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-        const res = await fetch(url, {
-          method: 'GET',
-          headers: { 'Accept': 'application/json' },
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!res.ok) {
-          throw new Error(`VTPass variations HTTP status ${res.status}`);
-        }
-
-        const vtpassJson = await res.json();
-        const rawVariations = vtpassJson?.content?.variations || [];
-
-        if (!rawVariations.length) {
-          throw new Error('No variations found in VTPass response');
-        }
-
-        const variations = rawVariations.map((v: any, idx: number) => {
-          const rawAmount = parseFloat(v.variation_amount) || 0;
-          const baseAmount = Math.round(rawAmount * 100) / 100;
-          const price = Math.ceil(baseAmount + surcharge);
-
-          // Extract validity from name (e.g. 30 days, 24 hrs, 1 month)
-          let validity = '30 Days';
-          const match = v.name.match(/(\d+\s*(?:day|days|hrs|hours|hr|month|months|week|weeks))/i);
-          if (match) {
-            validity = match[1].trim();
-          }
-
-          return {
-            id: `${v.variation_code}_${baseAmount}_${idx}`,
-            variation_code: v.variation_code,
-            name: v.name,
-            validity: validity,
-            baseAmount: baseAmount,
-            surcharge: surcharge,
-            price: price,
-            fixedPrice: v.fixedPrice === 'Yes',
-          };
-        });
-
-        return new Response(
-          JSON.stringify({
-            success: true,
-            serviceId: targetServiceId,
-            serviceName: vtpassJson?.content?.ServiceName || targetServiceId,
-            surcharge: surcharge,
-            variations: variations,
-          }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      } catch (fetchErr: any) {
-        console.warn(`[VTPass Variations Fallback for ${targetServiceId}]:`, fetchErr.message);
-        const fallbackVariations = getFallbackVariations(targetServiceId, surcharge);
-        return new Response(
-          JSON.stringify({
-            success: true,
-            serviceId: targetServiceId,
-            fallback: true,
-            surcharge: surcharge,
-            variations: fallbackVariations,
-          }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // TRANSACTION PAYMENT FLOW
-    // ─────────────────────────────────────────────────────────────
-    const {
-      serviceType,        // 'airtime' | 'data' | 'power' | 'cable' | 'internet' | 'transport' | 'education'
-      provider,           // 'mtn' | 'airtel' | 'ikedc' | 'dstv' ...
-      amount,             // Total amount charged to customer in Naira (includes surcharge)
-      baseAmount,         // Wholesale amount sent to VTPass (excluding surcharge)
-      destination,        // phone number, meter number, or smartcard number
-      customerPhone,      // phone number of customer
-      variationCode,      // e.g. 'mtn-100mb-1000', 'prepaid', 'dstv-padi'
-      meterType = 'prepaid', // 'prepaid' | 'postpaid'
-      accountId,          // UUID from linked_accounts
-      userId,             // Auth user ID or Customer ID
-      pin,                // MiliPay 4-digit PIN
-      reference = `MP-BIL-${Date.now().toString().slice(-8)}${Math.floor(1000 + Math.random() * 9000)}`,
-    } = body;
-
-    // 1. Basic Validation
-    if (!amount || typeof amount !== 'number' || amount <= 0) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Invalid transaction amount' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    if (!accountId) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Linked bank account is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    if (!serviceType || !provider || !destination) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Missing service type, provider, or destination' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // 2. Fetch Customer KYC Tier & Configured PIN Security Threshold
-    let customerKycTier = 2; // Default on enrollment (Tier 2)
-    let customerPinThreshold = 10000; // Default ₦10,000 threshold
-
-    if (userId) {
-      const { data: customerData } = await adminClient
-        .from('customers')
-        .select('id, kyc_tier, pin_threshold')
-        .or(`id.eq.${userId},auth_user_id.eq.${userId}`)
-        .maybeSingle();
-
-      if (customerData) {
-        customerKycTier = customerData.kyc_tier || 2;
-        customerPinThreshold = Number(customerData.pin_threshold) || 10000;
-      } else {
-        const { data: userData } = await adminClient
-          .from('users')
-          .select('id, kyc_tier, pin_threshold')
-          .eq('id', userId)
-          .maybeSingle();
-
-        if (userData) {
-          customerKycTier = userData.kyc_tier || 2;
-          customerPinThreshold = Number(userData.pin_threshold) || 10000;
-        }
-      }
-    }
-
-    const currentTierLimits = TIER_LIMITS[customerKycTier] || TIER_LIMITS[2];
-
-    // Enforce Single Transaction Limit
-    if (amount > currentTierLimits.maxSingle) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          code: 'EXCEEDS_SINGLE_LIMIT',
-          message: `Amount of ₦${amount.toLocaleString()} exceeds your ${currentTierLimits.name} maximum limit of ₦${currentTierLimits.maxSingle.toLocaleString()} per transaction.`,
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Enforce PIN Verification if amount > customer threshold
-    if (amount > customerPinThreshold && (!pin || String(pin).length < 4)) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          requirePin: true,
-          code: 'PIN_REQUIRED',
-          threshold: customerPinThreshold,
-          message: `Transactions exceeding your security threshold of ₦${customerPinThreshold.toLocaleString()} require 4-digit MiliPay PIN verification.`,
-        }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // 3. STEP 1: DEBIT FIRST (Verify Linked Bank Account & Deduct Balance)
-    const { data: account, error: accountError } = await adminClient
-      .from('linked_accounts')
-      .select('*')
-      .eq('id', accountId)
-      .eq('is_active', true)
-      .single();
-
-    if (accountError || !account) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Active linked bank account not found' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    accountToDebit = account;
-    const currentKobo = typeof account.balance === 'number' ? account.balance : 10000000;
-    const currentNaira = currentKobo / 100;
-
-    if (currentNaira < amount) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          code: 'INSUFFICIENT_FUNDS',
-          message: `Insufficient funds. Your ${account.bank_name} account balance is ₦${currentNaira.toLocaleString('en-NG', { minimumFractionDigits: 2 })}, but ₦${amount.toLocaleString()} is required.`,
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Execute Immediate Debit
-    deductionKobo = Math.round(amount * 100);
-    const newKobo = currentKobo - deductionKobo;
-
-    const { error: debitError } = await adminClient
-      .from('linked_accounts')
-      .update({ balance: newKobo })
-      .eq('id', accountId);
-
-    if (debitError) {
-      throw new Error(`Failed to debit account: ${debitError.message}`);
-    }
-
-    hasDebited = true;
-
-    // 4. STEP 2: FULFILL SECOND VIA VTPASS API (SANDBOX)
-    let vtpassServiceId = provider;
-    const providerMapping = VTPASS_SERVICE_MAP[provider.toLowerCase()];
-    if (providerMapping) {
-      if (serviceType === 'airtime' && providerMapping.airtime) {
-        vtpassServiceId = providerMapping.airtime;
-      } else if (serviceType === 'data' && providerMapping.data) {
-        vtpassServiceId = providerMapping.data;
-      } else if (serviceType === 'power' && providerMapping.power) {
-        vtpassServiceId = providerMapping.power;
-      } else if (serviceType === 'cable' && providerMapping.cable) {
-        vtpassServiceId = providerMapping.cable;
-      }
-    }
-
-    const vtpassRequestId = generateVTPassRequestId();
-    const vtpassApiKey = Deno.env.get('VTPASS_API_KEY');
-    const vtpassSecretKey = Deno.env.get('VTPASS_SECRET_KEY');
-    const vtpassBaseUrl = Deno.env.get('VTPASS_BASE_URL') || 'https://sandbox.vtpass.com/api';
-
-    let fulfillmentResult: {
-      status: 'delivered' | 'failed';
-      operatorReference: string;
-      token?: string;
-      units?: string;
-      rawResponse?: any;
-    };
-
-    if (vtpassApiKey && vtpassSecretKey) {
-      // Connect to Live / Sandbox VTPass Gateway
-      const isTelecom = serviceType === 'airtime' || serviceType === 'data';
-      const cleanPhone = (p?: string) => {
-        if (!p) return '';
-        const s = p.replace(/[^0-9+]/g, '');
-        if (s.startsWith('+234')) return '0' + s.slice(4);
-        if (s.startsWith('234') && s.length > 10) return '0' + s.slice(3);
-        return s;
-      };
-      const targetDestination = isTelecom ? cleanPhone(destination) : destination;
-      const targetPhone = isTelecom
-        ? targetDestination
-        : (cleanPhone(customerPhone) || targetDestination);
-
-      const payload: Record<string, any> = {
-        request_id: vtpassRequestId,
-        serviceID: vtpassServiceId,
-        billersCode: targetDestination,
-        amount: baseAmount || amount,
-        phone: targetPhone,
-      };
-
-      if (serviceType === 'data' && variationCode) {
-        payload.variation_code = variationCode;
-      } else if (serviceType === 'power') {
-        payload.variation_code = meterType || 'prepaid';
-      } else if (serviceType === 'cable' && variationCode) {
-        payload.variation_code = variationCode;
-      }
-
-      console.log(`[VTPass Request] ID: ${vtpassRequestId} -> ${vtpassBaseUrl}/pay (Wholesale: ₦${baseAmount || amount}, Customer Paid: ₦${amount})`, payload);
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000); // 4-sec SLA limit
-
-      try {
-        const vtpassRes = await fetch(`${vtpassBaseUrl}/pay`, {
-          method: 'POST',
-          headers: {
-            'api-key': vtpassApiKey,
-            'secret-key': vtpassSecretKey,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-        const vtpassJson = await vtpassRes.json();
-        console.log(`[VTPass Response] Code: ${vtpassJson.code}`, vtpassJson);
-
-        // VTPass '000' is Success, '099' is Processing/Pending
-        if (vtpassJson.code === '000' || vtpassJson.code === '099') {
-          let token: string | undefined;
-          let units: string | undefined;
-
-          // Parse purchased electricity token if available
-          if (vtpassJson.purchased_code) {
-            const tokenMatch = vtpassJson.purchased_code.match(/Token\s*:\s*([0-9-]+)/i);
-            if (tokenMatch) token = tokenMatch[1].trim();
-            const unitsMatch = vtpassJson.purchased_code.match(/Units\s*:\s*([0-9.]+\s*kWh)/i);
-            if (unitsMatch) units = unitsMatch[1].trim();
-          }
-
-          if (serviceType === 'power' && meterType === 'prepaid' && !token) {
-            token = generateStsToken();
-            units = `${(amount / 68.5).toFixed(1)} kWh`;
-          }
-
-          fulfillmentResult = {
-            status: 'delivered',
-            operatorReference: vtpassJson.content?.transactions?.transactionId || vtpassJson.requestId || `VTP-${Date.now()}`,
-            token: token,
-            units: units,
-            rawResponse: vtpassJson,
-          };
-        } else {
-          // VTPass Returned an error code (e.g. invalid biller, low float, invalid variation)
-          throw new Error(vtpassJson.response_description || `VTPass fulfillment declined (Code ${vtpassJson.code})`);
-        }
-      } catch (vtpassErr: any) {
-        clearTimeout(timeoutId);
-        console.error('[VTPass API Failure]', vtpassErr);
-        throw vtpassErr;
-      }
-    } else {
-      // Sandbox High-Fidelity Simulator (Used when testing without active VTPass secret keys)
-      console.log(`[VTPass Sandbox Simulated] Service: ${vtpassServiceId}, Dest: ${destination}, Wholesale: ₦${baseAmount || amount} (Customer Charged: ₦${amount})`);
-      
-      let token: string | undefined;
-      let units: string | undefined;
-
-      if (serviceType === 'power') {
-        if (meterType === 'prepaid') {
-          token = generateStsToken();
-          units = `${(amount / 68.5).toFixed(1)} kWh`;
-        }
-      } else if (serviceType === 'education') {
-        token = `PIN: ${Math.floor(1000000000 + Math.random() * 9000000000)}`;
-      }
-
-      fulfillmentResult = {
-        status: 'delivered',
-        operatorReference: `VTP-SBX-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
-        token: token,
-        units: units,
-      };
-    }
-
-    // 5. STEP 3: INSERT TRANSACTION RECORD INTO public.transactions
-    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const validUserUuid = userId && UUID_REGEX.test(userId) ? userId : null;
-    const validCustomerUuid = customerDataId(userId);
-
-    let merchantTitle = `${provider.toUpperCase()} Airtime`;
-    if (serviceType === 'data') merchantTitle = `${provider.toUpperCase()} Data`;
-    else if (serviceType === 'power') merchantTitle = `${provider.toUpperCase()} Electricity (${meterType.toUpperCase()})`;
-    else if (serviceType === 'cable') merchantTitle = `${provider.toUpperCase()} Subscription`;
-    else if (serviceType === 'internet') merchantTitle = `${provider.toUpperCase()} Broadband`;
-    else if (serviceType === 'education') merchantTitle = `${provider.toUpperCase()} Exam PIN`;
-
-    const txRecord = {
-      reference: reference,
-      user_id: validUserUuid,
-      customer_id: validCustomerUuid,
-      merchant_name: fulfillmentResult.token ? `${merchantTitle} [Token: ${fulfillmentResult.token}]` : merchantTitle,
-      amount: amount, // Strictly stored in Naira numeric(12,2)
-      status: 'success',
-      account_used: accountId,
-      created_at: new Date().toISOString(),
-    };
-
-    const { error: txError } = await adminClient
-      .from('transactions')
-      .insert(txRecord);
-
-    if (txError) {
-      console.warn('Transaction insert warning (proceeding with receipt):', txError.message);
-    }
-
-    // 6. RETURN SUCCESS RESPONSE & RECEIPT
-    return new Response(
-      JSON.stringify({
-        success: true,
-        reference: reference,
-        operatorReference: fulfillmentResult.operatorReference,
-        amount: amount,
-        serviceType: serviceType,
-        provider: provider,
-        beneficiary: destination,
-        merchantTitle: merchantTitle,
-        token: fulfillmentResult.token || null,
-        units: fulfillmentResult.units || null,
-        bankName: account.bank_name,
-        accountNumberLast4: account.account_number.slice(-4),
-        newBalance: newKobo / 100, // Naira
-        timestamp: new Date().toISOString(),
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  } catch (err: any) {
-    console.error('[VTU Service Error]', err.message || err);
-
-    // 7. AUTO-REVERSAL ENGINE: If debit succeeded but VTPass failed, reverse debit back to customer immediately
-    if (hasDebited && accountToDebit && deductionKobo > 0) {
-      try {
-        console.warn(`[AUTO-REVERSAL] Refunding ${deductionKobo} kobo to account ${accountToDebit.id}...`);
-        const { data: currentAcc } = await adminClient
-          .from('linked_accounts')
-          .select('balance')
-          .eq('id', accountToDebit.id)
-          .single();
-
-        if (currentAcc) {
-          const restoredKobo = Number(currentAcc.balance) + deductionKobo;
-          await adminClient
-            .from('linked_accounts')
-            .update({ balance: restoredKobo })
-            .eq('id', accountToDebit.id);
-
-          console.log(`[AUTO-REVERSAL COMPLETED] Restored balance to ${restoredKobo / 100} NGN`);
-        }
-      } catch (refundErr: any) {
-        console.error('[AUTO-REVERSAL CRITICAL ERROR] Failed to restore balance:', refundErr);
-      }
-
-      return new Response(
-        JSON.stringify({
-          success: false,
-          code: 'FULFILLMENT_FAILED_AUTO_REVERSED',
-          message: `Operator delivery could not be completed: ${err.message || 'Service provider unavailable'}. Your payment of ₦${(deductionKobo / 100).toLocaleString()} was automatically refunded.`,
-          refunded: true,
-        }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: err.message || 'Payment processing encountered an unexpected error',
-      }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
+function surchargeFor(serviceType: string, serviceId: string, settings: VtuSettings): number {
+  if (serviceType === "data" || serviceId.includes("data")) return settings.data_surcharge_ngn;
+  if (serviceType === "cable") return settings.cable_surcharge_ngn;
+  if (serviceType === "power") return settings.power_convenience_fee_ngn;
+  return 0;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Input validation
+// ─────────────────────────────────────────────────────────────
+
+const settingsSchema = z.object({
+  data_surcharge_ngn: z.number().min(0).max(10_000).optional(),
+  cable_surcharge_ngn: z.number().min(0).max(10_000).optional(),
+  power_convenience_fee_ngn: z.number().min(0).max(10_000).optional(),
+  airtime_surcharge_percent: z.number().min(0).max(100).optional(),
 });
 
-function customerDataId(id?: string): string | null {
-  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return id && UUID_REGEX.test(id) ? id : null;
+const purchaseSchema = z.object({
+  serviceType: z.enum(["airtime", "data", "power", "cable"]),
+  provider: z.string().min(2).max(32),
+  destination: z.string().min(3).max(32),
+  customerPhone: z.string().max(20).optional(),
+  variationCode: z.string().max(64).optional(),
+  dataCategory: z.enum(["sme", "direct"]).optional(),
+  meterType: z.enum(["prepaid", "postpaid"]).default("prepaid"),
+  accountId: z.string().uuid(),
+  // Airtime and postpaid power are open-value; bundles are priced from the catalogue.
+  amount: z.number().positive().max(1_000_000).optional(),
+  pin: z.string().regex(/^[0-9]{4}$/).optional(),
+  reference: z.string().min(6).max(64).optional(),
+});
+
+type PurchaseInput = z.infer<typeof purchaseSchema>;
+
+function parse<T extends z.ZodTypeAny>(schema: T, input: unknown): z.infer<T> {
+  const result = schema.safeParse(input);
+  if (!result.success) {
+    const first = result.error.issues[0];
+    throw new ApiError(
+      `${first.path.join(".") || "request"}: ${first.message}`,
+      400,
+      "VALIDATION_FAILED",
+    );
+  }
+  return result.data;
 }
+
+async function rateLimit(admin: SupabaseClient, key: string, limit: number, windowSeconds: number) {
+  const { data, error } = await admin.rpc("consume_rate_limit", {
+    p_key: key,
+    p_limit: limit,
+    p_window_seconds: windowSeconds,
+  });
+  // Fail open on infrastructure errors, closed on an actual breach.
+  if (error) {
+    console.error("[vtu] rate limit check failed", error);
+    return;
+  }
+  if (data === false) {
+    throw new ApiError("Too many requests. Please wait a moment and try again.", 429, "RATE_LIMITED");
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Server-side pricing: the client never decides what it pays
+// ─────────────────────────────────────────────────────────────
+
+interface Priced {
+  /** what the customer is charged, in Naira */
+  amount: number;
+  /** what we send the operator, in Naira */
+  baseAmount: number;
+  serviceId: string;
+  planLabel: string;
+}
+
+async function priceTransaction(
+  input: PurchaseInput,
+  settings: VtuSettings,
+): Promise<Priced> {
+  const serviceId = resolveVtpassServiceId(input.serviceType, input.provider);
+  const surcharge = surchargeFor(input.serviceType, serviceId, settings);
+
+  // Open-value services: the customer names the amount.
+  if (input.serviceType === "airtime" || input.serviceType === "power") {
+    if (!input.amount) {
+      throw new ApiError("Amount is required for this service", 400, "AMOUNT_REQUIRED");
+    }
+    const base = Math.round(input.amount * 100) / 100;
+    const fee = input.serviceType === "airtime"
+      ? Math.round(base * (settings.airtime_surcharge_percent / 100) * 100) / 100
+      : settings.power_convenience_fee_ngn;
+
+    return {
+      amount: Math.round((base + fee) * 100) / 100,
+      baseAmount: base,
+      serviceId,
+      planLabel: input.serviceType === "airtime" ? "Airtime" : `Electricity (${input.meterType})`,
+    };
+  }
+
+  // Fixed-price bundles: resolve the operator's own price for the requested
+  // variation. Never trust a price supplied by the caller.
+  if (!input.variationCode) {
+    throw new ApiError("A bundle must be selected", 400, "VARIATION_REQUIRED");
+  }
+
+  let catalogue: Variation[];
+  if (input.serviceType === "data" && input.dataCategory === "sme") {
+    catalogue = await fetchSmePlans(bigisubNetworkId(input.provider), surcharge);
+  } else {
+    catalogue = await fetchVtpassVariations(serviceId, surcharge);
+  }
+
+  const chosen = catalogue.find((v) => v.variation_code === input.variationCode);
+  if (!chosen) {
+    throw new ApiError(
+      "That bundle is no longer available. Refresh and choose again.",
+      409,
+      "VARIATION_UNAVAILABLE",
+    );
+  }
+
+  return {
+    amount: chosen.price,
+    baseAmount: chosen.baseAmount,
+    serviceId,
+    planLabel: chosen.name,
+  };
+}
+
+function merchantTitle(input: PurchaseInput, planLabel: string): string {
+  const provider = input.provider.toUpperCase();
+  switch (input.serviceType) {
+    case "data":
+      return `${provider} ${input.dataCategory === "sme" ? "SME " : ""}Data`;
+    case "power":
+      return `${provider} Electricity (${input.meterType.toUpperCase()})`;
+    case "cable":
+      return `${provider} ${planLabel}`;
+    default:
+      return `${provider} Airtime`;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Handler
+// ─────────────────────────────────────────────────────────────
+
+serve(handler(async (req) => {
+  const caller: Caller = await requireCaller(req);
+  const admin = adminClient();
+  const body = await req.json().catch(() => ({}));
+  const action = typeof body?.action === "string" ? body.action : "purchase";
+
+  // ---- Read the live margin configuration -------------------------------
+  if (action === "get_settings") {
+    return json({ success: true, settings: await loadSettings(admin) });
+  }
+
+  // ---- Update margins (administrators only) -----------------------------
+  if (action === "update_settings") {
+    await requireStaffRole(admin, caller.id, ["admin", "super_admin"]);
+    const patch = parse(settingsSchema, body);
+
+    const { data, error } = await admin
+      .from("vtu_settings")
+      .upsert({
+        id: "default",
+        ...patch,
+        updated_at: new Date().toISOString(),
+        updated_by: caller.email ?? caller.id,
+      })
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      console.error("[vtu] settings upsert failed", error);
+      throw new ApiError("Could not save margin settings", 500, "SETTINGS_WRITE_FAILED");
+    }
+
+    return json({ success: true, settings: await loadSettings(admin), saved: Boolean(data) });
+  }
+
+  // ---- Retail catalogue -------------------------------------------------
+  if (action === "get_variations") {
+    const { serviceType = "data", provider = "mtn" } = body;
+    const settings = await loadSettings(admin);
+    const serviceId = body.serviceId || resolveVtpassServiceId(serviceType, provider);
+    const surcharge = surchargeFor(serviceType, serviceId, settings);
+
+    try {
+      const variations = await fetchVtpassVariations(serviceId, surcharge);
+      return json({ success: true, serviceId, surcharge, variations });
+    } catch (err) {
+      console.warn(`[vtu] variations unavailable for ${serviceId}`, err);
+      // No silent fallback catalogue: a stale hardcoded price list would let a
+      // customer buy a bundle at the wrong price.
+      throw new ApiError(
+        "Live bundle prices are temporarily unavailable. Please try again shortly.",
+        503,
+        "CATALOGUE_UNAVAILABLE",
+      );
+    }
+  }
+
+  // ---- Wholesale SME catalogue (previously called but never implemented) --
+  if (action === "get_sme_plans") {
+    if (!isBigisubConfigured()) {
+      throw new ApiError("SME data is not available right now.", 503, "SME_UNAVAILABLE");
+    }
+    const settings = await loadSettings(admin);
+    const networkId = Number(body.network) || bigisubNetworkId(body.provider ?? "mtn");
+
+    try {
+      const plans = await fetchSmePlans(networkId, settings.data_surcharge_ngn);
+      if (plans.length === 0) {
+        throw new Error("empty SME catalogue");
+      }
+      return json({ success: true, network: networkId, surcharge: settings.data_surcharge_ngn, plans });
+    } catch (err) {
+      console.warn(`[vtu] SME plans unavailable for network ${networkId}`, err);
+      throw new ApiError(
+        "SME data plans are temporarily unavailable. Please try again shortly.",
+        503,
+        "CATALOGUE_UNAVAILABLE",
+      );
+    }
+  }
+
+  // ---- Purchase ---------------------------------------------------------
+  const input = parse(purchaseSchema, body);
+
+  await rateLimit(admin, `vtu:purchase:${caller.id}`, 10, 60);
+
+  const profile = await loadCustomerProfile(admin, caller.id);
+  if (!profile) {
+    throw new ApiError("No MiliPay customer profile is linked to this login", 403, "PROFILE_MISSING");
+  }
+
+  const settings = await loadSettings(admin);
+  const priced = await priceTransaction(input, settings);
+  const reference = input.reference ?? `MP-BIL-${Date.now().toString().slice(-8)}${crypto.randomUUID().slice(0, 4)}`;
+
+  // Idempotency: a retry of an already-settled reference must not re-charge.
+  const { data: existing } = await admin
+    .from("transactions")
+    .select("reference, amount, status")
+    .eq("reference", reference)
+    .maybeSingle();
+
+  if (existing) {
+    return json({
+      success: existing.status === "success",
+      idempotent: true,
+      reference,
+      amount: Number(existing.amount),
+      message: "This payment reference has already been processed.",
+    });
+  }
+
+  await enforceTransactionLimits(admin, {
+    authUserId: caller.id,
+    customerId: profile.id,
+    amount: priced.amount,
+    kycTier: profile.kycTier,
+    pinThreshold: profile.pinThreshold,
+    pin: input.pin,
+  });
+
+  // ---- Debit (atomic; ownership is enforced inside the RPC) -------------
+  const { data: newBalance, error: debitError } = await admin.rpc("debit_linked_account", {
+    p_account_id: input.accountId,
+    p_user_id: caller.id,
+    p_amount: priced.amount,
+  });
+
+  if (debitError) {
+    const message = String(debitError.message ?? "");
+    if (message.includes("INSUFFICIENT_FUNDS")) {
+      throw new ApiError(
+        "Insufficient funds in the selected account.",
+        400,
+        "INSUFFICIENT_FUNDS",
+      );
+    }
+    if (message.includes("ACCOUNT_NOT_FOUND")) {
+      throw new ApiError("That bank account is not linked to your profile.", 403, "ACCOUNT_NOT_FOUND");
+    }
+    console.error("[vtu] debit failed", debitError);
+    throw new ApiError("Could not debit your account. No funds were moved.", 503, "DEBIT_FAILED");
+  }
+
+  // From here on, money has moved: every failure path must reverse it.
+  const reverse = async (why: string) => {
+    try {
+      await admin.rpc("credit_linked_account", {
+        p_account_id: input.accountId,
+        p_amount: priced.amount,
+      });
+      console.warn(`[vtu] auto-reversed ${priced.amount} NGN on ${reference}: ${why}`);
+      return true;
+    } catch (err) {
+      // Money is stuck. Loud, because it needs manual settlement.
+      console.error(`[vtu] REVERSAL FAILED for ${reference}`, err);
+      return false;
+    }
+  };
+
+  // ---- Fulfil -----------------------------------------------------------
+  const isTelecom = input.serviceType === "airtime" || input.serviceType === "data";
+  const destination = isTelecom ? normalizeNigerianPhone(input.destination) : input.destination;
+  const contactPhone = isTelecom
+    ? destination
+    : normalizeNigerianPhone(input.customerPhone) || destination;
+
+  let fulfilment: Fulfilment;
+  try {
+    if (input.serviceType === "data" && input.dataCategory === "sme") {
+      fulfilment = await purchaseSmeData({
+        networkId: bigisubNetworkId(input.provider),
+        planId: Number(input.variationCode),
+        phone: destination,
+      });
+    } else {
+      fulfilment = await payWithVtpass({
+        serviceType: input.serviceType,
+        serviceId: priced.serviceId,
+        reference,
+        billersCode: destination,
+        phone: contactPhone,
+        baseAmount: priced.baseAmount,
+        variationCode: input.variationCode,
+        meterType: input.meterType,
+      });
+    }
+  } catch (err) {
+    const refunded = await reverse(err instanceof Error ? err.message : "fulfilment error");
+    const detail = err instanceof FulfilmentError
+      ? err.message
+      : "The operator could not complete this request";
+
+    throw new ApiError(
+      refunded
+        ? `${detail}. Your payment was automatically refunded.`
+        : `${detail}. Your refund is being processed and will reflect shortly.`,
+      502,
+      "FULFILMENT_FAILED",
+      { refunded },
+    );
+  }
+
+  // ---- Record the transaction ------------------------------------------
+  const title = merchantTitle(input, priced.planLabel);
+  const { error: txError } = await admin.from("transactions").insert({
+    reference,
+    user_id: caller.id,
+    customer_id: profile.id,
+    merchant_name: fulfilment.token ? `${title} [Token: ${fulfilment.token}]` : title,
+    amount: priced.amount,
+    status: "success",
+    account_used: input.accountId,
+    created_at: new Date().toISOString(),
+  });
+
+  if (txError) {
+    // The operator already delivered, so we cannot reverse: record the gap
+    // loudly instead of silently swallowing it as the old code did.
+    console.error(
+      `[vtu] LEDGER WRITE FAILED after successful fulfilment. reference=${reference} ` +
+        `user=${caller.id} amount=${priced.amount} operatorRef=${fulfilment.operatorReference}`,
+      txError,
+    );
+  }
+
+  return json({
+    success: true,
+    reference,
+    operatorReference: fulfilment.operatorReference,
+    amount: priced.amount,
+    baseAmount: priced.baseAmount,
+    serviceType: input.serviceType,
+    provider: input.provider,
+    beneficiary: input.destination,
+    merchantTitle: title,
+    token: fulfilment.token ?? null,
+    units: fulfilment.units ?? null,
+    newBalance: Number(newBalance),
+    ledgerRecorded: !txError,
+    timestamp: new Date().toISOString(),
+  });
+}));

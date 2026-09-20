@@ -107,7 +107,11 @@ serve(async (req) => {
     const bankName = acct.institution?.name || accountData?.data?.meta?.data_status || 'Unknown Bank';
     const accountNumber = acct.account_number || acct.accountNumber || '0000000000';
     const accountName = acct.name || 'Unknown User';
-    const balance = acct.balance || 0;
+
+    // Mono reports balances in kobo. linked_accounts.balance is Naira
+    // numeric(12,2) per the project currency invariant, so convert at the
+    // boundary rather than letting kobo leak into the ledger.
+    const balanceNgn = Math.round((Number(acct.balance) || 0)) / 100;
 
     // --- Database: save everything using admin client (bypasses RLS) ---
 
@@ -118,7 +122,7 @@ serve(async (req) => {
       bank_name: bankName,
       account_number: accountNumber,
       account_name: accountName,
-      balance: balance,
+      balance: balanceNgn,
     }).select().single();
 
     if (error) {

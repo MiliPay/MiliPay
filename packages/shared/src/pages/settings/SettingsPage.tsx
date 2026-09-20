@@ -123,43 +123,34 @@ export default function SettingsPage() {
     setVtuErrorMsg(null);
 
     const payload = {
-      id: "default",
       data_surcharge_ngn: Math.max(0, Number(vtuSettings.data_surcharge_ngn) || 0),
       cable_surcharge_ngn: Math.max(0, Number(vtuSettings.cable_surcharge_ngn) || 0),
       power_convenience_fee_ngn: Math.max(0, Number(vtuSettings.power_convenience_fee_ngn) || 0),
       airtime_surcharge_percent: Math.max(0, Number(vtuSettings.airtime_surcharge_percent) || 0),
-      updated_at: new Date().toISOString(),
-      updated_by: user?.email || user?.fullName || "Admin",
     };
 
     try {
-      // 1. Save to local storage for instant sync
-      localStorage.setItem("milipay_vtu_settings", JSON.stringify(payload));
-      setVtuSettings(payload);
+      // Single authoritative path. Writing the table directly from the browser
+      // no longer works (and should not): the Edge Function verifies the caller
+      // is an administrator before touching retail pricing.
+      const { data, error } = await supabase.functions.invoke("vtu-service", {
+        body: { action: "update_settings", ...payload },
+      });
 
-      // 2. Persist to Supabase Database table
-      try {
-        await supabase
-          .from("vtu_settings")
-          .upsert(payload, { onConflict: "id" });
-      } catch (_) {}
+      if (error) throw error;
+      if (!data?.success) {
+        throw new Error(data?.error || "Margin settings were not saved.");
+      }
 
-      // 3. Also notify Edge function if deployed
-      try {
-        await supabase.functions.invoke("vtu-service", {
-          body: {
-            action: "update_settings",
-            ...payload,
-            adminUser: user?.email,
-          },
-        });
-      } catch (_) {}
+      const saved = { ...payload, ...data.settings };
+      setVtuSettings(saved);
+      localStorage.setItem("milipay_vtu_settings", JSON.stringify(saved));
 
-      setVtuSuccessMsg("VTU profit margins successfully updated and synchronized across all customer mobile apps!");
+      setVtuSuccessMsg("VTU profit margins updated. Customer apps will pick up the new pricing within 10 minutes.");
       setTimeout(() => setVtuSuccessMsg(null), 6000);
     } catch (err: any) {
       console.error("Failed to update VTU settings:", err);
-      setVtuSuccessMsg("VTU profit margins saved locally and primed for sync!");
+      setVtuErrorMsg(err?.message || "Could not save margin settings. Your changes were not applied.");
     } finally {
       setIsSavingVtuSettings(false);
     }

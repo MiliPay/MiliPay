@@ -1,239 +1,191 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import {
+  ApiError,
+  adminClient,
+  handler,
+  json,
+  loadCustomerProfile,
+  requireCaller,
+  staffRole,
+} from "../_shared/auth.ts";
+import { enforceTransactionLimits } from "../_shared/limits.ts";
+import { matchPalm } from "../_shared/biometrics.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+/**
+ * Merchant POS checkout.
+ *
+ * Flow: authenticate the terminal's merchant -> match the palm -> enforce KYC
+ * tier limits and the PIN challenge -> record the transaction -> return the
+ * receipt. Every step fails closed.
+ */
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+interface PaymentBody {
+  terminalId?: string;
+  merchantId?: string;
+  amount?: number;
+  palmFeature?: string;
+  pin?: string;
+  reference?: string;
+  accountId?: string;
+}
+
+serve(handler(async (req) => {
+  const caller = await requireCaller(req);
+  const admin = adminClient();
+  const body = (await req.json()) as PaymentBody;
+
+  const amount = Number(body.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new ApiError("Invalid transaction amount", 400, "INVALID_AMOUNT");
+  }
+  // Naira, numeric(12,2): reject sub-kobo precision rather than silently rounding.
+  if (Math.round(amount * 100) !== amount * 100) {
+    throw new ApiError("Amount may not have more than 2 decimal places", 400, "INVALID_AMOUNT");
   }
 
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    const supabaseServiceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    const adminClient = createClient(supabaseUrl, supabaseServiceRole);
+  if (!body.merchantId) {
+    throw new ApiError("Missing merchant ID", 400, "MISSING_MERCHANT");
+  }
 
-    const body = await req.json();
-    const {
-      terminalId,
-      merchantId,
-      amount,
-      palmFeature,
-      pin,
-      reference = `MILI-TX-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`,
-      accountId,
-      userId,
-    } = body;
+  // 1. Merchant must exist, be active, and belong to the caller.
+  const { data: merchant, error: merchantError } = await admin
+    .from("merchants")
+    .select("id, business_name, status, auth_user_id, platform_fee_percent, settlement_schedule")
+    .eq("id", body.merchantId)
+    .maybeSingle();
 
-    if (!amount || amount <= 0) {
-      throw new Error("Invalid transaction amount");
-    }
+  if (merchantError || !merchant) {
+    throw new ApiError("Merchant not found", 404, "MERCHANT_NOT_FOUND");
+  }
 
-    if (!merchantId) {
-      throw new Error("Missing merchant ID");
-    }
+  const callerStaffRole = await staffRole(admin, caller.id);
+  const callerOwnsMerchant = merchant.auth_user_id === caller.id;
+  const callerIsAdmin = callerStaffRole === "admin" || callerStaffRole === "super_admin";
 
-    // 1. Validate Merchant & Fetch Settlement Configuration
-    const { data: merchant, error: merchantError } = await adminClient
-      .from('merchants')
-      .select('*')
-      .eq('id', merchantId)
-      .single();
+  if (!callerOwnsMerchant && !callerIsAdmin) {
+    // Without this check any signed-in user could bill any merchant.
+    throw new ApiError("You are not authorised to collect payments for this merchant", 403, "FORBIDDEN");
+  }
 
-    if (merchantError || !merchant) {
-      throw new Error("Merchant not found or inactive");
-    }
+  if (merchant.status !== "active") {
+    throw new ApiError(`Merchant account is currently ${merchant.status}`, 403, "MERCHANT_NOT_ACTIVE");
+  }
 
-    if (merchant.status !== 'active') {
-      throw new Error(`Merchant account is currently ${merchant.status}`);
-    }
-
-    // 2. Validate POS Terminal if specified
-    let terminal = null;
-    if (terminalId) {
-      const { data: terminalData, error: terminalError } = await adminClient
-        .from('pos_terminals')
-        .select('*')
-        .eq('terminal_id', terminalId)
-        .eq('merchant_id', merchantId)
-        .single();
-
-      if (terminalError || !terminalData) {
-        throw new Error("POS Terminal not authorized for this merchant");
-      }
-
-      if (!terminalData.is_active) {
-        throw new Error("POS Terminal has been deactivated or suspended");
-      }
-
-      terminal = terminalData;
-
-      // Update terminal heartbeat
-      await adminClient
-        .from('pos_terminals')
-        .update({ last_heartbeat: new Date().toISOString() })
-        .eq('id', terminalData.id);
-    }
-
-    // 3. Customer KYC Tier & Transaction Limits Validation
-    // Tier 1: Single max ₦50k, Daily ₦200k
-    // Tier 2: Single max ₦150k, Daily ₦500k (Default on enrollment)
-    // Tier 3: Single max ₦250k, Daily ₦1,000,000 (Coming Soon)
-    const TIER_LIMITS: Record<number, { tier: number; name: string; maxSingle: number; maxDaily: number }> = {
-      1: { tier: 1, name: "Tier 1", maxSingle: 50_000, maxDaily: 200_000 },
-      2: { tier: 2, name: "Tier 2", maxSingle: 150_000, maxDaily: 500_000 },
-      3: { tier: 3, name: "Tier 3", maxSingle: 250_000, maxDaily: 1_000_000 },
-    };
-
-    let customerKycTier = 2; // Default on registration (NIN + Palm scan confirmed)
-    let customerPinThreshold = 10000; // Default ₦10,000
-
-    if (userId) {
-      const { data: customerData } = await adminClient
-        .from('customers')
-        .select('id, kyc_tier, pin_threshold')
-        .or(`id.eq.${userId},auth_user_id.eq.${userId}`)
-        .maybeSingle();
-
-      if (customerData) {
-        customerKycTier = customerData.kyc_tier || 2;
-        customerPinThreshold = Number(customerData.pin_threshold) || 10000;
-      }
-    }
-
-    const currentTierLimits = TIER_LIMITS[customerKycTier] || TIER_LIMITS[2];
-
-    // A. Enforce Single Transaction Limit
-    if (amount > currentTierLimits.maxSingle) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          code: "EXCEEDS_SINGLE_LIMIT",
-          message: `Transaction of ₦${amount.toLocaleString()} exceeds your ${currentTierLimits.name} maximum limit of ₦${currentTierLimits.maxSingle.toLocaleString()} per transaction.`,
-          maxSingle: currentTierLimits.maxSingle,
-          tier: customerKycTier,
-        }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 400,
-        }
-      );
-    }
-
-    // B. Enforce Customer-Configurable PIN Verification Threshold (Default: ₦10,000)
-    if (amount > customerPinThreshold && !pin) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          requirePin: true,
-          code: "PIN_REQUIRED",
-          threshold: customerPinThreshold,
-          message: `Transactions exceeding your security threshold of ₦${customerPinThreshold.toLocaleString()} require 4-digit MiliPay PIN verification.`,
-        }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        }
-      );
-    }
-
-    // C. Enforce Cumulative Daily Limit (WAT: UTC+1)
-    if (userId) {
-      const { data: dailySpentData } = await adminClient
-        .rpc('get_customer_daily_spend', { p_user_id: userId });
-
-      const totalSpentToday = Number(dailySpentData || 0);
-      if (totalSpentToday + amount > currentTierLimits.maxDaily) {
-        const remainingLimit = Math.max(0, currentTierLimits.maxDaily - totalSpentToday);
-        return new Response(
-          JSON.stringify({
-            success: false,
-            code: "EXCEEDS_DAILY_LIMIT",
-            message: `Daily transaction limit of ₦${currentTierLimits.maxDaily.toLocaleString()} reached for ${currentTierLimits.name}. Remaining today: ₦${remainingLimit.toLocaleString()}. Resets at 00:00 WAT.`,
-            dailySpent: totalSpentToday,
-            maxDaily: currentTierLimits.maxDaily,
-            remainingLimit: remainingLimit,
-            tier: customerKycTier,
-          }),
-          {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 400,
-          }
-        );
-      }
-    }
-
-    // 4. Split Settlement Calculations
-    const platformFeeRate = Number(merchant.platform_fee_percent || 1.50) / 100;
-    const feeAmount = Math.round(amount * platformFeeRate * 100) / 100;
-    const netMerchantAmount = Math.round((amount - feeAmount) * 100) / 100;
-
-    // 5. Auth Code & Idempotent Reference
-    const authCode = `APPR-${Math.floor(100000 + Math.random() * 900000)}`;
-
-    // 6. Record Transaction in public.transactions
-    const { data: transaction, error: txError } = await adminClient
-      .from('transactions')
-      .insert({
-        merchant_id: merchant.id,
-        merchant_name: merchant.business_name,
-        user_id: userId || null,
-        account_used: accountId || null,
-        terminal_id: terminalId || null,
-        amount: amount,
-        status: 'success',
-        reference: reference,
-        created_at: new Date().toISOString(),
-      })
-
-      .select()
+  // 2. Terminal must be paired to this merchant and enabled.
+  let terminal: { id: string; terminal_id: string } | null = null;
+  if (body.terminalId) {
+    const { data: terminalData, error: terminalError } = await admin
+      .from("pos_terminals")
+      .select("id, terminal_id, is_active")
+      .eq("terminal_id", body.terminalId)
+      .eq("merchant_id", merchant.id)
       .maybeSingle();
 
-    if (txError) {
-      console.warn("Transaction insert error (possibly partition trigger):", txError.message);
+    if (terminalError || !terminalData) {
+      throw new ApiError("POS terminal is not authorised for this merchant", 403, "TERMINAL_NOT_AUTHORISED");
     }
+    if (!terminalData.is_active) {
+      throw new ApiError("POS terminal has been deactivated or blacklisted", 403, "TERMINAL_INACTIVE");
+    }
+    terminal = terminalData;
+  }
 
-    // 7. Return Full POS Receipt & Verification Payload
-    return new Response(
-      JSON.stringify({
-        success: true,
-        status: "APPROVED",
-        authCode: authCode,
-        reference: reference,
-        amount: amount,
-        platformFee: feeAmount,
-        netMerchantPayout: netMerchantAmount,
-        settlementSchedule: merchant.settlement_schedule || 'instant',
-        receipt: {
-          merchantName: merchant.business_name,
-          terminalId: terminalId || "PORTAL-DIRECT",
-          amount: amount,
-          currency: "NGN",
-          timestamp: new Date().toISOString(),
-          status: "APPROVED",
-          authCode: authCode,
-          reference: reference,
-        },
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      }
-    );
-  } catch (err: any) {
-    return new Response(
-      JSON.stringify({
-        success: false,
-        status: "DECLINED",
-        error: err.message || "Payment processing failed",
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 400,
-      }
+  // 3. Idempotency. A retried request must never double-charge.
+  const reference = body.reference?.trim() ||
+    `MILI-TX-${Date.now()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+
+  const { data: existing } = await admin
+    .from("transactions")
+    .select("reference, amount, status, created_at")
+    .eq("reference", reference)
+    .maybeSingle();
+
+  if (existing) {
+    return json({
+      success: existing.status === "success",
+      status: existing.status === "success" ? "APPROVED" : "DECLINED",
+      idempotent: true,
+      reference,
+      amount: Number(existing.amount),
+      message: "This payment reference has already been processed.",
+    });
+  }
+
+  // 4. Identify the customer by their palm. Fails closed when the sovereign
+  //    matcher is unreachable or unconfigured.
+  const match = await matchPalm(body.palmFeature ?? "");
+
+  const profile = await loadCustomerProfile(admin, match.authUserId);
+  if (!profile) {
+    throw new ApiError("Matched customer has no active MiliPay profile", 403, "CUSTOMER_PROFILE_MISSING");
+  }
+
+  // 5. KYC tier caps, PIN challenge above the customer's threshold, daily cap.
+  await enforceTransactionLimits(admin, {
+    authUserId: match.authUserId,
+    customerId: profile.id,
+    amount,
+    kycTier: profile.kycTier,
+    pinThreshold: profile.pinThreshold,
+    pin: body.pin,
+  });
+
+  // 6. Split settlement. Stored in Naira, numeric(12,2).
+  const feePercent = Number(merchant.platform_fee_percent ?? 1.5);
+  const feeAmount = Math.round(amount * (feePercent / 100) * 100) / 100;
+  const netMerchantAmount = Math.round((amount - feeAmount) * 100) / 100;
+  const authCode = `APPR-${100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000)}`;
+
+  // 7. Record the transaction. A ledger write that fails must decline the
+  //    payment: previously this was a console.warn and still returned APPROVED.
+  const { error: txError } = await admin.from("transactions").insert({
+    merchant_id: merchant.id,
+    merchant_name: merchant.business_name,
+    user_id: match.authUserId,
+    customer_id: profile.id,
+    account_used: body.accountId ?? null,
+    terminal_id: terminal?.terminal_id ?? null,
+    amount,
+    status: "success",
+    reference,
+    created_at: new Date().toISOString(),
+  });
+
+  if (txError) {
+    console.error("[process-payment] ledger write failed", txError);
+    throw new ApiError(
+      "Payment could not be recorded and was declined. No funds were moved.",
+      503,
+      "LEDGER_WRITE_FAILED",
     );
   }
-});
+
+  // Heartbeat only after the money path succeeded.
+  if (terminal) {
+    await admin
+      .from("pos_terminals")
+      .update({ last_heartbeat: new Date().toISOString() })
+      .eq("id", terminal.id);
+  }
+
+  return json({
+    success: true,
+    status: "APPROVED",
+    authCode,
+    reference,
+    amount,
+    platformFee: feeAmount,
+    netMerchantPayout: netMerchantAmount,
+    settlementSchedule: merchant.settlement_schedule ?? "instant",
+    receipt: {
+      merchantName: merchant.business_name,
+      terminalId: terminal?.terminal_id ?? "PORTAL-DIRECT",
+      amount,
+      currency: "NGN",
+      timestamp: new Date().toISOString(),
+      status: "APPROVED",
+      authCode,
+      reference,
+    },
+  });
+}));

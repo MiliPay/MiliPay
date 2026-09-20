@@ -91,7 +91,6 @@ export default function QuickServiceScreen({ route, navigation }: any) {
   const user = useAuthStore((state) => state.user);
   const { linkedAccounts, activeBankIndex, setActiveBankIndex } = useBankStore();
   const [selectedBankIndex, setSelectedBankIndex] = useState<number>(activeBankIndex || 0);
-  const recordBillPayment = useTransactionStore((state) => state.recordBillPayment);
 
   useEffect(() => {
     if (activeBankIndex >= 0 && activeBankIndex < linkedAccounts.length) {
@@ -380,7 +379,6 @@ export default function QuickServiceScreen({ route, navigation }: any) {
     let provider = selectedTelco;
     let destination = recipientNumber;
     let variationCode: string | undefined = undefined;
-    let baseAmount: number | undefined = undefined;
 
     if (serviceType === 'airtime') {
       provider = selectedTelco;
@@ -389,7 +387,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
       provider = selectedTelco;
       destination = recipientNumber;
       variationCode = (selectedDataPlan as any)?.variationCode || selectedDataPlan?.id;
-      baseAmount = (selectedDataPlan as any)?.basePrice;
+
     } else if (serviceType === 'power') {
       provider = selectedDisco;
       destination = meterNumber;
@@ -398,7 +396,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
       provider = selectedCable;
       destination = smartcardNumber;
       variationCode = (selectedBouquet as any)?.variationCode || selectedBouquet?.id;
-      baseAmount = (selectedBouquet as any)?.basePrice;
+
     } else if (serviceType === 'internet') {
       provider = 'spectranet';
       destination = recipientNumber || '08011111111';
@@ -412,48 +410,46 @@ export default function QuickServiceScreen({ route, navigation }: any) {
 
     try {
       const data = await executeVtuRecharge({
-        serviceType: serviceType as any,
+        serviceType,
         provider,
-        amount: payable,
-        baseAmount,
+        // Only open-value services carry an amount. Bundle prices are resolved
+        // server-side from the operator catalogue so they cannot be tampered with.
+        amount: serviceType === 'airtime' || serviceType === 'power' ? payable : undefined,
         destination,
         customerPhone: user?.phone || recipientNumber || undefined,
         variationCode,
         meterType: serviceType === 'power' ? meterType : undefined,
         dataCategory: serviceType === 'data' ? dataCategory : undefined,
-        planId: serviceType === 'data' && dataCategory === 'sme' && variationCode ? parseInt(variationCode, 10) : undefined,
         accountId: activeAccount?.id || undefined,
-        userId: user?.id || undefined,
         pin: enteredPin || undefined,
       });
 
       if (!data || data.success === false) {
-        // PIN required trigger
+        // PIN challenge, or a rejected PIN that can be retried.
         if (data?.requirePin) {
           setIsProcessing(false);
-          setPinError(data.message || '4-digit PIN required');
+          setPinError(data.message || data.error || '4-digit PIN required');
           setIsPinModalVisible(true);
           return;
         }
 
-        // Auto-reversal alert if VTPass failed
-        if (data?.code === 'FULFILLMENT_FAILED_AUTO_REVERSED') {
+        // Fulfilment failed after debit; the server reverses automatically.
+        if (data?.code === 'FULFILMENT_FAILED') {
           setIsProcessing(false);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           Alert.alert(
-            'Recharge Failed & Auto-Refunded',
-            data.message || `The telecom operator could not fulfill this transaction. Your payment of ₦${payable.toLocaleString()} was immediately refunded to your account.`
+            data.refunded ? 'Recharge Failed & Refunded' : 'Recharge Failed',
+            data.error || data.message || 'The operator could not complete this transaction.'
           );
-          if (user?.id) {
-            await useBankStore.getState().fetchAccounts(user.id);
-          }
           return;
         }
 
         throw new Error(data?.error || data?.message || 'Transaction could not be completed.');
       }
 
-      // Success flow! (Balance was already debited in executeVtuRecharge)
+      // Success. The ledger and balances are already server-authoritative;
+      // executeVtuRecharge refreshed them before returning.
+      const chargedAmount = Number(data.amount ?? payable);
       const finalRef = data.reference || `MP-BIL-${Date.now()}`;
       const finalTitle = (data.token ? `${data.merchantTitle || 'Quick Service'} [Token: ${data.token}]` : data.merchantTitle) || 'Quick Service';
 
@@ -466,7 +462,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
             customer_id: user?.customerId || null,
             user_id: user?.id || null,
             merchant_name: finalTitle,
-            amount: payable,
+            amount: chargedAmount,
             status: 'success',
             account_used: activeAccount?.id || null,
             created_at: data.timestamp || new Date().toISOString(),
@@ -482,10 +478,10 @@ export default function QuickServiceScreen({ route, navigation }: any) {
 
       setSuccessReceipt({
         reference: data.reference,
-        amount: payable,
+        amount: chargedAmount,
         merchant: data.merchantTitle,
         beneficiary: destination,
-        bank: data.bankName || activeAccount?.bankName || 'MiliPay Linked Account',
+        bank: activeAccount?.bankName || 'MiliPay Linked Account',
         date: new Date(data.timestamp || Date.now()).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' }),
         token: data.token || null,
         units: data.units || null,

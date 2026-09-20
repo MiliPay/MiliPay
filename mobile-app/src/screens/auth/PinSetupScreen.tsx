@@ -6,6 +6,7 @@ import Animated, { useAnimatedStyle, withSpring, useSharedValue, withSequence, w
 import * as Haptics from 'expo-haptics';
 
 import { Dialpad } from '../../components/ui/Dialpad';
+import { useAuthStore } from '../../store/useStore';
 
 const PIN_LENGTH = 4;
 
@@ -40,13 +41,16 @@ export default function PinSetupScreen({ navigation }: any) {
   const [confirmPin, setConfirmPin] = useState('');
   const [step, setStep] = useState<1 | 2>(1);
   const [isError, setIsError] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const shakeOffset = useSharedValue(0);
+  const setPinOnServer = useAuthStore((state) => state.setPin);
 
   const currentDisplay = step === 1 ? pin : confirmPin;
 
   const handleKeyPress = (val: string) => {
-    if (currentDisplay.length >= PIN_LENGTH) return;
-    
+    if (currentDisplay.length >= PIN_LENGTH || isSaving) return;
+
     if (step === 1) {
       const newPin = pin + val;
       setPin(newPin);
@@ -78,25 +82,45 @@ export default function PinSetupScreen({ navigation }: any) {
     }
   };
 
-  const verifyPin = (finalConfirm: string) => {
-    if (pin === finalConfirm) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setTimeout(() => navigation.navigate('BiometricSetup'), 500);
-    } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setIsError(true);
-      shakeOffset.value = withSequence(
-        withTiming(-10, { duration: 50 }),
-        withTiming(10, { duration: 50 }),
-        withTiming(-10, { duration: 50 }),
-        withTiming(10, { duration: 50 }),
-        withSpring(0, { damping: 10, stiffness: 400 })
-      );
-      setTimeout(() => {
-        setConfirmPin('');
-        setIsError(false);
-      }, 500);
+  const rejectPin = (message?: string) => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    setIsError(true);
+    shakeOffset.value = withSequence(
+      withTiming(-10, { duration: 50 }),
+      withTiming(10, { duration: 50 }),
+      withTiming(-10, { duration: 50 }),
+      withTiming(10, { duration: 50 }),
+      withSpring(0, { damping: 10, stiffness: 400 })
+    );
+    if (message) setErrorMessage(message);
+    setTimeout(() => {
+      setConfirmPin('');
+      setIsError(false);
+    }, 500);
+  };
+
+  const verifyPin = async (finalConfirm: string) => {
+    if (pin !== finalConfirm) {
+      rejectPin('PINs did not match. Try again.');
+      return;
     }
+
+    // Persist the PIN. Until this call succeeds the customer has no PIN, and
+    // every payment above their threshold will be declined.
+    setIsSaving(true);
+    setErrorMessage(null);
+    const result = await setPinOnServer(finalConfirm);
+    setIsSaving(false);
+
+    if (!result.success) {
+      setStep(1);
+      setPin('');
+      rejectPin(result.error || 'Could not save your PIN. Please try again.');
+      return;
+    }
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setTimeout(() => navigation.navigate('BiometricSetup'), 500);
   };
 
   const animatedShake = useAnimatedStyle(() => ({
@@ -123,13 +147,26 @@ export default function PinSetupScreen({ navigation }: any) {
 
           <Animated.View style={animatedShake} className="flex-row mt-16 bg-white/5 p-6 rounded-full border border-white/5 shadow-2xl">
             {Array.from({ length: PIN_LENGTH }).map((_, i) => (
-              <PinWell 
-                key={i} 
-                filled={i < currentDisplay.length} 
+              <PinWell
+                key={i}
+                filled={i < currentDisplay.length}
                 isError={isError}
               />
             ))}
           </Animated.View>
+
+          <View className="h-10 mt-6 justify-center">
+            {isSaving && (
+              <Text className="text-white/50 text-sm font-inter text-center">
+                Securing your PIN...
+              </Text>
+            )}
+            {!isSaving && errorMessage && (
+              <Text className="text-red-400 text-sm font-inter text-center max-w-[300px]">
+                {errorMessage}
+              </Text>
+            )}
+          </View>
         </View>
 
         <View className="pb-8">
