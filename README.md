@@ -1,334 +1,535 @@
-# MiliPay — Biometric Financial Switch
+# MiliPay — Biometric Payments Infrastructure
 
 <div align="center">
 
 ![MiliPay Logo](website/public/logo-main.png)
 
-**Payments in Milliseconds • Sovereign Biometric Financial Infrastructure**
+**Palm-vein authentication for direct bank-account payments in Nigeria**
 
-[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-blue.svg)](#)
-[![Monorepo: npm Workspaces](https://img.shields.io/badge/Monorepo-npm%20Workspaces-green.svg)](#)
-[![Framework: React%2018%20%2B%20Vite](https://img.shields.io/badge/Frontend-React%2018%20%2F%20Vite-61dafb.svg)](#)
-[![Mobile: React%20Native%20%2F%20Expo](https://img.shields.io/badge/Mobile-React%20Native%20%2F%20Expo-000020.svg)](#)
-[![Backend: Supabase%20%2B%20Edge%20Functions](https://img.shields.io/badge/Backend-Supabase%20%2B%20Deno-3ECF8E.svg)](#)
-[![Open Banking: Mono](https://img.shields.io/badge/Open%20Banking-Mono%20DirectPay-0052FF.svg)](#)
-[![Regulatory: NDPA%20%26%20CBN](https://img.shields.io/badge/Compliance-NDPA%20%26%20CBN%20Certified-orange.svg)](#)
+[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-blue.svg)](#license)
+[![Status: Pre-production](https://img.shields.io/badge/Status-Pre--production-yellow.svg)](#project-status)
+[![Monorepo: npm Workspaces](https://img.shields.io/badge/Monorepo-npm%20Workspaces-green.svg)](#repository-layout)
+[![Frontend: React 18 / Vite](https://img.shields.io/badge/Frontend-React%2018%20%2F%20Vite-61dafb.svg)](#repository-layout)
+[![Mobile: React Native / Expo](https://img.shields.io/badge/Mobile-React%20Native%20%2F%20Expo-000020.svg)](#customer-mobile-app)
+[![Backend: Supabase + Deno](https://img.shields.io/badge/Backend-Supabase%20%2B%20Deno-3ECF8E.svg)](#the-money-path)
 
 </div>
 
 ---
 
-## Executive Summary
-
-**MiliPay** is an enterprise-grade biometric financial switch engineered for emerging markets, starting with Nigeria. It bridges physical identity and digital banking by combining dual-lens near-infrared (NIR 850nm) + RGB subcutaneous palm vein scanning with Open Banking payment rails (powered by **Mono DirectPay**).
-
-MiliPay enables consumers to make retail store payments in **under 450 milliseconds** simply by hovering their palm over a certified merchant POS terminal—completely cardless, phoneless, and cash-free.
+> **Read this first.** MiliPay is at seed stage and **is not in production, is not certified,
+> and does not move real money yet.** Several components described in earlier versions of this
+> document — the palm-matching microservice, the Android hardware bridge, and the Mono DirectPay
+> debit leg — are **design targets that do not exist in this repository**.
+> [Not built yet](#not-built-yet) is the authoritative list. Nothing in this README should be
+> read as a claim of regulatory approval.
 
 ---
 
-## System Architecture
+## Contents
+
+- [What MiliPay is](#what-milipay-is)
+- [Project status](#project-status)
+- [Architecture](#architecture)
+- [Repository layout](#repository-layout)
+- [The money path](#the-money-path)
+- [Portals and roles](#portals-and-roles)
+- [Customer mobile app](#customer-mobile-app)
+- [Bill payments and airtime](#bill-payments-and-airtime)
+- [Support ticketing](#support-ticketing)
+- [Security model](#security-model)
+- [Secrets and environment](#secrets-and-environment)
+- [Getting started](#getting-started)
+- [Quality gates](#quality-gates)
+- [Deployment](#deployment)
+- [Not built yet](#not-built-yet)
+- [Regulatory posture](#regulatory-posture)
+- [License](#license)
+
+---
+
+## What MiliPay is
+
+MiliPay is an **authentication and payment-initiation layer**, not a wallet and not a custodian
+of customer funds. The intent is that a customer hovers their palm over a merchant POS terminal,
+the palm identifies them, and their own bank account is debited over Open Banking rails — no
+card, no phone, no cash.
+
+The repository holds four role-based web portals, a public marketing site, a customer mobile app,
+a shared React package, and a Supabase backend (Postgres + RLS + Deno Edge Functions).
+
+---
+
+## Project status
+
+| Area | State | Notes |
+| :--- | :--- | :--- |
+| Staff auth and role separation | **Built** | Supabase Auth + RLS, five roles, enforced in DB and UI |
+| Customer enrolment (agent / admin) | **Built** | Edge function mints identities; agent enrolments land as `pending` |
+| Merchant onboarding | **Built** | Bank-account name lookup via Mono; falls back silently if unconfigured |
+| POS terminal registry, blacklist, cascade delete | **Built** | `SECURITY DEFINER` RPC preserves transaction history |
+| Support ticketing (two-tier) | **Built** | Ticket IDs minted only on resolve or escalate |
+| KYC tiers, daily caps, PIN challenge | **Built** | Server-enforced in Edge Functions; client cannot bypass |
+| Bill payments / airtime (VTU) | **Built** | VTPass + BigiSub, server-side pricing, atomic debit with reversal |
+| Bank account linking | **Built** | Mono account auth, max 3 active accounts per customer |
+| Transaction ledger | **Built** | Monthly range partitions, auto-created by trigger |
+| Palm capture (client) | **Partial** | Bridge contract + simulation gate exist; **no native bridge in this repo** |
+| Palm matching (server) | **Partial** | Edge client exists and fails closed; **matcher service is not in this repo** |
+| Card-present payment authorisation | **Partial** | Authenticates, matches, enforces limits, writes the ledger — **no bank is charged** |
+| Settlement and payouts | **Not built** | Split is calculated and recorded, never disbursed |
+| Identity verification (NIN/BVN) | **Not built** | Format-checked only; no NIMC/NIBSS verification call |
+| Automated tests | **Not built** | Zero test files in the repository |
+
+---
+
+## Architecture
 
 ```mermaid
 flowchart TB
-    subgraph Hardware ["Hardware Tier (HFSecurity Ecosystem)"]
-        FP08PV["HF-FP08PV Rugged Tablet\n(Field Agent Onboarding)"]
-        VP930["HF-VP930Pro USB Scanner\n(MVP / Benchmarks)"]
-        HP605["HF-HP605PV Smart POS\n(EMV / PCI Retail Checkout)"]
+    subgraph Hardware ["Hardware tier — target, not integrated"]
+        FP08PV["HF-FP08PV rugged tablet<br/>(field agent onboarding)"]
+        HP605["HF-HP605PV smart POS<br/>(retail checkout)"]
     end
 
-    subgraph ClientApps ["Client Applications (npm Workspaces)"]
-        AgentPortal["Agent Portal (:3001)\n(Field Agent Console)"]
-        AdminPanel["Admin Panel (:3000)\n(Supervisory & Risk)"]
-        ServicePortal["Service Portal (:3002)\n(Customer Support Desk)"]
-        MerchantPortal["Merchant Portal (:3003)\n(Store Operations)"]
-        MobileApp["Customer Mobile App\n(React Native / Expo)"]
-        Website["Marketing Website\n(Customer & Merchant Hub)"]
+    subgraph ClientApps ["Client applications (npm workspaces)"]
+        AdminPanel["Admin Panel<br/>(supervisory and risk)"]
+        AgentPortal["Agent Portal<br/>(field enrolment)"]
+        ServicePortal["Service Portal<br/>(support desk)"]
+        MerchantPortal["Merchant Portal<br/>(store operations)"]
+        MobileApp["Customer mobile app<br/>(React Native / Expo)"]
+        Website["Marketing website"]
     end
 
-    subgraph SovereignEngine ["Biometric Matching Core (Zero Cloud Leak)"]
-        CppEngine["C++ In-Memory Microservice\n(Sub-200ms 1:N RAM Matching)"]
-        ByteaVault["Supabase BYTEA Biometric Storage\n(NDPA Sovereign Pipeline)"]
+    subgraph Backend ["Supabase"]
+        EdgeFns["Deno Edge Functions<br/>(the only path to money)"]
+        Postgres["Postgres + RLS<br/>(partitioned ledger)"]
     end
 
-    subgraph OpenBanking ["Financial Infrastructure"]
-        MonoDirectPay["Mono DirectPay Rails\n(Customer Debit & Split Settlement)"]
-        MonoLookup["NIBSS Account Lookup API"]
-        MonoPayouts["Mono Transfers (T+0 / EOD NIP)"]
+    subgraph External ["External services"]
+        Matcher["Palm 1:N matcher<br/>NOT IN THIS REPO"]
+        Mono["Mono<br/>(account linking + name lookup)"]
+        VTU["VTPass / BigiSub<br/>(airtime, data, power, cable)"]
     end
 
-    FP08PV --> AgentPortal
-    HP605 --> MerchantPortal
-    HP605 --> SovereignEngine
-    SovereignEngine --> MonoDirectPay
-    AgentPortal & AdminPanel & ServicePortal & MerchantPortal --> ByteaVault
-    MobileApp --> MonoLookup
-    MonoDirectPay --> MonoPayouts
+    FP08PV -.-> AgentPortal
+    HP605 -.-> MerchantPortal
+    AdminPanel & AgentPortal & ServicePortal & MerchantPortal --> EdgeFns
+    MobileApp --> EdgeFns
+    EdgeFns --> Postgres
+    EdgeFns -->|PALM_MATCH_URL| Matcher
+    EdgeFns --> Mono
+    EdgeFns --> VTU
+
+    classDef missing stroke-dasharray: 5 5
+    class Matcher,FP08PV,HP605 missing
 ```
 
----
-
-## Biometric Hardware Strategy & Tiering
-
-Under Central Bank of Nigeria (CBN) regulations and the Nigeria Data Protection Act (NDPA), all biometric operations strictly adhere to **data sovereignty**. Biometric templates are never streamed to foreign cloud demo servers. MiliPay utilizes HFSecurity hardware integrated with private on-premise local SDK libraries.
-
-| Device Tier | Model | OS & Certifications | Target Role | Key Capabilities |
-| :--- | :--- | :--- | :--- | :--- |
-| **Field Agent Handheld** | `HF-FP08PV` | Android 13 • IP65 | Field Agents (`role: 'agent'`) | 10,000mAh battery, 4G LTE, OCR/MRZ camera for NIN/Passport, built-in dual NIR/RGB palm scanner. Roaming customer enrollment. |
-| **Development & Benchmark** | `HF-VP930Pro` | Multi-OS (Android / Linux / Windows) | MVP & C++ Benchmarks | USB Type-C module for algorithm tuning, RAM matching benchmarks, and local rapid testing. |
-| **Primary Merchant POS** | `HF-HP605PV` | Android 11 • **EMV & PCI-PTS Certified** | Retail Merchants (`role: 'merchant'`) | Mandatory CBN financial certification, 6.0" IPS touchscreen, 3000mAh battery, built-in thermal printer, ≤450ms biometric recognition. |
-| **Budget POS Terminal** | `HF-MP50` | Android 11 | Secondary / Tier-2 Retail | 5.5" display, 1800mAh battery, lower-cost alternative where PCI/EMV is not strictly mandated. |
-| **Future Enterprise** | Desktop & Floor Kiosks | Industrial Linux / Android | Supermarket Chains | Self-checkout kiosks with 58/80mm thermal receipt printers and integrated palm sensors (Shoprite, Spar, Ebeano). |
-
-### Biometric SDK Pipeline
-- **Android Native Bridge (`PalmScannerModule.java`)**: Wraps `palm-android-sdk-v1.3.7.jar`.
-  - Lifecycle: `PalmSdk.initialize()` &rarr; `Device.create()` &rarr; `mDevice.open()` &rarr; `createStream(StreamType.RGB_IR)` &rarr; `start()`.
-  - Capture: `mDevice.capturePalm(callback, timeout)` extracts raw byte arrays: `irFeature`, `rgbFeature`, `score`, `palmType` (`0: left, 1: right`).
-  - Real-Time Hardware Prompts: Maps SDK feedback to UI guidance (`NO_PALM_DETECTED`, `IR_DARKNESS` &rarr; move closer, `IR_OVER_EXPOSE` &rarr; move away, `PALM_IS_MOVING` &rarr; keep still).
-  - Hardware Status LEDs: `LED_GREEN_MODE` on approval, `LED_RED_MODE` on decline, `LED_BLUE_BREATH_MODE` during biometric acquisition.
-- **Sovereign In-Memory Matching Engine**: Sovereign C++ Microservice utilizing the Linux SDK (`vp930-sdk-linux-x86_64-v1.3.58-P`). Loads biometric templates as `BYTEA` arrays into memory as `std::vector<float>` and executes `CompareFeaturesScore` in **<200ms** across the customer base.
+Dashed boxes are not implemented in this repository.
 
 ---
 
-## Monorepo Architecture & Workspaces
-
-MiliPay is structured as an **npm workspace monorepo** to enforce clean boundaries between shared business logic and independent frontend applications.
+## Repository layout
 
 ```
 BioPay/
 ├── packages/
-│   └── shared/                # Core shared package (@milipay/shared)
-│       ├── src/
-│       │   ├── components/    # Reusable UI primitives (Buttons, Modals, Cards, Tables)
-│       │   ├── features/      # Business services (auth, customers, merchants, staff)
-│       │   ├── lib/           # Supabase client, constants, helpers
-│       │   ├── pages/         # Shared views (Login, Customers, Complaints, Merchants)
-│       │   └── types/         # Master TypeScript domain models & schemas
-├── AdminPanel/                # Central Supervisory Command (:3000)
-├── agent-portal/              # Field Agent Roaming Console (:3001)
-├── service-portal/            # Customer Support & Live Desk (:3002)
-├── merchant-portal/           # Merchant Store Manager (:3003)
-├── website/                   # Public Marketing & Onboarding Portal
-├── mobile-app/                # React Native / Expo Customer Application
-├── supabase/                  # PostgreSQL schemas, migrations, Edge Functions
+│   └── shared/                # @milipay/shared — the only place business logic lives
+│       └── src/
+│           ├── components/    # UI primitives
+│           ├── features/      # auth, customers, merchants, staff, support, biometrics
+│           ├── lib/           # Supabase client, constants, helpers
+│           ├── pages/         # Shared views, mounted by each portal
+│           └── types/         # Domain models (single source of truth)
+├── AdminPanel/                # Supervisory console
+├── agent-portal/              # Field agent enrolment console
+├── service-portal/            # Customer support desk
+├── merchant-portal/           # Merchant store manager
+├── website/                   # Public marketing site
+├── mobile-app/                # React Native / Expo customer app (managed workflow)
+├── supabase/
 │   ├── functions/
-│   │   ├── onboard-merchant/  # Merchant registration & NIBSS bank verification
-│   │   ├── process-payment/   # Palm matching, Mono DirectPay split debit
-│   │   └── link-mono-account/ # Token exchange & bank account linking
-│   └── migrations/            # Production migrations & RLS security policies
-└── firebase.json              # Multi-target Firebase Hosting deployment
+│   │   ├── _shared/           # auth, limits, biometrics, providers — shared by all functions
+│   │   ├── process-payment/   # Card-present authorisation
+│   │   ├── vtu-service/       # Airtime, data, power, cable
+│   │   ├── link-mono-account/ # Bank account linking
+│   │   ├── onboard-merchant/  # Merchant registration + bank name lookup
+│   │   ├── agent-register-user/
+│   │   ├── approve-customer/ · reject-customer/
+│   │   └── create-staff/ · delete-staff/
+│   └── migrations/            # 22 migrations: schema, RLS, RPCs, hardening
+├── scripts/
+│   ├── scan-secrets.mjs       # Credential scanner (pre-commit + CI + history audit)
+│   └── check-migrations.mjs   # BOM + PostgreSQL grammar check
+├── .githooks/pre-commit       # Enabled automatically by `npm install`
+└── .github/workflows/ci.yml   # Secret scan · typecheck and build · migrations parse
 ```
 
----
-
-## Portal Roles & Separation of Responsibilities
-
-MiliPay strictly enforces role boundaries across four web portals:
-
-### 1. Field Agent Portal (`agent-portal` — Port 3001)
-- **Role**: `role: 'agent'`
-- **Target Hardware**: Rugged Handheld Tablet (`HF-FP08PV` / `VP930Pro`).
-- **Responsibilities**:
-  - Roaming in-person customer enrollment (NIN verification, palm vein capture).
-  - Physical merchant onboarding and terminal pairing (`TID`).
-  - Handling physical walk-in customer complaints on the spot.
-- **Security Privacy Restriction**: Field Agents are **strictly barred** from viewing merchant financial transactions or terminal revenue ledgers (enforced at both PostgreSQL RLS and UI layers).
-
-### 2. Service Portal (`service-portal` — Port 3002)
-- **Role**: `role: 'support'`
-- **Target Hardware**: Support Staff Workstation.
-- **Responsibilities**:
-  - Managing omnichannel live chats originating from the customer Mobile App.
-  - Two-tier complaint resolution (Tier-1 instant solve vs. Tier-2 administrative escalation).
-  - Customer profile and linked banking status lookups.
-
-### 3. Admin Panel (`AdminPanel` — Port 3000)
-- **Role**: `role: 'admin'`, `role: 'super_admin'`
-- **Target Hardware**: Central Master Console.
-- **Responsibilities**:
-  - KYB compliance reviews, merchant approvals, and commission rates.
-  - Emergency security controls: **Blacklist Merchant** (instantly locks down all paired POS hardware) and **Cascade Delete** (cleans up terminals and decouples historical transactions with `merchant_id = NULL` to preserve CBN financial audit trails).
-  - Fleet management and POS hardware inventory tracking.
-  - Master settlement ledger auditing and platform revenue reconciliation.
-
-### 4. Merchant Portal (`merchant-portal` — Port 3003)
-- **Role**: `role: 'merchant'`
-- **Target Hardware**: Desktop / Tablet Store Management.
-- **Responsibilities**:
-  - Real-time store sales tracking and transaction telemetry.
-  - POS terminal fleet health monitoring (HP605PV / HF-MP50 heartbeats).
-  - Mono DirectPay settlement ledger and automated payout records (98.5% net settlement).
+The four portals are thin shells. Nearly all screens come from `@milipay/shared`; each app's
+Vite config aliases `@milipay/shared` to `packages/shared/src` and `@` to its own `src`.
 
 ---
 
-## Two-Tier Ticketing Architecture
+## The money path
 
-Customer dispute resolution follows a strict two-tier lifecycle where a formal ticket ID (`TKT-XXXX`) is generated **only upon resolution or escalation**, avoiding orphaned empty tickets.
+`process-payment` is the card-present authorisation endpoint. What it does today, in order:
+
+1. **Authenticate the caller** against a Supabase JWT.
+2. **Verify merchant ownership** — a merchant can only take payment for themselves.
+3. **Check the terminal** is registered and active.
+4. **Idempotency** — a repeated `reference` returns the original outcome instead of charging again.
+5. **Match the palm** via `PALM_MATCH_URL`. This **fails closed**: with no matcher configured,
+   every transaction is declined. An unverified palm must never move money.
+6. **Enforce limits** — KYC tier single-transaction cap, cumulative daily cap, and a PIN
+   challenge above the customer's configured threshold.
+7. **Calculate the split** — platform fee (default 1.5%) against merchant net.
+8. **Write the ledger.** A failed ledger write **declines the payment** rather than returning
+   approved.
+
+### What step 8 is not
+
+The ledger row is the end of the line. **No bank API is called and no funds move.** The split in
+the response is arithmetic recorded against the transaction, not a disbursement. Wiring the debit
+leg and the payout leg is the single largest piece of outstanding work — see
+[Not built yet](#not-built-yet).
+
+### KYC tiers
+
+Enforced server-side in `supabase/functions/_shared/limits.ts` and mirrored in
+`packages/shared/src/types`. Daily totals reset at 00:00 WAT.
+
+| Tier | Per transaction | Per day |
+| :--- | ---: | ---: |
+| Tier 1 | 50,000 NGN | 200,000 NGN |
+| Tier 2 | 150,000 NGN | 500,000 NGN |
+| Tier 3 | 250,000 NGN | 1,000,000 NGN |
+
+### Currency invariant
+
+**All monetary amounts are stored in Naira as `numeric(12,2)`. Never kobo.** Mono reports
+balances in kobo and is converted once, at the boundary, in `link-mono-account`. `formatNaira`
+must never divide by 100. This is a hard rule — see `GEMINI.md`.
+
+---
+
+## Portals and roles
+
+Role boundaries are enforced twice: in Postgres RLS and again in the UI. RLS is the one that counts.
+
+### Admin Panel — `role: admin`, `super_admin`
+KYB review and merchant approval, commission rates, merchant blacklisting (which immediately
+deactivates every paired terminal), cascade delete, fleet inventory, ledger audit.
+
+Cascade delete decouples transactions with `merchant_id = NULL` rather than removing them, so the
+financial audit trail survives a merchant being purged.
+
+### Agent Portal — `role: agent`
+In-person customer enrolment, merchant onboarding, terminal pairing, walk-in complaints.
+
+Agents are **barred from transaction ledgers and merchant revenue** — enforced in RLS, not just
+hidden in the UI. Customers enrolled by an agent land as `pending` and require admin approval;
+customers enrolled by an admin are active immediately.
+
+### Service Portal — `role: support`
+Live chat from the mobile app, two-tier complaint resolution, customer and linked-account lookups.
+
+### Merchant Portal — `role: merchant`
+Store sales, terminal health, settlement records. **Not currently deployed** — it has no Firebase
+hosting target.
+
+---
+
+## Customer mobile app
+
+React Native on Expo SDK 57 (managed workflow), React 19, zustand, NativeWind.
+
+Working: login, PIN setup, bank account linking through the Mono SDK, account limits, bill
+payments and airtime, transaction history, support chat, profile settings.
+
+There is **no `android/` or `ios/` directory** — the app is built through EAS, has no custom
+native modules, and therefore cannot talk to palm-vein hardware. `BiometricSetupScreen` is a
+visual mock: it animates, waits three seconds, and reports success without performing any
+biometric check.
+
+The app holds **no operator credentials**. `src/lib/vtuService.ts` is a thin client over the
+`vtu-service` Edge Function; it does no pricing and no balance arithmetic.
+
+---
+
+## Bill payments and airtime
+
+Fully implemented and the most complete money flow in the repository.
+
+- **VTPass** — airtime, data, electricity, cable TV.
+- **BigiSub** — wholesale SME data plans.
+
+Pricing is resolved **server-side** from the operator catalogue with a configurable margin. The
+client submits what it wants to buy, never what it costs.
+
+Purchase sequence: rate limit → profile load → server-side pricing → idempotency check → tier and
+PIN enforcement → **atomic debit** → fulfil with the operator → **automatic reversal** if
+fulfilment fails. A failed reversal is logged loudly for manual settlement.
+
+The debit is a single `UPDATE ... WHERE balance >= amount` inside a `SECURITY DEFINER` RPC, so
+concurrent purchases cannot overdraw the account. Retries reuse a request ID derived from the
+reference, so the operator deduplicates them.
+
+---
+
+## Support ticketing
+
+A formal ticket ID (`TKT-XXXX`) is minted **only on resolution or escalation**, so informal
+conversations do not litter the queue with empty tickets.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> InformalChannel: Customer Initiates Contact
+    [*] --> Informal: Customer makes contact
 
-    state InformalChannel {
-        LiveChat: Mobile App Live Chat (Service Portal)
-        WalkIn: Physical Walk-in Dialogue (Agent Portal)
+    state Informal {
+        LiveChat: Mobile app live chat (Service Portal)
+        WalkIn: Physical walk-in (Agent Portal)
     }
 
-    InformalChannel --> SolvedOnSpot: Issue Resolved Immediately
-    InformalChannel --> EscalatedToAdmin: High-Complexity / Financial Dispute
+    Informal --> SolvedOnSpot: Resolved immediately
+    Informal --> Escalated: Financial dispute / high complexity
 
     state SolvedOnSpot {
-        GenTkt1: Generate Ticket ID (TKT-XXXX)
-        StampSolved: Stamp solved_by (Agent / Support ID)
-        Archive1: Move to Resolved History
+        Gen1: Mint TKT-XXXX
+        Stamp: Stamp solved_by
+        Arch: Move to resolved history
     }
 
-    state EscalatedToAdmin {
-        GenTkt2: Generate Ticket ID (TKT-XXXX)
-        MoveAdmin: Route to Admin Panel Queue
-        AdminReview: Admin Investigates & Closes
+    state Escalated {
+        Gen2: Mint TKT-XXXX
+        Route: Route to Admin queue
+        Review: Admin investigates and closes
     }
 
     SolvedOnSpot --> [*]
-    AdminReview --> [*]
+    Review --> [*]
 ```
 
 ---
 
-## Open Banking & Settlement Architecture (Mono)
+## Security model
 
-MiliPay leverages **Mono** as its primary Open Banking and payment rail in Nigeria:
+The design rule: **the client is never trusted with money, identity, or limits.** Everything that
+matters happens in an Edge Function or a `SECURITY DEFINER` RPC.
 
-1. **Merchant Verification**: Before activation, merchant settlement bank accounts are validated in real-time against the national NIBSS switch via Mono's Account Lookup API (`/v2/lookup/account`).
-2. **Split Payments**: Each merchant is provisioned a Mono Sub-Account (`mono_subaccount_id`). Customer debits via Mono DirectPay automatically execute a split:
-   - **98.5%** &rarr; Merchant Settlement Account.
-   - **1.5%** &rarr; MiliPay Platform Take-Rate Revenue Account.
-3. **Automated Disbursements**: Instant (T+0) or Daily EOD batch NIP transfers via Mono Transfers API directly to merchant commercial bank accounts.
-4. **Idempotency & Reversals**: Every payment request enforces a unique idempotency reference (`reference`). Two-way webhook handshakes trigger Mono's automated reversal engine if bank switches experience mid-flight timeouts.
-5. **High-Value PIN Safeguard**: Transactions exceeding the customer-defined security threshold (e.g. > ₦5,000) require the customer to enter their 4-digit PIN on the terminal before triggering the Mono DirectPay debit.
+**Every money endpoint authenticates.** `process-payment`, `vtu-service` and
+`agent-register-user` validate a JWT and check the caller's role before doing anything.
+
+**The ledger is server-authoritative.** `INSERT`, `UPDATE` and `DELETE` on `public.transactions`
+are revoked from `authenticated` and `anon`. Clients read; only Edge Functions write.
+
+**Column-level grants where RLS cannot reach.** RLS controls rows, not columns, so a customer who
+could update their own row could set their own balance. `UPDATE` is revoked on
+`linked_accounts` and `users` and re-granted per column — `is_active` on accounts,
+`email`/`bvn`/`nin`/`is_verified` on users. Balance and KYC tier are not client-writable.
+
+**Partitions are hardened individually.** `transactions` is range-partitioned by month and new
+partitions are created by trigger. Partitions do **not** inherit parent privileges, so the
+trigger function runs `SECURITY DEFINER` and revokes write access on each partition as it is
+created — otherwise next month's data would be world-writable.
+
+**PINs are real.** Hashed with `pgcrypto` (`crypt` + `gen_salt('bf')`), never stored or compared
+in plaintext, weak values (`0000`, `1234`, …) rejected, and locked out after 5 failed attempts
+for 15 minutes. The PIN threshold is set through a clamped RPC that cannot exceed the tier cap.
+
+**Biometrics fail closed.** No matcher configured means every payment is declined. Simulated palm
+captures carry a `SIMULATED-PVT-` prefix, are only produced in a dev build with
+`VITE_ALLOW_BIOMETRIC_SIMULATION=true`, and are **refused at enrolment** outside simulation builds.
+
+**Rate limiting** is a fixed-window counter in Postgres (`consume_rate_limit`), applied to
+purchases and other abusable endpoints.
 
 ---
 
-## Database Security & PostgreSQL RLS Policies
+## Secrets and environment
 
-All database access is secured by strict Row Level Security (RLS) policies:
+Copy `.env.example` to `.env` and fill it in. **`.env` is git-ignored and must never be
+committed.** `.env.example` is the authoritative contract — this README deliberately does not
+duplicate variable values.
 
-- **Transactions Table (`public.transactions`)**:
-  - `SELECT` is restricted to `admin`, `super_admin`, and `support` roles. Field Agents (`role: 'agent'`) have **zero read permissions** on transaction ledgers.
-  - `merchant_id` allows `NULL` with `ON DELETE SET NULL` to preserve historical records if a merchant is deleted.
-- **Merchants Table (`public.merchants`)**:
-  - Statuses supported: `'pending'`, `'active'`, `'suspended'`, `'blacklisted'`.
-  - `DELETE` is restricted to `admin` and `super_admin`.
-- **POS Terminals Table (`public.pos_terminals`)**:
-  - Terminals maintain a foreign key to `merchants.id` (`ON DELETE CASCADE`).
-  - Terminal blacklisting sets `is_active = false` immediately halting biometric capture.
-- **Cascade Purge Function (`delete_merchant_cascade`)**:
-  - `SECURITY DEFINER` stored procedure that decouples transaction records, removes terminals, purges the merchant profile, and deletes linked authentication records.
+The rule that matters:
 
----
-
-## Getting Started
-
-### Prerequisites
-- **Node.js**: `v18.0.0+` (Recommended: `v20.x`)
-- **npm**: `v9.0.0+`
-- **Supabase CLI**: For local Edge Function testing and migrations
-- **Firebase Tools**: For hosting deployments (`npm install -g firebase-tools`)
-
-### Installation
+> Anything prefixed **`VITE_`** or **`EXPO_PUBLIC_`** is compiled into the client bundle and is
+> readable by anyone who inspects the app. Operator and platform secrets must **only** be set as
+> Supabase Edge Function secrets.
 
 ```bash
-# Clone the repository
+supabase secrets set MONO_SECRET_KEY=... VTPASS_API_KEY=...
+```
+
+Client-safe: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_ALLOW_BIOMETRIC_SIMULATION`.
+The anon key is public by design and is only as strong as the RLS behind it.
+
+Server-only: the service role key, `PALM_MATCH_*`, `MONO_*`, `VTPASS_*`, `BIGISUB_*`, and
+notification provider keys.
+
+`PALM_MATCH_URL` is **required** for card-present payments. Leaving it unset is safe — the
+endpoint declines every transaction — but nothing will authorise until a matcher is reachable.
+
+---
+
+## Getting started
+
+### Prerequisites
+
+- Node.js 20.x (18+ works; CI runs 20)
+- npm 9+
+- Supabase CLI — local migrations and Edge Functions
+- Firebase CLI — hosting deploys
+
+### Install
+
+```bash
 git clone https://github.com/Alashabeeb/BioPay.git
 cd BioPay
-
-# Install all workspace dependencies
 npm install
 ```
 
-### Environment Configuration
+`npm install` also runs `git config core.hooksPath .githooks`, which enables the pre-commit secret
+scan. Every clone gets it; nobody has to remember.
 
-Create a `.env` file in the root or individual portal directories:
-
-```env
-# Supabase Configuration
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-
-# Mono Open Banking
-MONO_PUBLIC_KEY=test_pk_...
-MONO_SECRET_KEY=test_sk_...
-MONO_WEBHOOK_SECRET=your_webhook_secret
-
-# Platform Configuration
-VITE_PLATFORM_FEE_PERCENTAGE=1.5
-```
-
-### Development Servers
-
-Run individual portals independently:
+### Run a portal
 
 ```bash
-# Admin Panel (Port 3000)
 npm --prefix AdminPanel run dev
+```
 
-# Field Agent Portal (Port 3001)
-npm --prefix agent-portal run dev
+Substitute `agent-portal`, `service-portal`, `merchant-portal` or `website`. None of the Vite
+configs pin a port, so each one takes Vite's default (5173) and increments when that is busy —
+watch the terminal for the actual URL.
 
-# Customer Service Portal (Port 3002)
-npm --prefix service-portal run dev
+### Run the mobile app
 
-# Merchant Store Portal (Port 3003)
-npm --prefix merchant-portal run dev
-
-# Marketing Website
-npm --prefix website run dev
-
-# Customer Mobile App (Expo)
+```bash
 npm --prefix mobile-app start
 ```
 
-### Production Builds
+### Build everything
 
 ```bash
-# Build all web applications
-npm --prefix AdminPanel run build
-npm --prefix agent-portal run build
-npm --prefix service-portal run build
-npm --prefix merchant-portal run build
-npm --prefix website run build
+for app in AdminPanel agent-portal service-portal merchant-portal website; do
+  npm --prefix "$app" run build
+done
 ```
 
 ---
 
-## Deployment & Hosting
-
-The web applications are deployed to **Firebase Hosting** with multi-target configurations defined in `firebase.json` and `.firebaserc`:
-
-| Portal | Target Name | Production Hosting URL |
-| :--- | :--- | :--- |
-| **Marketing Website** | `website` | [https://milipay-website.web.app](https://milipay-website.web.app) |
-| **Admin Panel** | `admin` | [https://milipay-adminportal.web.app](https://milipay-adminportal.web.app) |
-| **Field Agent Portal** | `agent` | [https://milipay-agentportal.web.app](https://milipay-agentportal.web.app) |
-| **Service Portal** | `service` | [https://milipay-serviceportal.web.app](https://milipay-serviceportal.web.app) |
-
-To deploy active portals:
+## Quality gates
 
 ```bash
-# Deploy website, admin, agent, and service portals
+npm run scan-secrets          # every blob in every branch (full history audit)
+npm run scan-secrets:staged   # what is about to be committed — this is the pre-commit hook
+npm run check-migrations      # UTF-8 BOM check + PostgreSQL grammar parse
+```
+
+CI runs on every push to `main` and every pull request, in three jobs: **Secret scan**,
+**Typecheck and build** (all five portals plus a mobile typecheck), and **Migrations parse**.
+
+`.gitattributes` normalises line endings to LF, so a Windows editor cannot turn a two-word change
+into a six-hundred-line diff.
+
+**Limit of the migration check:** `pgsql-parser` validates the outer SQL grammar only. PL/pgSQL
+bodies inside `$$ ... $$` are opaque string literals to it, so a logic error inside a function
+body passes. **Apply migrations to a Supabase branch before production.**
+
+---
+
+## Deployment
+
+Firebase Hosting, multi-target, configured in `firebase.json` and `.firebaserc`.
+
+| Portal | Target | URL |
+| :--- | :--- | :--- |
+| Marketing website | `website` | https://milipay-website.web.app |
+| Admin Panel | `admin` | https://milipay-adminportal.web.app |
+| Agent Portal | `agent` | https://milipay-agentportal.web.app |
+| Service Portal | `service` | https://milipay-serviceportal.web.app |
+| Merchant Portal | — | **No hosting target configured** |
+
+```bash
 npx firebase-tools deploy --only hosting:admin,hosting:agent,hosting:service,hosting:website
 ```
 
+The mobile app ships through EAS (`mobile-app/eas.json`); there is no local native build.
+
 ---
 
-## Regulatory Compliance & Certifications
+## Not built yet
 
-- **CBN Guidelines on Biometrics in Payment Systems**: 100% compliant with Central Bank of Nigeria requirements for transaction authorization, dispute resolution timelines, and biometric liveness.
-- **Nigeria Data Protection Act (NDPA)**: Bank-grade encryption for biometric templates in transit (TLS 1.3, AES-256) and at rest (`BYTEA` format in sovereign private infrastructure).
-- **EMV & PCI-PTS**: Hardware-level security standards enforced on merchant POS terminals (`HF-HP605PV`).
+An honest inventory. Everything here is absent or non-functional in this repository.
+
+### Money movement
+
+- **No customer debit.** `process-payment` never calls Mono DirectPay or any other rail. It
+  authorises, records, and returns approved. No bank account is touched.
+- **No settlement or payout.** The platform-fee split is computed and stored. Nothing disburses it.
+  There is no transfers integration and no payout scheduler.
+- **No webhooks, no reversal handshake.** Nothing listens for provider callbacks on the
+  card-present path. (VTU has its own in-process reversal; that one is real.)
+- **Merchant sub-accounts are fake.** `mono_subaccount_id` is generated locally as
+  `mono_sub_<timestamp>_<random>`. No Mono sub-account is provisioned.
+- **Balances are a one-time snapshot.** `linked_accounts.balance` is captured once when the
+  account is linked and thereafter only decremented by VTU purchases. There is no refresh, no
+  reconciliation against the bank, and card-present payments do not touch it. **It will drift.**
+
+### Biometrics
+
+- **No native bridge.** `palmScanner.ts` defines the `window.MiliPayPalmBridge` contract the
+  Android shell is expected to inject. That shell does not exist here — there is no
+  `PalmScannerModule.java`, no bundled HFSecurity SDK, no `android/` directory.
+- **No matching service.** `PALM_MATCH_URL` is expected to point at a C++ 1:N matcher holding
+  templates in RAM. That service is not in this repository. Until it exists, card-present
+  payments decline by design.
+- **No liveness enforcement.** The UI maps a `LIVENESS_ERROR` hint from the SDK, but nothing
+  server-side verifies liveness.
+- **Templates are stored as plaintext `text`.** `customers.palm_vein_template` is a `text`
+  column, not `BYTEA`, and is not encrypted at the application layer.
+
+### Identity and data protection
+
+- **NIN and BVN are not verified.** They are regex-checked for 11 digits and stored. There is no
+  NIMC, NIBSS or third-party identity call anywhere in the codebase.
+- **Schema comments overstate encryption.** `users.bvn` and `users.nin` carry the comment
+  "Encrypted at app level". They are not. Values are stored as cleaned digit strings.
+  (`customers` stores only `nin_last_4`, which is better.)
+
+### Engineering
+
+- **No automated tests.** Zero test files. CI typechecks and builds; it does not verify behaviour.
+- **Ticket IDs can collide.** `TKT-` plus a random four-digit number against a `UNIQUE` column
+  gives 9,000 possible IDs and no retry on conflict.
+- **Dev ports are not pinned.** Documentation elsewhere refers to ports 3000–3003; no Vite config
+  sets them.
+- **Notifications are unwired.** `RESEND_API_KEY` and `TERMII_API_KEY` are in the environment
+  contract; no send path uses them.
+- **Merchant portal is undeployed.** Builds fine, has no hosting target.
+
+---
+
+## Regulatory posture
+
+**MiliPay holds no licence, certification or regulatory approval.** The items below describe what
+the system is *designed against*, not what it has achieved.
+
+- **CBN guidelines on biometrics in payment systems** — tier limits, PIN step-up above a
+  threshold, and a preserved audit trail are implemented against these requirements. Nothing has
+  been reviewed or approved by the Central Bank of Nigeria.
+- **Nigeria Data Protection Act** — the architecture keeps biometric templates inside
+  infrastructure MiliPay controls rather than a vendor cloud, and the matcher is designed to run
+  on MiliPay's own hardware. As noted above, templates and identity numbers are **not yet
+  encrypted at rest beyond what Postgres provides**. This gap must close before any live data.
+- **EMV / PCI-PTS** — properties of the target POS hardware (`HF-HP605PV`), not of this software.
+  No PCI assessment has been performed.
+
+Target hardware for a future integration: `HF-FP08PV` rugged tablet for field agents,
+`HF-HP605PV` certified POS for retail, `HF-VP930Pro` USB module for development and benchmarking.
+None is integrated today.
 
 ---
 
 ## License
 
-Copyright &copy; 2026 MiliPay Ltd. All rights reserved. Proprietary software.
+Copyright © 2026 MiliPay Ltd. All rights reserved. Proprietary software.
