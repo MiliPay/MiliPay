@@ -58,7 +58,7 @@ export default function TransactionsPage() {
     {
       key: "amount",
       header: "Amount",
-      render: (row) => <span className="font-data text-sm text-ink">{formatNaira(row.amountKobo)}</span>,
+      render: (row) => <span className="font-data text-sm text-ink">{formatNaira(row.amountNgn)}</span>,
     },
     {
       key: "status",

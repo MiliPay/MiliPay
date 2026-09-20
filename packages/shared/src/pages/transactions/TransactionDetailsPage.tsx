@@ -38,7 +38,7 @@ export default function TransactionDetailsPage() {
 
   const analytics = useMemo(() => {
     if (!transaction) return null;
-    const baseAmount = transaction.amountKobo;
+    const baseAmount = transaction.amountNgn;
     const rawFee = Math.floor(baseAmount * 0.015);
     const processingFee = Math.min(rawFee, 2000); // Capped at 2000 NGN
     const vat = Math.floor(processingFee * 0.075);
@@ -97,7 +97,7 @@ export default function TransactionDetailsPage() {
           </button>
           <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             <h1 className="text-xl sm:text-2xl md:text-3xl font-display font-bold text-ink flex items-center gap-3">
-              {analytics ? formatNaira(analytics.totalAmount) : formatNaira(transaction.amountKobo)}
+              {analytics ? formatNaira(analytics.totalAmount) : formatNaira(transaction.amountNgn)}
             </h1>
             <StatusBadge status={transaction.status} />
           </div>

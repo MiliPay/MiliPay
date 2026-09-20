@@ -71,7 +71,7 @@ export async function fetchTransactions(
     customerName: row.customers ? `${row.customers.first_name} ${row.customers.last_name}` : "Unknown",
     customerId: row.customers?.id || "",
     merchantName: row.merchant_name,
-    amountKobo: row.amount,
+    amountNgn: row.amount,
     status: row.status as TransactionStatus,
     timestamp: row.created_at,
   }));
@@ -108,7 +108,7 @@ export async function fetchRecentTransactions(): Promise<PaginatedResult<Transac
     customerName: row.customers ? `${row.customers.first_name} ${row.customers.last_name}` : "Unknown",
     customerId: row.customers?.id || "",
     merchantName: row.merchant_name,
-    amountKobo: row.amount,
+    amountNgn: row.amount,
     status: row.status as TransactionStatus,
     timestamp: row.created_at,
   }));
@@ -244,7 +244,7 @@ export async function fetchTransactionsByCustomerId(
     customerName: row.customers ? `${row.customers.first_name} ${row.customers.last_name}` : "Unknown",
     customerId: row.customers?.id || "",
     merchantName: row.merchant_name,
-    amountKobo: row.amount,
+    amountNgn: row.amount,
     status: row.status as TransactionStatus,
     timestamp: row.created_at,
   }));
@@ -282,7 +282,7 @@ export async function fetchTransactionById(id: string): Promise<Transaction | nu
     customerName: cust ? `${cust.first_name} ${cust.last_name}` : "Unknown",
     customerId: cust?.id || "",
     merchantName: data.merchant_name,
-    amountKobo: data.amount,
+    amountNgn: data.amount,
     status: data.status as TransactionStatus,
     timestamp: data.created_at,
   };

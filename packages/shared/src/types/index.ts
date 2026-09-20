@@ -126,7 +126,7 @@ export interface Transaction {
   customerName: string;
   customerId: string;
   merchantName: string;
-  amountKobo: number; // integer minor units — never a float
+  amountNgn: number; // NAIRA, numeric(12,2). Never kobo — see the currency invariant in GEMINI.md.
   status: TransactionStatus;
   timestamp: string;
 }
@@ -301,4 +301,4 @@ export interface MerchantTransaction {
   status: TransactionStatus;
   timestamp: string;
 }
-
+

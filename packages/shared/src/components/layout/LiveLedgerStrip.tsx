@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import type { Transaction } from "@/types";
-import { formatNaira } from "@/lib/utils/format";
+import type { Transaction } from "@milipay/shared/types";
+import { formatNaira } from "@milipay/shared/lib/utils/format";
 
 interface LiveLedgerStripProps {
   transactions: Transaction[];
@@ -53,7 +53,7 @@ export function LiveLedgerStrip({ transactions }: LiveLedgerStripProps) {
               </span>
             </div>
             <span className="font-data text-sm text-ink-muted shrink-0 ml-3">
-              {formatNaira(txn.amountKobo)}
+              {formatNaira(txn.amountNgn)}
             </span>
           </Link>
         ))}
