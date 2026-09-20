@@ -1,4 +1,4 @@
-﻿-- Migration: 20260912000004_drop_broad_transaction_policy_and_allow_null_merchant.sql
+-- Migration: 20260912000004_drop_broad_transaction_policy_and_allow_null_merchant.sql
 -- Description: Drop permissive public read policy on transactions, and make merchant_id nullable for decoupling.
 
 -- 1. Drop permissive public read policy so Agent restriction is strictly enforced

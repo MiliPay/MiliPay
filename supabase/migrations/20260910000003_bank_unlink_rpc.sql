@@ -1,4 +1,4 @@
-﻿-- 1. Grant table privileges on linked_accounts so authenticated users can update them
+-- 1. Grant table privileges on linked_accounts so authenticated users can update them
 GRANT ALL ON public.linked_accounts TO authenticated, service_role;
 
 -- 2. Create a secure RPC function to unlink a bank account
