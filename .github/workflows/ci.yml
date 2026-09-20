@@ -72,37 +72,11 @@ jobs:
         with:
           node-version: '20'
 
-      # Two migrations once shipped with a UTF-8 BOM, which PostgreSQL rejects.
-      # Nothing caught it until a push failed.
-      - name: Reject byte-order marks
-        run: |
-          fail=0
-          for f in supabase/migrations/*.sql; do
-            if [ "$(head -c3 "$f" | od -An -tx1 | tr -d ' ')" = "efbbbf" ]; then
-              echo "::error file=$f::migration starts with a UTF-8 BOM; PostgreSQL will reject it"
-              fail=1
-            fi
-          done
-          exit $fail
+      # Checks for a UTF-8 BOM and parses each file with the PostgreSQL
+      # grammar. Two migrations once shipped with a BOM and nothing caught it
+      # until a push failed. Runnable locally: npm run check-migrations
+      - name: Install
+        run: npm ci || npm install
 
-      - name: Parse every migration with the PostgreSQL grammar
-        run: |
-          npm install --no-save pgsql-parser@13
-          node - <<'EOF'
-          import('node:fs').then(async (fs) => {
-            const { parse } = await import('pgsql-parser');
-            const dir = 'supabase/migrations';
-            let failed = 0;
-            for (const f of fs.readdirSync(dir).filter(n => n.endsWith('.sql')).sort()) {
-              const p = `${dir}/${f}`;
-              try {
-                await parse(fs.readFileSync(p, 'utf8'));
-                console.log(`ok   ${f}`);
-              } catch (e) {
-                console.log(`FAIL ${f}: ${e.message}`);
-                failed++;
-              }
-            }
-            process.exit(failed ? 1 : 0);
-          });
-          EOF
+      - name: Validate migrations
+        run: npm run check-migrations

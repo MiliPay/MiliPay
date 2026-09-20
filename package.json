@@ -12,12 +12,16 @@
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || exit 0",
     "scan-secrets": "node scripts/scan-secrets.mjs --history",
-    "scan-secrets:staged": "node scripts/scan-secrets.mjs --staged"
+    "scan-secrets:staged": "node scripts/scan-secrets.mjs --staged",
+    "check-migrations": "node scripts/check-migrations.mjs"
   },
   "dependencies": {
     "dotenv": "^17.4.2"
   },
-  "devDependencies": {
+  "optionalDependencies": {
     "@rollup/rollup-win32-x64-msvc": "^4.62.5"
+  },
+  "devDependencies": {
+    "pgsql-parser": "^13.19.1"
   }
 }
