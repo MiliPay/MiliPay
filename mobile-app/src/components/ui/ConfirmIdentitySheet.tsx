@@ -26,7 +26,20 @@ interface Props {
   visible: boolean;
   /** Shown in the OS prompt and as the sheet subtitle. */
   reason: string;
-  onConfirmed: () => void;
+  /**
+   * Skip the fingerprint and demand the PIN.
+   *
+   * Above the customer's PIN threshold the server requires the PIN itself —
+   * a fingerprint is checked by the phone, which the server cannot verify, so
+   * biometrics alone cannot authorise a large payment. Below the threshold the
+   * fingerprint is enough and this stays false.
+   */
+  requirePin?: boolean;
+  /**
+   * Carries the PIN when one was entered, so the caller can pass it to a
+   * server call that needs to check it again. Undefined after a biometric.
+   */
+  onConfirmed: (pin?: string) => void;
   onCancel: () => void;
 }
 
@@ -51,7 +64,13 @@ const PinWell = ({ filled, isError }: { filled: boolean; isError: boolean }) => 
  * path's failed-attempt counter and 15-minute lockout — so this is not a softer
  * door into the same account.
  */
-export function ConfirmIdentitySheet({ visible, reason, onConfirmed, onCancel }: Props) {
+export function ConfirmIdentitySheet({
+  visible,
+  reason,
+  requirePin = false,
+  onConfirmed,
+  onCancel,
+}: Props) {
   const [mode, setMode] = useState<'checking' | 'biometric' | 'pin'>('checking');
   const [pin, setPin] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
@@ -117,7 +136,12 @@ export function ConfirmIdentitySheet({ visible, reason, onConfirmed, onCancel }:
 
       setCapability(cap);
 
-      if (enabled && cap.hasHardware && cap.isEnrolled) {
+      if (requirePin) {
+        // The server will verify this PIN itself, so offering a fingerprint
+        // here would only be a nicer way of arriving at the same keypad.
+        setMode('pin');
+        setMessage('Enter your PIN to authorise this amount.');
+      } else if (enabled && cap.hasHardware && cap.isEnrolled) {
         setMode('biometric');
         await tryBiometric();
       } else {
@@ -128,7 +152,7 @@ export function ConfirmIdentitySheet({ visible, reason, onConfirmed, onCancel }:
     return () => {
       cancelled = true;
     };
-  }, [visible, tryBiometric]);
+  }, [visible, tryBiometric, requirePin]);
 
   const submitPin = useCallback(
     async (candidate: string) => {
@@ -138,7 +162,7 @@ export function ConfirmIdentitySheet({ visible, reason, onConfirmed, onCancel }:
 
       if (result.valid) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        onConfirmed();
+        onConfirmed(candidate);
         return;
       }
       reject(result.error ?? 'Incorrect PIN.');

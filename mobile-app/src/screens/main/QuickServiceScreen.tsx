@@ -35,7 +35,20 @@ import { useColorScheme } from 'nativewind';
 import { useAuthStore, useBankStore, useTransactionStore } from '../../store/useStore';
 import { shareReceiptAsPdf, shareReceiptAsImage } from '../../lib/receiptSharing';
 import { supabase } from '../../lib/supabase';
-import { fetchDynamicVariations, fetchSmeDataPlans, executeVtuRecharge, DynamicVariation } from '../../lib/vtuService';
+import {
+  fetchDynamicVariations,
+  fetchSmeDataPlans,
+  executeVtuRecharge,
+  verifyBillAccount,
+  DynamicVariation,
+} from '../../lib/vtuService';
+import { ConfirmIdentitySheet } from '../../components/ui/ConfirmIdentitySheet';
+import { PurchaseProgressSheet } from '../../components/ui/PurchaseProgressSheet';
+import {
+  watchTransaction,
+  isSuccess,
+  type TransactionSnapshot,
+} from '../../lib/transactionStatus';
 
 // Telco Configuration
 const TELCOS = [
@@ -136,10 +149,42 @@ export default function QuickServiceScreen({ route, navigation }: any) {
   const [pinError, setPinError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Step 4: fingerprint, PIN as fallback. Above the customer's PIN threshold
+  // the PIN stops being a fallback and becomes mandatory, because the server
+  // verifies it and cannot verify a fingerprint the phone checked.
+  const [isIdentitySheetVisible, setIsIdentitySheetVisible] = useState(false);
+
+  // Step 5: what they watch while the bank and the network do their part.
+  const [progressSnapshot, setProgressSnapshot] = useState<TransactionSnapshot | null>(null);
+  const [isProgressVisible, setIsProgressVisible] = useState(false);
+  const [progressTitle, setProgressTitle] = useState('');
+  const stopWatchingRef = useRef<(() => void) | null>(null);
+
+  // Electricity and cable cannot be paid without the verified account holder;
+  // BigiSub's own endpoints require it.
+  const [verifiedName, setVerifiedName] = useState<string | null>(null);
+  const [verifiedAddress, setVerifiedAddress] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  useEffect(() => {
+    // A verified name belongs to one specific meter or smartcard. Changing the
+    // number must invalidate it, or the purchase would carry the previous
+    // holder's name against the new account.
+    setVerifiedName(null);
+    setVerifiedAddress(null);
+  }, [meterNumber, smartcardNumber, selectedDisco, selectedCable, meterType, serviceType]);
+
   // Success Receipt
   const [successReceipt, setSuccessReceipt] = useState<any | null>(null);
   const [hasCopiedToken, setHasCopiedToken] = useState(false);
   const receiptCardRef = useRef<View>(null);
+
+  useEffect(() => {
+    return () => {
+      stopWatchingRef.current?.();
+      stopWatchingRef.current = null;
+    };
+  }, []);
   const [isSharingPdf, setIsSharingPdf] = useState(false);
   const [isSharingImage, setIsSharingImage] = useState(false);
 
@@ -336,41 +381,73 @@ export default function QuickServiceScreen({ route, navigation }: any) {
   };
 
   // Open confirmation sheet
-  const handleInitiatePayment = () => {
+  const handleInitiatePayment = async () => {
     if (!validateForm()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Electricity and cable are verified BEFORE the confirmation sheet, not
+    // after payment. Two reasons: BigiSub's own pay endpoints require the
+    // account holder's name exactly as their verify call returned it, so
+    // skipping it means the purchase is rejected after the customer's bank has
+    // already been debited — and it lets the customer catch their own typo by
+    // seeing whose meter they are about to credit.
+    if (serviceType === 'power' || serviceType === 'cable') {
+      const verified = await runVerification();
+      if (!verified) return;
+    }
+
     setIsConfirmModalVisible(true);
   };
 
-  // Execute payment
+  /**
+   * Every purchase is authorised, not just the large ones. A fingerprint is one
+   * touch, so there is no reason to let anyone who picks up an unlocked phone
+   * spend from a linked bank account.
+   */
   const handleConfirmPayment = async () => {
-    const payable = getPayableAmount();
-    const threshold = user?.pinThreshold || 10000;
-
-    // Check PIN requirement if amount > user threshold
-    if (payable > threshold) {
-      setIsConfirmModalVisible(false);
-      setEnteredPin('');
-      setPinError(null);
-      setIsPinModalVisible(true);
-      return;
-    }
-
-    // Direct execution
-    await processFinalPayment();
+    setIsConfirmModalVisible(false);
+    setEnteredPin('');
+    setPinError(null);
+    setIsIdentitySheetVisible(true);
   };
 
-  const handlePinSubmit = async () => {
-    if (enteredPin.length < 4) {
-      setPinError('Please enter your 4-digit PIN');
-      return;
-    }
+  /** Above the PIN threshold the server insists on the PIN itself. */
+  const pinIsMandatory = () => getPayableAmount() > (user?.pinThreshold || 10000);
 
-    setIsPinModalVisible(false);
-    await processFinalPayment();
+  const handleIdentityConfirmed = async (pin?: string) => {
+    setIsIdentitySheetVisible(false);
+    await processFinalPayment(pin);
   };
 
-  const processFinalPayment = async () => {
+  /** Verify a meter or smartcard before anyone pays for it. */
+  const runVerification = async () => {
+    if (serviceType !== 'power' && serviceType !== 'cable') return true;
+
+    const destination = serviceType === 'power' ? meterNumber : smartcardNumber;
+    const provider = serviceType === 'power' ? selectedDisco : selectedCable;
+
+    setIsVerifying(true);
+    const result = await verifyBillAccount({
+      serviceType,
+      provider,
+      destination,
+      meterType: serviceType === 'power' ? meterType : undefined,
+    });
+    setIsVerifying(false);
+
+    if (!result.success) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Could not verify', result.error);
+      return false;
+    }
+
+    setVerifiedName(result.customerName);
+    setVerifiedAddress(result.customerAddress ?? null);
+    if (serviceType === 'power') setMeterVerifiedName(result.customerName);
+    return true;
+  };
+
+  const processFinalPayment = async (pin?: string) => {
     setIsConfirmModalVisible(false);
     setIsProcessing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -420,8 +497,12 @@ export default function QuickServiceScreen({ route, navigation }: any) {
         variationCode,
         meterType: serviceType === 'power' ? meterType : undefined,
         dataCategory: serviceType === 'data' ? dataCategory : undefined,
+        // Required by BigiSub for these two, and gathered by runVerification
+        // before the customer ever reached the fingerprint.
+        customerName: verifiedName ?? undefined,
+        customerAddress: verifiedAddress ?? undefined,
         accountId: activeAccount?.id || undefined,
-        pin: enteredPin || undefined,
+        pin: pin || enteredPin || undefined,
       });
 
       if (!data || data.success === false) {
@@ -447,44 +528,56 @@ export default function QuickServiceScreen({ route, navigation }: any) {
         throw new Error(data?.error || data?.message || 'Transaction could not be completed.');
       }
 
-      // Success. The ledger and balances are already server-authoritative;
-      // executeVtuRecharge refreshed them before returning.
+      // NOT success — the purchase has merely been ACCEPTED. The bank has
+      // been asked for the money and will confirm by webhook; the airtime is
+      // only sent after that. So we open the progress sheet and follow the
+      // reference rather than declaring victory here.
       const chargedAmount = Number(data.amount ?? payable);
-      const finalRef = data.reference || `MP-BIL-${Date.now()}`;
-      const finalTitle = (data.token ? `${data.merchantTitle || 'Quick Service'} [Token: ${data.token}]` : data.merchantTitle) || 'Quick Service';
-
-      // Add to in-memory transaction store
-      useTransactionStore.setState((state) => ({
-        transactions: [
-          {
-            id: finalRef,
-            reference: finalRef,
-            customer_id: user?.customerId || null,
-            user_id: user?.id || null,
-            merchant_name: finalTitle,
-            amount: chargedAmount,
-            status: 'success',
-            account_used: activeAccount?.id || null,
-            created_at: data.timestamp || new Date().toISOString(),
-            category: 'bills',
-            token: data.token || null,
-          },
-          ...state.transactions,
-        ],
-      }));
+      const finalRef = data.reference!;
+      const finalTitle = data.merchantTitle || 'Quick Service';
 
       setIsProcessing(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      setSuccessReceipt({
-        reference: data.reference,
+      setProgressTitle(`${finalTitle} · ${destination}`);
+      setProgressSnapshot({
+        reference: finalRef,
+        status: 'initiated',
         amount: chargedAmount,
-        merchant: data.merchantTitle,
-        beneficiary: destination,
-        bank: activeAccount?.bankName || 'MiliPay Linked Account',
-        date: new Date(data.timestamp || Date.now()).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' }),
-        token: data.token || null,
-        units: data.units || null,
+        token: null,
+        units: null,
+        failureReason: null,
+        updatedAt: null,
+      });
+      setIsProgressVisible(true);
+
+      stopWatchingRef.current?.();
+      stopWatchingRef.current = watchTransaction({
+        reference: finalRef,
+        onUpdate: setProgressSnapshot,
+        onSettled: (snapshot) => {
+          setProgressSnapshot(snapshot);
+          Haptics.notificationAsync(
+            isSuccess(snapshot.status)
+              ? Haptics.NotificationFeedbackType.Success
+              : Haptics.NotificationFeedbackType.Warning,
+          );
+
+          // The balance moved, so re-read it rather than guessing.
+          const userId = user?.id;
+          if (userId) void useBankStore.getState().fetchAccounts(userId);
+
+          if (isSuccess(snapshot.status)) {
+            setSuccessReceipt({
+              reference: snapshot.reference,
+              amount: snapshot.amount,
+              merchant: finalTitle,
+              beneficiary: destination,
+              bank: activeAccount?.bankName || 'MiliPay Linked Account',
+              date: new Date().toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' }),
+              token: snapshot.token,
+              units: snapshot.units,
+            });
+          }
+        },
       });
     } catch (err: any) {
       setIsProcessing(false);
@@ -1354,62 +1447,12 @@ export default function QuickServiceScreen({ route, navigation }: any) {
         </View>
       </Modal>
 
-      {/* PIN Challenge Modal (For High-Value Payments > pinThreshold) */}
-      <Modal
-        visible={isPinModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsPinModalVisible(false)}
-      >
-        <View className="flex-1 justify-center items-center px-6 bg-black/60">
-          <Pressable
-            className="absolute inset-0"
-            onPress={() => setIsPinModalVisible(false)}
-          />
-          <View className="w-full max-w-sm rounded-3xl p-6 bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 items-center">
-            <View className="w-14 h-14 rounded-full bg-emerald-500/15 items-center justify-center mb-4">
-              <Lock color="#10b981" size={24} />
-            </View>
-
-            <Text className="text-slate-900 dark:text-white font-inter-bold text-lg text-center mb-1">
-              Enter 4-Digit MiliPay PIN
-            </Text>
-            <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs text-center mb-5 px-2">
-              This transaction of ₦{getPayableAmount().toLocaleString()} exceeds your instant threshold (₦{(user?.pinThreshold || 10000).toLocaleString()}).
-            </Text>
-
-            {/* PIN Input */}
-            <TextInput
-              value={enteredPin}
-              onChangeText={(t) => {
-                setEnteredPin(t.slice(0, 4));
-                setPinError(null);
-              }}
-              keyboardType="number-pad"
-              maxLength={4}
-              secureTextEntry
-              autoFocus
-              placeholder="••••"
-              placeholderTextColor={isDark ? '#52525b' : '#94a3b8'}
-              className="w-40 h-14 bg-slate-100 dark:bg-zinc-800 rounded-2xl text-center text-slate-900 dark:text-white font-inter-bold text-2xl tracking-[12px] mb-2"
-            />
-
-            {pinError && (
-              <Text className="text-red-500 font-inter text-xs mb-3">{pinError}</Text>
-            )}
-
-            <Pressable
-              onPress={handlePinSubmit}
-              disabled={enteredPin.length < 4}
-              className={`w-full h-13 rounded-xl items-center justify-center mt-3 ${
-                enteredPin.length === 4 ? 'bg-emerald-500 active:bg-emerald-600' : 'bg-slate-200 dark:bg-zinc-800 opacity-60'
-              }`}
-            >
-              <Text className="text-black font-inter-bold text-base">Authorize Payment</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      {/* The bespoke PIN modal that used to sit here is gone.
+          ConfirmIdentitySheet covers both paths now — fingerprint first, PIN
+          as the fallback, and the PIN outright above the threshold — and it
+          checks the PIN through verify_own_pin, which shares the payment
+          path's failed-attempt counter and lockout. The old modal did not:
+          it was a softer door into the same account. */}
 
       {/* Full-Screen Processing Modal (OPay Standard) */}
       <Modal visible={isProcessing} transparent animationType="fade">
@@ -1614,6 +1657,34 @@ export default function QuickServiceScreen({ route, navigation }: any) {
           </View>
         </View>
       </Modal>
+
+      {/* Step 4: fingerprint, PIN as the fallback — and the PIN outright once
+          the amount is above the customer's threshold, because the server
+          verifies the PIN and cannot verify a fingerprint the phone checked. */}
+      <ConfirmIdentitySheet
+        visible={isIdentitySheetVisible}
+        reason={`Authorise ₦${getPayableAmount().toLocaleString('en-NG')} for ${getServiceTitle()}`}
+        requirePin={pinIsMandatory()}
+        onConfirmed={handleIdentityConfirmed}
+        onCancel={() => setIsIdentitySheetVisible(false)}
+      />
+
+      {/* Step 5: the few real seconds between the fingerprint and the airtime.
+          Every line of it is a fact the server reported. */}
+      <PurchaseProgressSheet
+        visible={isProgressVisible}
+        snapshot={progressSnapshot}
+        title={progressTitle}
+        onClose={() => {
+          // Closing is not cancelling — the money is already moving. The watch
+          // is torn down so it does not outlive the screen; the transaction
+          // carries on and reconciliation finishes it.
+          stopWatchingRef.current?.();
+          stopWatchingRef.current = null;
+          setIsProgressVisible(false);
+        }}
+        onViewReceipt={() => setIsProgressVisible(false)}
+      />
     </SafeAreaView>
   );
 }

@@ -282,7 +282,7 @@ function HomeScreenContent({ navigation }: any) {
 
   const user = useAuthStore((state) => state.user);
   const { linkedAccounts, activeBankIndex, isLoading, fetchAccounts, setActiveBankIndex } = useBankStore();
-  const { transactions, fetchTransactions } = useTransactionStore();
+  const { transactions, fetchTransactions, subscribeToLive } = useTransactionStore();
   
   const [isBalanceHidden, setIsBalanceHidden] = useState(true);
   const [isMoreServicesVisible, setIsMoreServicesVisible] = useState(false);
@@ -413,10 +413,21 @@ function HomeScreenContent({ navigation }: any) {
   };
 
   useEffect(() => {
-    if (user?.id) {
-      fetchAccounts(user.id);
-      fetchTransactions(user.id, user.customerId);
-    }
+    if (!user?.id) return;
+
+    fetchAccounts(user.id);
+    fetchTransactions(user.id, user.customerId);
+
+    // Live history and live balance. A purchase settles asynchronously now —
+    // the bank confirms by webhook and the airtime follows — so a transaction
+    // really does change state while this screen is open. Without the
+    // subscription it would sit on "Confirming with your bank" until a manual
+    // refresh, which reads as a stuck payment.
+    //
+    // Subscribed here rather than in each screen so there is one channel per
+    // session, not one per mount.
+    const unsubscribe = subscribeToLive(user.id);
+    return unsubscribe;
   }, [user?.id, user?.customerId]);
 
   const handleOpenService = (serviceType: string) => {

@@ -855,10 +855,21 @@ interface TransactionState {
   isLoading: boolean;
   error: string | null;
   fetchTransactions: (userId: string, customerId?: string) => Promise<void>;
-
+  /**
+   * Live history and live balance.
+   *
+   * A purchase settles asynchronously now — the bank confirms by webhook and
+   * the airtime follows — so a transaction genuinely changes state while the
+   * customer is looking at the list. Without this they see "Confirming with
+   * your bank" until they pull to refresh, which reads as a stuck payment.
+   *
+   * Returns an unsubscribe. Call it on sign-out or the channel outlives the
+   * session.
+   */
+  subscribeToLive: (userId: string) => () => void;
 }
 
-export const useTransactionStore = create<TransactionState>((set) => ({
+export const useTransactionStore = create<TransactionState>((set, get) => ({
   transactions: [],
   isLoading: false,
   error: null,
@@ -901,5 +912,67 @@ export const useTransactionStore = create<TransactionState>((set) => ({
     }
   },
 
+  subscribeToLive: (userId: string) => {
+    const channel = supabase
+      .channel(`live_activity_${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'transactions',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const row = payload.new as any;
+          if (!row?.id) return;
+
+          const mapped: AppTransaction = {
+            id: row.id,
+            reference: row.reference,
+            customer_id: row.customer_id,
+            user_id: row.user_id,
+            merchant_name: row.merchant_name,
+            amount: row.amount,
+            status: row.status,
+            account_used: row.account_used,
+            created_at: row.created_at,
+            category: 'bills',
+          };
+
+          set((state) => {
+            const index = state.transactions.findIndex((t) => t.id === mapped.id);
+            if (index === -1) {
+              return { transactions: [mapped, ...state.transactions] };
+            }
+            // Replace in place. A status change must not reorder the list
+            // under the customer's thumb while they are reading it.
+            const next = [...state.transactions];
+            next[index] = { ...next[index], ...mapped };
+            return { transactions: next };
+          });
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'linked_accounts',
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          // The cached balance moved. Re-read through the store's own mapper
+          // rather than patching a number in place, so there is one code path
+          // that decides what a balance looks like.
+          void useBankStore.getState().fetchAccounts(userId);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  },
 }));
 

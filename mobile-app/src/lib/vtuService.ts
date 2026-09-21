@@ -40,9 +40,20 @@ export interface VtuRechargePayload {
   variationCode?: string;
   meterType?: 'prepaid' | 'postpaid';
   dataCategory?: 'sme' | 'direct';
+  /** BigiSub plan shelf. 'sme' / 'direct' above are the legacy shorthand. */
+  planType?: 'SME' | 'GIFTING' | 'DataTransfer' | 'SME2' | 'CGIFTING' | 'DataCOUPON' | 'SNS';
+  /**
+   * Electricity and cable only, and required: BigiSub's own endpoints demand
+   * the verified account holder, so the purchase is refused without one rather
+   * than failing at the gateway after the customer has paid.
+   */
+  customerName?: string;
+  customerAddress?: string;
   accountId?: string;
   pin?: string;
-  reference?: string;
+  // reference is deliberately absent. The server owns it now: it used to be
+  // accepted from here and generated only as a fallback, so a retry that
+  // omitted it produced a fresh reference and a second charge.
 }
 
 export interface VtuRechargeResult {
@@ -195,11 +206,15 @@ export async function getActiveVtuMargins(): Promise<VtuMargins> {
 }
 
 /**
- * Execute a recharge.
+ * Start a purchase.
  *
- * The Edge Function debits, fulfils and reverses atomically. On return we
- * re-read balances from the server rather than adjusting them locally, so the
- * UI can never disagree with the ledger.
+ * This no longer waits for the airtime. It returns as soon as the transaction
+ * is open and the customer's bank has been asked for the money — because the
+ * bank confirms by webhook, which is a few real seconds later, and blocking
+ * the UI on it would mean a spinner with nothing behind it.
+ *
+ * The caller takes the returned `reference` and watches it with
+ * watchTransaction(). Success is NOT implied by this resolving.
  */
 export async function executeVtuRecharge(
   payload: VtuRechargePayload,
@@ -227,20 +242,69 @@ export async function executeVtuRecharge(
       customerPhone: payload.customerPhone,
       variationCode: payload.variationCode,
       dataCategory: payload.dataCategory,
+      planType: payload.planType,
+      customerName: payload.customerName,
+      customerAddress: payload.customerAddress,
       meterType: payload.meterType ?? 'prepaid',
       accountId: payload.accountId,
       pin: payload.pin,
-      reference: payload.reference,
     },
   });
 
-  const result = toResult(data, error);
+  return toResult(data, error);
+}
 
-  // Whatever happened, the server is the source of truth for the balance.
-  const userId = useAuthStore.getState().user?.id;
-  if (userId) {
-    await useBankStore.getState().fetchAccounts(userId);
+/**
+ * Verify an electricity meter or a TV smartcard.
+ *
+ * Not optional and not merely a nicety: BigiSub's pay/purchase endpoints
+ * require the account holder's name exactly as their own verify call returned
+ * it. Skipping this means the purchase is rejected by the gateway AFTER the
+ * customer's bank has been debited.
+ *
+ * It also lets the customer catch their own typo — they see whose meter they
+ * are about to credit before any money moves.
+ */
+export async function verifyBillAccount(args: {
+  serviceType: 'power' | 'cable';
+  provider: string;
+  destination: string;
+  meterType?: 'prepaid' | 'postpaid';
+}): Promise<
+  | { success: true; customerName: string; customerAddress?: string | null; currentBouquet?: string | null }
+  | { success: false; error: string }
+> {
+  const { data, error } = await supabase.functions.invoke('vtu-service', {
+    body: {
+      action: args.serviceType === 'power' ? 'verify_meter' : 'verify_cable',
+      provider: args.provider,
+      destination: args.destination,
+      meterType: args.meterType ?? 'prepaid',
+    },
+  });
+
+  if (error || !data?.success) {
+    return {
+      success: false,
+      error: data?.error ?? 'That account could not be verified. Check the number and try again.',
+    };
   }
 
-  return result;
+  return {
+    success: true,
+    customerName: String(data.customerName ?? ''),
+    customerAddress: data.customerAddress ?? null,
+    currentBouquet: data.currentBouquet ?? null,
+  };
+}
+
+/** Electricity providers and the service charge each one levies. */
+export async function fetchElectricityProviders(): Promise<
+  { name: string; code: string; minAmount: number; serviceCharge: number; serviceChargeType: string }[]
+> {
+  const { data, error } = await supabase.functions.invoke('vtu-service', {
+    body: { action: 'get_electricity_providers' },
+  });
+  if (error || !data?.success) return [];
+  return data.providers ?? [];
 }
