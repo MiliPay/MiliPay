@@ -21,6 +21,14 @@ export interface Fulfilment {
   operatorReference: string;
   token?: string;
   units?: string;
+  /**
+   * The provider's own code, handed back raw so vtu-state decides what it
+   * means. Fulfilment used to throw for anything that was not a success,
+   * which collapsed "the operator declined" and "the operator is still
+   * thinking" into the same outcome — and the caller reversed for both.
+   */
+  providerCode?: string;
+  providerStatus?: string;
 }
 
 export class FulfilmentError extends Error {
@@ -77,11 +85,19 @@ function vtpassCredentials(): { apiKey: string; secretKey: string } | null {
 
 /**
  * VTPass request_id must start with WAT (UTC+1) YYYYMMDDHHmm.
+ *
  * Derived from the MiliPay reference so a retry reuses the same request_id and
- * VTPass deduplicates it for us.
+ * VTPass deduplicates it for us — but that only holds if the timestamp is
+ * stable too. It used to come from Date.now(), so a retry a minute later
+ * produced a DIFFERENT request_id and VTPass treated it as a fresh purchase:
+ * the customer paid once and could be credited twice, at our cost.
+ *
+ * `issuedAt` is the transaction's own initiated_at, so every retry of the
+ * same transaction produces the same id.
  */
-export function vtpassRequestId(reference: string): string {
-  const wat = new Date(Date.now() + 60 * 60 * 1000);
+export function vtpassRequestId(reference: string, issuedAt?: string | Date): string {
+  const base = issuedAt ? new Date(issuedAt) : new Date();
+  const wat = new Date(base.getTime() + 60 * 60 * 1000);
   const stamp = [
     wat.getUTCFullYear(),
     String(wat.getUTCMonth() + 1).padStart(2, "0"),
@@ -152,6 +168,8 @@ export async function payWithVtpass(args: {
   baseAmount: number;
   variationCode?: string;
   meterType?: string;
+  /** The transaction's initiated_at, so a retry reuses the same request_id. */
+  issuedAt?: string;
   timeoutMs?: number;
 }): Promise<Fulfilment> {
   const creds = vtpassCredentials();
@@ -163,7 +181,7 @@ export async function payWithVtpass(args: {
   }
 
   const payload: Record<string, unknown> = {
-    request_id: vtpassRequestId(args.reference),
+    request_id: vtpassRequestId(args.reference, args.issuedAt),
     serviceID: args.serviceId,
     billersCode: args.billersCode,
     amount: args.baseAmount,
@@ -205,10 +223,14 @@ export async function payWithVtpass(args: {
     clearTimeout(timer);
   }
 
-  // '000' delivered, '099' accepted/processing.
-  if (body.code !== "000" && body.code !== "099") {
+  // The code is handed back rather than judged here. '099' and '001' mean
+  // "still processing", and treating them as success is how a customer gets
+  // charged for airtime VTPass later failed to send. statusForVtpassCode in
+  // vtu-state.ts owns that mapping, and it is tested.
+  const code = String(body.code ?? "");
+  if (code !== "000" && code !== "099" && code !== "001") {
     throw new FulfilmentError(
-      body.response_description || `Operator declined the request (code ${body.code})`,
+      body.response_description || `Operator declined the request (code ${code})`,
     );
   }
 
@@ -225,27 +247,119 @@ export async function payWithVtpass(args: {
       `VTP-${Date.now()}`,
     token,
     units,
+    providerCode: code,
+    providerStatus: body.content?.transactions?.status,
   };
+}
+
+/**
+ * VTPass wallet balance.
+ *
+ * Checked BEFORE the customer's bank is debited. The two money movements in a
+ * purchase are independent — Mono moves the customer's money to us, and our
+ * own pre-funded VTPass wallet pays the operator — so an empty VTPass wallet
+ * means we take the customer's money and cannot deliver. Refusing a sale is
+ * survivable; that is not.
+ */
+export async function fetchVtpassWalletBalance(timeoutMs = 4000): Promise<number | null> {
+  const creds = vtpassCredentials();
+  if (!creds) return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${vtpassBaseUrl()}/balance`, {
+      headers: { "api-key": creds.apiKey, "secret-key": creds.secretKey },
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const body = await res.json();
+    const balance = Number(body?.contents?.balance ?? body?.balance);
+    return Number.isFinite(balance) ? balance : null;
+  } catch {
+    // Unknown, not zero. The caller decides whether to proceed blind; saying
+    // "no balance" here would block every sale whenever VTPass is slow.
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Ask VTPass what actually happened to a transaction we never got a final
+ * answer for. This is what resolves fulfilment_pending, and it is the reason
+ * a timeout no longer triggers a blind reversal.
+ */
+export async function requeryVtpass(
+  reference: string,
+  issuedAt: string | undefined,
+  timeoutMs = 10_000,
+): Promise<{ providerCode: string; providerStatus?: string; token?: string; units?: string }> {
+  const creds = vtpassCredentials();
+  if (!creds) throw new FulfilmentError("Telecom gateway is not configured", true);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${vtpassBaseUrl()}/requery`, {
+      method: "POST",
+      headers: {
+        "api-key": creds.apiKey,
+        "secret-key": creds.secretKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ request_id: vtpassRequestId(reference, issuedAt) }),
+      signal: controller.signal,
+    });
+    const body = await res.json();
+    let token: string | undefined;
+    let units: string | undefined;
+    if (typeof body.purchased_code === "string") {
+      token = /Token\s*:\s*([0-9-]+)/i.exec(body.purchased_code)?.[1]?.trim();
+      units = /Units\s*:\s*([0-9.]+\s*kWh)/i.exec(body.purchased_code)?.[1]?.trim();
+    }
+    return {
+      providerCode: String(body.code ?? ""),
+      providerStatus: body.content?.transactions?.status,
+      token,
+      units,
+    };
+  } catch (err) {
+    throw new FulfilmentError(
+      err instanceof Error && err.name === "AbortError"
+        ? "Requery timed out"
+        : "Could not reach the telecom gateway",
+      true,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
 // BigiSub — wholesale SME data bundles
 // ─────────────────────────────────────────────────────────────
 
-export function bigisubNetworkId(provider: string): number {
-  switch (String(provider).toLowerCase().trim()) {
-    case "mtn":
-      return 1;
-    case "airtel":
-      return 2;
-    case "glo":
-      return 3;
-    case "9mobile":
-    case "etisalat":
-      return 4;
-    default:
-      return 1;
-  }
+/**
+ * BigiSub carries SME data for MTN and Airtel ONLY. Everything else — all
+ * airtime, retail data, Glo and 9mobile data, power, cable — is VTPass.
+ *
+ * This used to map Glo to 3 and 9mobile to 4, and the mobile app defaulted
+ * every network to the SME tab, so Glo data was routed to a gateway that does
+ * not sell it. Returning null makes the caller choose a real route rather than
+ * silently falling through to MTN, which is what `default: return 1` did.
+ */
+export const BIGISUB_NETWORKS: Record<string, number> = {
+  mtn: 1,
+  airtel: 2,
+};
+
+export function bigisubNetworkId(provider: string): number | null {
+  return BIGISUB_NETWORKS[String(provider).toLowerCase().trim()] ?? null;
+}
+
+export function supportsSmeData(provider: string): boolean {
+  return bigisubNetworkId(provider) !== null;
 }
 
 function bigisubConfig(): { baseUrl: string; token: string; pin: string } | null {
@@ -352,8 +466,11 @@ export async function purchaseSmeData(args: {
     clearTimeout(timer);
   }
 
-  const delivered = ok && (body.success === true || body.data?.status === "successful");
-  if (!delivered) {
+  const providerStatus = String(body.data?.status ?? (body.success === true ? "successful" : ""));
+  const pending = ok && /pending|processing/i.test(providerStatus);
+  const delivered = ok && (body.success === true || /successful|success|delivered/i.test(providerStatus));
+
+  if (!delivered && !pending) {
     throw new FulfilmentError(
       body.message || body.detail ||
         (typeof body.data === "string" ? body.data : "SME data purchase was declined"),
@@ -363,5 +480,6 @@ export async function purchaseSmeData(args: {
   return {
     operatorReference: body.data?.reference || body.data?.transaction_id ||
       `BGS-${Date.now()}`,
+    providerStatus,
   };
 }
