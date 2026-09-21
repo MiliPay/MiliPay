@@ -80,3 +80,33 @@ jobs:
 
       - name: Validate migrations
         run: npm run check-migrations
+
+  schema-drift:
+    name: Schema drift
+    runs-on: ubuntu-latest
+    # Secrets are not available to forked pull requests, and a skipped check is
+    # better than a red one that nobody can fix.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # The live database once carried three wide-open RLS policies that were
+      # in no migration, while a policy that WAS in a migration was absent.
+      # This compares the running schema against supabase/security-snapshot.json
+      # and fails on any difference, plus on unconditional policies, anon-callable
+      # SECURITY DEFINER functions and tables with RLS off.
+      #
+      # Accept an intended change with: npm run schema-snapshot -- --write
+      - name: Check schema against committed snapshot
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::warning::SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set — schema drift not checked."
+            exit 0
+          fi
+          node scripts/schema-snapshot.mjs

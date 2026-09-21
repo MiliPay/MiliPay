@@ -13,7 +13,8 @@
     "prepare": "git config core.hooksPath .githooks || exit 0",
     "scan-secrets": "node scripts/scan-secrets.mjs --history",
     "scan-secrets:staged": "node scripts/scan-secrets.mjs --staged",
-    "check-migrations": "node scripts/check-migrations.mjs"
+    "check-migrations": "node scripts/check-migrations.mjs",
+    "schema-snapshot": "node scripts/schema-snapshot.mjs"
   },
   "dependencies": {
     "dotenv": "^17.4.2"

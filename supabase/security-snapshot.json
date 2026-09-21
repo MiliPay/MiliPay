@@ -1,0 +1,1735 @@
+{
+  "column_grants": [
+    {
+      "columns": [
+        "created_at",
+        "customer_id",
+        "id",
+        "issue",
+        "status",
+        "urgency"
+      ],
+      "grantee": "anon",
+      "privilege": "INSERT",
+      "table": "complaints"
+    },
+    {
+      "columns": [
+        "created_at",
+        "customer_id",
+        "id",
+        "issue",
+        "status",
+        "urgency"
+      ],
+      "grantee": "anon",
+      "privilege": "SELECT",
+      "table": "complaints"
+    },
+    {
+      "columns": [
+        "created_at",
+        "customer_id",
+        "id",
+        "issue",
+        "status",
+        "urgency"
+      ],
+      "grantee": "anon",
+      "privilege": "UPDATE",
+      "table": "complaints"
+    },
+    {
+      "columns": [
+        "created_at",
+        "customer_id",
+        "id",
+        "issue",
+        "status",
+        "urgency"
+      ],
+      "grantee": "authenticated",
+      "privilege": "INSERT",
+      "table": "complaints"
+    },
+    {
+      "columns": [
+        "created_at",
+        "customer_id",
+        "id",
+        "issue",
+        "status",
+        "urgency"
+      ],
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "complaints"
+    },
+    {
+      "columns": [
+        "created_at",
+        "customer_id",
+        "id",
+        "issue",
+        "status",
+        "urgency"
+      ],
+      "grantee": "authenticated",
+      "privilege": "UPDATE",
+      "table": "complaints"
+    },
+    {
+      "columns": [
+        "address",
+        "auth_user_id",
+        "biometric_enrolled_at",
+        "bvn_last_4",
+        "bvn_verified",
+        "bvn_verified_at",
+        "created_at",
+        "daily_limit",
+        "date_of_birth",
+        "email",
+        "face_captured_at",
+        "face_simulated",
+        "first_name",
+        "gender",
+        "has_face_template",
+        "has_palm_template",
+        "id",
+        "kyc_tier",
+        "last_name",
+        "must_change_password",
+        "nin_last_4",
+        "nin_verified",
+        "nin_verified_at",
+        "onboarding_completed_at",
+        "palm_simulated",
+        "password_changed_at",
+        "password_delivered_at",
+        "password_delivery_channel",
+        "password_delivery_status",
+        "phone",
+        "pin_failed_attempts",
+        "pin_locked_until",
+        "pin_threshold",
+        "registered_by",
+        "rejection_reason",
+        "single_limit",
+        "state",
+        "status",
+        "verified_at",
+        "verified_by"
+      ],
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "customers"
+    },
+    {
+      "columns": [
+        "address",
+        "email",
+        "first_name",
+        "last_name",
+        "phone",
+        "state"
+      ],
+      "grantee": "authenticated",
+      "privilege": "UPDATE",
+      "table": "customers"
+    },
+    {
+      "columns": [
+        "account_name",
+        "account_number",
+        "balance",
+        "bank_name",
+        "created_at",
+        "id",
+        "is_active",
+        "mono_account_id",
+        "user_id"
+      ],
+      "grantee": "authenticated",
+      "privilege": "INSERT",
+      "table": "linked_accounts"
+    },
+    {
+      "columns": [
+        "account_name",
+        "account_number",
+        "balance",
+        "bank_name",
+        "created_at",
+        "id",
+        "is_active",
+        "mono_account_id",
+        "user_id"
+      ],
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "linked_accounts"
+    },
+    {
+      "columns": [
+        "is_active"
+      ],
+      "grantee": "authenticated",
+      "privilege": "UPDATE",
+      "table": "linked_accounts"
+    },
+    {
+      "columns": [
+        "address",
+        "auth_user_id",
+        "business_name",
+        "cac_rc_number",
+        "category",
+        "created_at",
+        "director_bvn",
+        "director_name",
+        "director_phone",
+        "email",
+        "id",
+        "mono_subaccount_id",
+        "onboarded_by",
+        "platform_fee_percent",
+        "settlement_account_name",
+        "settlement_account_number",
+        "settlement_bank_code",
+        "settlement_bank_name",
+        "settlement_schedule",
+        "state",
+        "status",
+        "updated_at"
+      ],
+      "grantee": "anon",
+      "privilege": "INSERT",
+      "table": "merchants"
+    },
+    {
+      "columns": [
+        "address",
+        "auth_user_id",
+        "business_name",
+        "cac_rc_number",
+        "category",
+        "created_at",
+        "director_bvn",
+        "director_name",
+        "director_phone",
+        "email",
+        "id",
+        "mono_subaccount_id",
+        "onboarded_by",
+        "platform_fee_percent",
+        "settlement_account_name",
+        "settlement_account_number",
+        "settlement_bank_code",
+        "settlement_bank_name",
+        "settlement_schedule",
+        "state",
+        "status",
+        "updated_at"
+      ],
+      "grantee": "anon",
+      "privilege": "SELECT",
+      "table": "merchants"
+    },
+    {
+      "columns": [
+        "address",
+        "auth_user_id",
+        "business_name",
+        "cac_rc_number",
+        "category",
+        "created_at",
+        "director_bvn",
+        "director_name",
+        "director_phone",
+        "email",
+        "id",
+        "mono_subaccount_id",
+        "onboarded_by",
+        "platform_fee_percent",
+        "settlement_account_name",
+        "settlement_account_number",
+        "settlement_bank_code",
+        "settlement_bank_name",
+        "settlement_schedule",
+        "state",
+        "status",
+        "updated_at"
+      ],
+      "grantee": "anon",
+      "privilege": "UPDATE",
+      "table": "merchants"
+    },
+    {
+      "columns": [
+        "address",
+        "auth_user_id",
+        "business_name",
+        "cac_rc_number",
+        "category",
+        "created_at",
+        "director_bvn",
+        "director_name",
+        "director_phone",
+        "email",
+        "id",
+        "mono_subaccount_id",
+        "onboarded_by",
+        "platform_fee_percent",
+        "settlement_account_name",
+        "settlement_account_number",
+        "settlement_bank_code",
+        "settlement_bank_name",
+        "settlement_schedule",
+        "state",
+        "status",
+        "updated_at"
+      ],
+      "grantee": "authenticated",
+      "privilege": "INSERT",
+      "table": "merchants"
+    },
+    {
+      "columns": [
+        "address",
+        "auth_user_id",
+        "business_name",
+        "cac_rc_number",
+        "category",
+        "created_at",
+        "director_bvn",
+        "director_name",
+        "director_phone",
+        "email",
+        "id",
+        "mono_subaccount_id",
+        "onboarded_by",
+        "platform_fee_percent",
+        "settlement_account_name",
+        "settlement_account_number",
+        "settlement_bank_code",
+        "settlement_bank_name",
+        "settlement_schedule",
+        "state",
+        "status",
+        "updated_at"
+      ],
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "merchants"
+    },
+    {
+      "columns": [
+        "address",
+        "auth_user_id",
+        "business_name",
+        "cac_rc_number",
+        "category",
+        "created_at",
+        "director_bvn",
+        "director_name",
+        "director_phone",
+        "email",
+        "id",
+        "mono_subaccount_id",
+        "onboarded_by",
+        "platform_fee_percent",
+        "settlement_account_name",
+        "settlement_account_number",
+        "settlement_bank_code",
+        "settlement_bank_name",
+        "settlement_schedule",
+        "state",
+        "status",
+        "updated_at"
+      ],
+      "grantee": "authenticated",
+      "privilege": "UPDATE",
+      "table": "merchants"
+    },
+    {
+      "columns": [
+        "assigned_by",
+        "created_at",
+        "device_model",
+        "device_serial_number",
+        "id",
+        "is_active",
+        "last_heartbeat",
+        "merchant_id",
+        "terminal_api_key_hash",
+        "terminal_id"
+      ],
+      "grantee": "anon",
+      "privilege": "INSERT",
+      "table": "pos_terminals"
+    },
+    {
+      "columns": [
+        "assigned_by",
+        "created_at",
+        "device_model",
+        "device_serial_number",
+        "id",
+        "is_active",
+        "last_heartbeat",
+        "merchant_id",
+        "terminal_api_key_hash",
+        "terminal_id"
+      ],
+      "grantee": "anon",
+      "privilege": "SELECT",
+      "table": "pos_terminals"
+    },
+    {
+      "columns": [
+        "assigned_by",
+        "created_at",
+        "device_model",
+        "device_serial_number",
+        "id",
+        "is_active",
+        "last_heartbeat",
+        "merchant_id",
+        "terminal_api_key_hash",
+        "terminal_id"
+      ],
+      "grantee": "anon",
+      "privilege": "UPDATE",
+      "table": "pos_terminals"
+    },
+    {
+      "columns": [
+        "assigned_by",
+        "created_at",
+        "device_model",
+        "device_serial_number",
+        "id",
+        "is_active",
+        "last_heartbeat",
+        "merchant_id",
+        "terminal_api_key_hash",
+        "terminal_id"
+      ],
+      "grantee": "authenticated",
+      "privilege": "INSERT",
+      "table": "pos_terminals"
+    },
+    {
+      "columns": [
+        "assigned_by",
+        "created_at",
+        "device_model",
+        "device_serial_number",
+        "id",
+        "is_active",
+        "last_heartbeat",
+        "merchant_id",
+        "terminal_api_key_hash",
+        "terminal_id"
+      ],
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "pos_terminals"
+    },
+    {
+      "columns": [
+        "assigned_by",
+        "created_at",
+        "device_model",
+        "device_serial_number",
+        "id",
+        "is_active",
+        "last_heartbeat",
+        "merchant_id",
+        "terminal_api_key_hash",
+        "terminal_id"
+      ],
+      "grantee": "authenticated",
+      "privilege": "UPDATE",
+      "table": "pos_terminals"
+    },
+    {
+      "columns": [
+        "created_at",
+        "email",
+        "full_name",
+        "id",
+        "nin",
+        "nin_last_4",
+        "phone",
+        "role",
+        "state",
+        "status"
+      ],
+      "grantee": "anon",
+      "privilege": "INSERT",
+      "table": "staff_profiles"
+    },
+    {
+      "columns": [
+        "created_at",
+        "email",
+        "full_name",
+        "id",
+        "nin",
+        "nin_last_4",
+        "phone",
+        "role",
+        "state",
+        "status"
+      ],
+      "grantee": "anon",
+      "privilege": "SELECT",
+      "table": "staff_profiles"
+    },
+    {
+      "columns": [
+        "created_at",
+        "email",
+        "full_name",
+        "id",
+        "nin",
+        "nin_last_4",
+        "phone",
+        "role",
+        "state",
+        "status"
+      ],
+      "grantee": "anon",
+      "privilege": "UPDATE",
+      "table": "staff_profiles"
+    },
+    {
+      "columns": [
+        "created_at",
+        "email",
+        "full_name",
+        "id",
+        "nin",
+        "nin_last_4",
+        "phone",
+        "role",
+        "state",
+        "status"
+      ],
+      "grantee": "authenticated",
+      "privilege": "INSERT",
+      "table": "staff_profiles"
+    },
+    {
+      "columns": [
+        "created_at",
+        "email",
+        "full_name",
+        "id",
+        "nin",
+        "nin_last_4",
+        "phone",
+        "role",
+        "state",
+        "status"
+      ],
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "staff_profiles"
+    },
+    {
+      "columns": [
+        "created_at",
+        "email",
+        "full_name",
+        "id",
+        "nin",
+        "nin_last_4",
+        "phone",
+        "role",
+        "state",
+        "status"
+      ],
+      "grantee": "authenticated",
+      "privilege": "UPDATE",
+      "table": "staff_profiles"
+    },
+    {
+      "columns": [
+        "assigned_to",
+        "created_at",
+        "created_by",
+        "customer_id",
+        "id",
+        "is_escalated",
+        "issue_description",
+        "resolved_at",
+        "solved_by",
+        "started_at",
+        "status",
+        "subject",
+        "ticket_id",
+        "updated_at",
+        "urgency"
+      ],
+      "grantee": "authenticated",
+      "privilege": "INSERT",
+      "table": "support_tickets"
+    },
+    {
+      "columns": [
+        "assigned_to",
+        "created_at",
+        "created_by",
+        "customer_id",
+        "id",
+        "is_escalated",
+        "issue_description",
+        "resolved_at",
+        "solved_by",
+        "started_at",
+        "status",
+        "subject",
+        "ticket_id",
+        "updated_at",
+        "urgency"
+      ],
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "support_tickets"
+    },
+    {
+      "columns": [
+        "assigned_to",
+        "created_at",
+        "created_by",
+        "customer_id",
+        "id",
+        "is_escalated",
+        "issue_description",
+        "resolved_at",
+        "solved_by",
+        "started_at",
+        "status",
+        "subject",
+        "ticket_id",
+        "updated_at",
+        "urgency"
+      ],
+      "grantee": "authenticated",
+      "privilege": "UPDATE",
+      "table": "support_tickets"
+    },
+    {
+      "columns": [
+        "content",
+        "created_at",
+        "id",
+        "sender_id",
+        "sender_type",
+        "ticket_id"
+      ],
+      "grantee": "authenticated",
+      "privilege": "INSERT",
+      "table": "ticket_messages"
+    },
+    {
+      "columns": [
+        "content",
+        "created_at",
+        "id",
+        "sender_id",
+        "sender_type",
+        "ticket_id"
+      ],
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "ticket_messages"
+    },
+    {
+      "columns": [
+        "content",
+        "created_at",
+        "id",
+        "sender_id",
+        "sender_type",
+        "ticket_id"
+      ],
+      "grantee": "authenticated",
+      "privilege": "UPDATE",
+      "table": "ticket_messages"
+    },
+    {
+      "columns": [
+        "account_used",
+        "amount",
+        "created_at",
+        "customer_id",
+        "id",
+        "merchant_id",
+        "merchant_name",
+        "reference",
+        "status",
+        "terminal_id",
+        "user_id"
+      ],
+      "grantee": "anon",
+      "privilege": "SELECT",
+      "table": "transactions"
+    },
+    {
+      "columns": [
+        "account_used",
+        "amount",
+        "created_at",
+        "customer_id",
+        "id",
+        "merchant_id",
+        "merchant_name",
+        "reference",
+        "status",
+        "terminal_id",
+        "user_id"
+      ],
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "transactions"
+    },
+    {
+      "columns": [
+        "bvn",
+        "created_at",
+        "daily_limit",
+        "email",
+        "id",
+        "is_verified",
+        "kyc_tier",
+        "nin",
+        "phone",
+        "pin_failed_attempts",
+        "pin_hash",
+        "pin_locked_until",
+        "pin_threshold",
+        "single_limit"
+      ],
+      "grantee": "authenticated",
+      "privilege": "INSERT",
+      "table": "users"
+    },
+    {
+      "columns": [
+        "bvn",
+        "created_at",
+        "daily_limit",
+        "email",
+        "id",
+        "is_verified",
+        "kyc_tier",
+        "nin",
+        "phone",
+        "pin_failed_attempts",
+        "pin_hash",
+        "pin_locked_until",
+        "pin_threshold",
+        "single_limit"
+      ],
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "users"
+    },
+    {
+      "columns": [
+        "bvn",
+        "email",
+        "is_verified",
+        "nin"
+      ],
+      "grantee": "authenticated",
+      "privilege": "UPDATE",
+      "table": "users"
+    },
+    {
+      "columns": [
+        "airtime_surcharge_percent",
+        "cable_surcharge_ngn",
+        "data_surcharge_ngn",
+        "id",
+        "power_convenience_fee_ngn",
+        "updated_at"
+      ],
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "vtu_settings"
+    }
+  ],
+  "functions": [
+    {
+      "anon_execute": false,
+      "args": "",
+      "authenticated_execute": true,
+      "name": "complete_onboarding",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "p_key text, p_limit integer, p_window_seconds integer",
+      "authenticated_execute": false,
+      "name": "consume_rate_limit",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "",
+      "authenticated_execute": false,
+      "name": "create_partition_and_insert",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "p_full_name text, p_email text, p_phone text, p_nin text, p_role text, p_state text, p_password text",
+      "authenticated_execute": false,
+      "name": "create_staff_user",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "p_account_id uuid, p_amount numeric",
+      "authenticated_execute": false,
+      "name": "credit_linked_account",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "",
+      "authenticated_execute": true,
+      "name": "customer_has_pin",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "p_account_id uuid, p_user_id uuid, p_amount numeric",
+      "authenticated_execute": false,
+      "name": "debit_linked_account",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "target_customer_id uuid",
+      "authenticated_execute": true,
+      "name": "delete_customer_user",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "target_merchant_id uuid",
+      "authenticated_execute": true,
+      "name": "delete_merchant_cascade",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "target_user_id uuid",
+      "authenticated_execute": true,
+      "name": "delete_staff_user",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "p_user_id uuid",
+      "authenticated_execute": false,
+      "name": "get_customer_daily_spend",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "",
+      "authenticated_execute": true,
+      "name": "get_onboarding_state",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "",
+      "authenticated_execute": false,
+      "name": "get_transactions_policies",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "",
+      "authenticated_execute": true,
+      "name": "mark_password_changed",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "",
+      "authenticated_execute": false,
+      "name": "on_staff_profile_delete_cascade_auth",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "",
+      "authenticated_execute": false,
+      "name": "rls_auto_enable",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "",
+      "authenticated_execute": false,
+      "name": "security_snapshot",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "p_enrolled boolean",
+      "authenticated_execute": true,
+      "name": "set_biometric_enrolled",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "p_pin text",
+      "authenticated_execute": true,
+      "name": "set_customer_pin",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "p_threshold numeric",
+      "authenticated_execute": true,
+      "name": "set_pin_threshold",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "p_single numeric, p_daily numeric",
+      "authenticated_execute": true,
+      "name": "set_transaction_limits",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "p_tier integer",
+      "authenticated_execute": true,
+      "name": "tier_caps",
+      "search_path_pinned": true,
+      "security_definer": false
+    },
+    {
+      "anon_execute": false,
+      "args": "target_account_id uuid",
+      "authenticated_execute": true,
+      "name": "unlink_bank_account",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "p_user_id uuid, p_pin text",
+      "authenticated_execute": false,
+      "name": "verify_customer_pin",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "p_pin text",
+      "authenticated_execute": true,
+      "name": "verify_own_pin",
+      "search_path_pinned": true,
+      "security_definer": true
+    }
+  ],
+  "policies": [
+    {
+      "check": "",
+      "command": "ALL",
+      "name": "Admins have full access to complaints",
+      "roles": [
+        "authenticated"
+      ],
+      "table": "complaints",
+      "using": "(((auth.jwt() -> 'app_metadata'::text) ->> 'role'::text) = ANY (ARRAY['super_admin'::text, 'admin'::text]))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Service can read all complaints",
+      "roles": [
+        "authenticated"
+      ],
+      "table": "complaints",
+      "using": "(((auth.jwt() -> 'app_metadata'::text) ->> 'role'::text) = 'service'::text)"
+    },
+    {
+      "check": "",
+      "command": "UPDATE",
+      "name": "Service can update complaints (resolve)",
+      "roles": [
+        "authenticated"
+      ],
+      "table": "complaints",
+      "using": "(((auth.jwt() -> 'app_metadata'::text) ->> 'role'::text) = 'service'::text)"
+    },
+    {
+      "check": "",
+      "command": "UPDATE",
+      "name": "Admins can update customers",
+      "roles": [
+        "public"
+      ],
+      "table": "customers",
+      "using": "(COALESCE(((auth.jwt() -> 'app_metadata'::text) ->> 'role'::text), ''::text) = ANY (ARRAY['admin'::text, 'super_admin'::text, 'superAdmin'::text]))"
+    },
+    {
+      "check": "",
+      "command": "ALL",
+      "name": "Admins have full access to customers",
+      "roles": [
+        "authenticated"
+      ],
+      "table": "customers",
+      "using": "(((auth.jwt() -> 'app_metadata'::text) ->> 'role'::text) = ANY (ARRAY['super_admin'::text, 'admin'::text]))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Agents can read own registered customers",
+      "roles": [
+        "authenticated"
+      ],
+      "table": "customers",
+      "using": "((((auth.jwt() -> 'app_metadata'::text) ->> 'role'::text) = 'agent'::text) AND (registered_by = auth.uid()))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Customers can view their own record",
+      "roles": [
+        "public"
+      ],
+      "table": "customers",
+      "using": "(auth_user_id = auth.uid())"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Service can read all customers",
+      "roles": [
+        "authenticated"
+      ],
+      "table": "customers",
+      "using": "(((auth.jwt() -> 'app_metadata'::text) ->> 'role'::text) = 'service'::text)"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Staff can view customers",
+      "roles": [
+        "public"
+      ],
+      "table": "customers",
+      "using": "(COALESCE(((auth.jwt() -> 'app_metadata'::text) ->> 'role'::text), ''::text) = ANY (ARRAY['admin'::text, 'super_admin'::text, 'superAdmin'::text, 'support'::text]))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Staff can read identity verifications",
+      "roles": [
+        "public"
+      ],
+      "table": "identity_verifications",
+      "using": "(COALESCE(((auth.jwt() -> 'app_metadata'::text) ->> 'role'::text), ''::text) = ANY (ARRAY['admin'::text, 'super_admin'::text, 'superAdmin'::text, 'agent'::text, 'support'::text]))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Staff can view all linked accounts",
+      "roles": [
+        "public"
+      ],
+      "table": "linked_accounts",
+      "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['admin'::text, 'super_admin'::text, 'agent'::text, 'support'::text])))))"
+    },
+    {
+      "check": "(auth.uid() = user_id)",
+      "command": "INSERT",
+      "name": "Users can insert their own linked accounts",
+      "roles": [
+        "public"
+      ],
+      "table": "linked_accounts",
+      "using": ""
+    },
+    {
+      "check": "",
+      "command": "UPDATE",
+      "name": "Users can update their own linked accounts",
+      "roles": [
+        "public"
+      ],
+      "table": "linked_accounts",
+      "using": "(auth.uid() = user_id)"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Users can view their own linked accounts",
+      "roles": [
+        "public"
+      ],
+      "table": "linked_accounts",
+      "using": "(auth.uid() = user_id)"
+    },
+    {
+      "check": "",
+      "command": "DELETE",
+      "name": "Admins can delete merchants",
+      "roles": [
+        "public"
+      ],
+      "table": "merchants",
+      "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['admin'::text, 'super_admin'::text])))))"
+    },
+    {
+      "check": "",
+      "command": "UPDATE",
+      "name": "Admins can update merchants",
+      "roles": [
+        "public"
+      ],
+      "table": "merchants",
+      "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['admin'::text, 'super_admin'::text])))))"
+    },
+    {
+      "check": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['agent'::text, 'admin'::text, 'super_admin'::text])))))",
+      "command": "INSERT",
+      "name": "Agents and Admins can create merchants",
+      "roles": [
+        "public"
+      ],
+      "table": "merchants",
+      "using": ""
+    },
+    {
+      "check": "",
+      "command": "UPDATE",
+      "name": "Merchants can update own business record",
+      "roles": [
+        "public"
+      ],
+      "table": "merchants",
+      "using": "((auth_user_id = auth.uid()) OR ((((auth.jwt() -> 'app_metadata'::text) ->> 'merchant_id'::text))::uuid = id))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Merchants can view own business record",
+      "roles": [
+        "public"
+      ],
+      "table": "merchants",
+      "using": "((auth_user_id = auth.uid()) OR ((((auth.jwt() -> 'app_metadata'::text) ->> 'merchant_id'::text))::uuid = id))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Staff can view merchants",
+      "roles": [
+        "public"
+      ],
+      "table": "merchants",
+      "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE (staff_profiles.id = auth.uid())))"
+    },
+    {
+      "check": "",
+      "command": "DELETE",
+      "name": "Admins can delete terminals",
+      "roles": [
+        "public"
+      ],
+      "table": "pos_terminals",
+      "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['admin'::text, 'super_admin'::text])))))"
+    },
+    {
+      "check": "",
+      "command": "UPDATE",
+      "name": "Admins can update terminals",
+      "roles": [
+        "public"
+      ],
+      "table": "pos_terminals",
+      "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['admin'::text, 'super_admin'::text])))))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Merchants can view own terminals",
+      "roles": [
+        "public"
+      ],
+      "table": "pos_terminals",
+      "using": "(merchant_id IN ( SELECT merchants.id\n   FROM merchants\n  WHERE ((merchants.auth_user_id = auth.uid()) OR ((((auth.jwt() -> 'app_metadata'::text) ->> 'merchant_id'::text))::uuid = merchants.id))))"
+    },
+    {
+      "check": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['agent'::text, 'admin'::text, 'super_admin'::text])))))",
+      "command": "INSERT",
+      "name": "Staff can register terminals",
+      "roles": [
+        "public"
+      ],
+      "table": "pos_terminals",
+      "using": ""
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Staff can view terminals",
+      "roles": [
+        "public"
+      ],
+      "table": "pos_terminals",
+      "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE (staff_profiles.id = auth.uid())))"
+    },
+    {
+      "check": "",
+      "command": "ALL",
+      "name": "Admins have full access to staff_profiles",
+      "roles": [
+        "authenticated"
+      ],
+      "table": "staff_profiles",
+      "using": "(((auth.jwt() -> 'app_metadata'::text) ->> 'role'::text) = ANY (ARRAY['super_admin'::text, 'superAdmin'::text, 'admin'::text]))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Staff can view their own profile",
+      "roles": [
+        "authenticated"
+      ],
+      "table": "staff_profiles",
+      "using": "(id = auth.uid())"
+    },
+    {
+      "check": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['admin'::text, 'super_admin'::text, 'support'::text, 'agent'::text])))))",
+      "command": "ALL",
+      "name": "Admins and Support can manage tickets",
+      "roles": [
+        "public"
+      ],
+      "table": "support_tickets",
+      "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['admin'::text, 'super_admin'::text, 'support'::text, 'agent'::text])))))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Admins and Support can view all tickets",
+      "roles": [
+        "public"
+      ],
+      "table": "support_tickets",
+      "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['admin'::text, 'super_admin'::text, 'support'::text, 'agent'::text])))))"
+    },
+    {
+      "check": "(created_by = auth.uid())",
+      "command": "INSERT",
+      "name": "Customers can create tickets",
+      "roles": [
+        "public"
+      ],
+      "table": "support_tickets",
+      "using": ""
+    },
+    {
+      "check": "",
+      "command": "UPDATE",
+      "name": "Customers can update own tickets",
+      "roles": [
+        "public"
+      ],
+      "table": "support_tickets",
+      "using": "((created_by = auth.uid()) OR (customer_id IN ( SELECT customers.id\n   FROM customers\n  WHERE (customers.auth_user_id = auth.uid()))))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Customers can view own tickets",
+      "roles": [
+        "public"
+      ],
+      "table": "support_tickets",
+      "using": "((created_by = auth.uid()) OR (customer_id IN ( SELECT customers.id\n   FROM customers\n  WHERE (customers.auth_user_id = auth.uid()))))"
+    },
+    {
+      "check": "((EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['admin'::text, 'super_admin'::text, 'support'::text, 'agent'::text]))))) AND ((sender_id = auth.uid()) OR (sender_id IS NULL)) AND (sender_type = ANY (ARRAY['staff'::text, 'system'::text])))",
+      "command": "INSERT",
+      "name": "Admins and Support can insert messages",
+      "roles": [
+        "public"
+      ],
+      "table": "ticket_messages",
+      "using": ""
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Admins and Support can view all messages",
+      "roles": [
+        "public"
+      ],
+      "table": "ticket_messages",
+      "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['admin'::text, 'super_admin'::text, 'support'::text, 'agent'::text])))))"
+    },
+    {
+      "check": "((ticket_id IN ( SELECT support_tickets.id\n   FROM support_tickets\n  WHERE ((support_tickets.created_by = auth.uid()) OR (support_tickets.customer_id IN ( SELECT customers.id\n           FROM customers\n          WHERE (customers.auth_user_id = auth.uid())))))) AND (sender_id = auth.uid()) AND (sender_type = 'customer'::text))",
+      "command": "INSERT",
+      "name": "Customers can insert own messages",
+      "roles": [
+        "public"
+      ],
+      "table": "ticket_messages",
+      "using": ""
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Customers can view own messages",
+      "roles": [
+        "public"
+      ],
+      "table": "ticket_messages",
+      "using": "(ticket_id IN ( SELECT support_tickets.id\n   FROM support_tickets\n  WHERE ((support_tickets.created_by = auth.uid()) OR (support_tickets.customer_id IN ( SELECT customers.id\n           FROM customers\n          WHERE (customers.auth_user_id = auth.uid()))))))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Merchants can view own transactions",
+      "roles": [
+        "public"
+      ],
+      "table": "transactions",
+      "using": "(merchant_id IN ( SELECT merchants.id\n   FROM merchants\n  WHERE ((merchants.auth_user_id = auth.uid()) OR ((((auth.jwt() -> 'app_metadata'::text) ->> 'merchant_id'::text))::uuid = merchants.id))))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Staff can view all transactions",
+      "roles": [
+        "public"
+      ],
+      "table": "transactions",
+      "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['admin'::text, 'super_admin'::text, 'support'::text])))))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Users can view their own transactions",
+      "roles": [
+        "authenticated"
+      ],
+      "table": "transactions",
+      "using": "((auth.uid() = user_id) OR (customer_id IN ( SELECT customers.id\n   FROM customers\n  WHERE (customers.auth_user_id = auth.uid()))))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Staff can view all users",
+      "roles": [
+        "public"
+      ],
+      "table": "users",
+      "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['admin'::text, 'super_admin'::text, 'agent'::text, 'support'::text])))))"
+    },
+    {
+      "check": "",
+      "command": "UPDATE",
+      "name": "Users can update their own profile",
+      "roles": [
+        "public"
+      ],
+      "table": "users",
+      "using": "(auth.uid() = id)"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Users can view their own profile",
+      "roles": [
+        "public"
+      ],
+      "table": "users",
+      "using": "(auth.uid() = id)"
+    },
+    {
+      "check": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['admin'::text, 'super_admin'::text])))))",
+      "command": "INSERT",
+      "name": "Admins can insert vtu_settings",
+      "roles": [
+        "public"
+      ],
+      "table": "vtu_settings",
+      "using": ""
+    },
+    {
+      "check": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['admin'::text, 'super_admin'::text])))))",
+      "command": "UPDATE",
+      "name": "Admins can update vtu_settings",
+      "roles": [
+        "public"
+      ],
+      "table": "vtu_settings",
+      "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['admin'::text, 'super_admin'::text])))))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Signed-in users can read VTU pricing",
+      "roles": [
+        "authenticated"
+      ],
+      "table": "vtu_settings",
+      "using": "true"
+    }
+  ],
+  "table_grants": [
+    {
+      "grantee": "anon",
+      "privilege": "DELETE",
+      "table": "complaints"
+    },
+    {
+      "grantee": "anon",
+      "privilege": "INSERT",
+      "table": "complaints"
+    },
+    {
+      "grantee": "anon",
+      "privilege": "SELECT",
+      "table": "complaints"
+    },
+    {
+      "grantee": "anon",
+      "privilege": "UPDATE",
+      "table": "complaints"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "DELETE",
+      "table": "complaints"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "INSERT",
+      "table": "complaints"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "complaints"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "UPDATE",
+      "table": "complaints"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "DELETE",
+      "table": "linked_accounts"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "INSERT",
+      "table": "linked_accounts"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "linked_accounts"
+    },
+    {
+      "grantee": "anon",
+      "privilege": "DELETE",
+      "table": "merchants"
+    },
+    {
+      "grantee": "anon",
+      "privilege": "INSERT",
+      "table": "merchants"
+    },
+    {
+      "grantee": "anon",
+      "privilege": "SELECT",
+      "table": "merchants"
+    },
+    {
+      "grantee": "anon",
+      "privilege": "UPDATE",
+      "table": "merchants"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "DELETE",
+      "table": "merchants"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "INSERT",
+      "table": "merchants"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "merchants"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "UPDATE",
+      "table": "merchants"
+    },
+    {
+      "grantee": "anon",
+      "privilege": "DELETE",
+      "table": "pos_terminals"
+    },
+    {
+      "grantee": "anon",
+      "privilege": "INSERT",
+      "table": "pos_terminals"
+    },
+    {
+      "grantee": "anon",
+      "privilege": "SELECT",
+      "table": "pos_terminals"
+    },
+    {
+      "grantee": "anon",
+      "privilege": "UPDATE",
+      "table": "pos_terminals"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "DELETE",
+      "table": "pos_terminals"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "INSERT",
+      "table": "pos_terminals"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "pos_terminals"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "UPDATE",
+      "table": "pos_terminals"
+    },
+    {
+      "grantee": "anon",
+      "privilege": "DELETE",
+      "table": "staff_profiles"
+    },
+    {
+      "grantee": "anon",
+      "privilege": "INSERT",
+      "table": "staff_profiles"
+    },
+    {
+      "grantee": "anon",
+      "privilege": "SELECT",
+      "table": "staff_profiles"
+    },
+    {
+      "grantee": "anon",
+      "privilege": "UPDATE",
+      "table": "staff_profiles"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "DELETE",
+      "table": "staff_profiles"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "INSERT",
+      "table": "staff_profiles"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "staff_profiles"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "UPDATE",
+      "table": "staff_profiles"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "DELETE",
+      "table": "support_tickets"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "INSERT",
+      "table": "support_tickets"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "support_tickets"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "UPDATE",
+      "table": "support_tickets"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "DELETE",
+      "table": "ticket_messages"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "INSERT",
+      "table": "ticket_messages"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "ticket_messages"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "UPDATE",
+      "table": "ticket_messages"
+    },
+    {
+      "grantee": "anon",
+      "privilege": "SELECT",
+      "table": "transactions"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "transactions"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "DELETE",
+      "table": "users"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "INSERT",
+      "table": "users"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "users"
+    }
+  ],
+  "tables": [
+    {
+      "name": "complaints",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "name": "customers",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "name": "data_migrations",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "name": "identity_verifications",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "name": "linked_accounts",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "name": "merchants",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "name": "pos_terminals",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "name": "rate_limits",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "name": "staff_profiles",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "name": "support_tickets",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "name": "ticket_messages",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "name": "transactions",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "name": "users",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "name": "vtu_settings",
+      "rls_enabled": true,
+      "rls_forced": false
+    }
+  ]
+}
