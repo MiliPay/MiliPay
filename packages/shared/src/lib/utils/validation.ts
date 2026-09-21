@@ -6,6 +6,12 @@ export function isValidNin(value: string): boolean {
   return /^\d{11}$/.test(value.trim());
 }
 
+/** BVN is optional at enrolment, but must be well-formed when supplied. */
+export function isValidBvn(value: string): boolean {
+  if (!value.trim()) return true;
+  return isValidNin(value);
+}
+
 export function isValidEmail(value: string): boolean {
   if (!value) return true; // email is optional
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -25,11 +31,13 @@ export function validateCustomerDraft(draft: {
   dateOfBirth: string;
   gender: string;
   nin: string;
+  bvn?: string;
   phone: string;
   email: string;
   address: string;
   state: string;
   palmVeinTemplate: string;
+  faceTemplate: string;
 }): FieldError[] {
   const errors: FieldError[] = [];
 
@@ -57,8 +65,14 @@ export function validateCustomerDraft(draft: {
   if (!isNotBlank(draft.state)) {
     errors.push({ field: "state", message: "Select a state." });
   }
+  if (!isValidBvn(draft.bvn ?? "")) {
+    errors.push({ field: "bvn", message: "BVN must be exactly 11 digits." });
+  }
   if (!isNotBlank(draft.palmVeinTemplate)) {
     errors.push({ field: "palmVein", message: "A Palm Vein scan is required." });
+  }
+  if (!isNotBlank(draft.faceTemplate)) {
+    errors.push({ field: "face", message: "A facial capture is required." });
   }
 
   return errors;

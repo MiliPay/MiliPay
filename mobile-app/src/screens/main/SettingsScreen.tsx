@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, Pressable, Switch, Alert, Modal, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,6 +23,14 @@ import { useColorScheme } from 'nativewind';
 
 import { useAuthStore, useBankStore } from '../../store/useStore';
 import { GlassCard } from '../../components/ui/GlassCard';
+import { ConfirmIdentitySheet } from '../../components/ui/ConfirmIdentitySheet';
+import {
+  getBiometricCapability,
+  isBiometricUnlockEnabled,
+  enrolBiometricUnlock,
+  setBiometricUnlockEnabled,
+  type BiometricCapability,
+} from '../../lib/deviceAuth';
 
 // --- Reusable Setting Row ---
 const SettingRow = ({ icon: Icon, label, subtitle, value, type = 'nav', danger = false, onPress, iconBg }: any) => {
@@ -81,13 +89,60 @@ const SectionHeader = ({ title }: { title: string }) => (
 export default function SettingsScreen({ navigation }: any) {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+  const recordBiometricEnrolled = useAuthStore((state) => state.setBiometricEnrolled);
   const { linkedAccounts, unlinkAccount } = useBankStore();
   
   const { colorScheme, setColorScheme } = useColorScheme();
   const isDark = colorScheme !== 'light';
 
-  const [biometricEnabled, setBiometricEnabled] = useState(true);
+  // Reflects the real SecureStore preference, not an optimistic default. The
+  // switch used to start on and toggle a local boolean that nothing consumed.
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricCapability, setBiometricCapability] = useState<BiometricCapability | null>(null);
+  const [isChangingPin, setIsChangingPin] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([getBiometricCapability(), isBiometricUnlockEnabled()]).then(
+      ([capability, enabled]) => {
+        if (cancelled) return;
+        setBiometricCapability(capability);
+        setBiometricEnabled(enabled);
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleToggleBiometric = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    if (biometricEnabled) {
+      await setBiometricUnlockEnabled(false);
+      await recordBiometricEnrolled(false);
+      setBiometricEnabled(false);
+      return;
+    }
+
+    if (!biometricCapability?.hasHardware || !biometricCapability?.isEnrolled) {
+      Alert.alert(
+        'Not available',
+        `No ${biometricCapability?.label.toLowerCase() ?? 'biometrics'} are set up on this phone. Add one in your device settings first.`
+      );
+      return;
+    }
+
+    const enrolled = await enrolBiometricUnlock('Confirm it is you to enable biometric unlock');
+    if (!enrolled) {
+      Alert.alert('Not enabled', 'That did not match. Biometric unlock is still off.');
+      return;
+    }
+
+    await recordBiometricEnrolled(true);
+    setBiometricEnabled(true);
+  };
   const [isThemeModalVisible, setIsThemeModalVisible] = useState(false);
   const [activeTheme, setActiveTheme] = useState<'system' | 'light' | 'dark'>('system');
   const [isBankModalVisible, setIsBankModalVisible] = useState(false);
@@ -198,22 +253,24 @@ export default function SettingsScreen({ navigation }: any) {
         <View className="px-6">
           <SectionHeader title="Security" />
           <GlassCard intensity={isDark ? 15 : 40} className="p-0">
-            <SettingRow 
-              icon={Fingerprint} 
-              label="Biometric Login" 
-              subtitle="Use fingerprint or face to sign in"
-              type="switch" 
-              value={biometricEnabled} 
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setBiometricEnabled(!biometricEnabled);
-              }}
+            <SettingRow
+              icon={Fingerprint}
+              label={`${biometricCapability?.label ?? 'Biometric'} Unlock`}
+              subtitle="Confirm sensitive actions like linking a bank"
+              type="switch"
+              value={biometricEnabled}
+              onPress={handleToggleBiometric}
             />
             <SectionDivider />
-            <SettingRow 
-              icon={Lock} 
-              label="Change PIN" 
+            <SettingRow
+              icon={Lock}
+              label="Change PIN"
               subtitle="Update your 4-digit transaction PIN"
+              type="nav"
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setIsChangingPin(true);
+              }}
             />
             <SectionDivider />
             <SettingRow 
@@ -674,6 +731,18 @@ export default function SettingsScreen({ navigation }: any) {
           </View>
         </View>
       </Modal>
+
+      {/* Changing the PIN is gated on the same check as linking a bank: a
+          stolen unlocked handset must not be able to reset the PIN freely. */}
+      <ConfirmIdentitySheet
+        visible={isChangingPin}
+        reason="Confirm it is you before changing your transaction PIN."
+        onConfirmed={() => {
+          setIsChangingPin(false);
+          navigation.navigate('ChangePin');
+        }}
+        onCancel={() => setIsChangingPin(false)}
+      />
     </SafeAreaView>
   );
 }

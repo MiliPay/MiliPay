@@ -19,6 +19,8 @@ import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 
 import { MonoProvider, useMonoConnect } from '@mono.co/connect-react-native';
+
+import { ConfirmIdentitySheet } from '../../components/ui/ConfirmIdentitySheet';
 import { useBankStore, useAuthStore, useTransactionStore, LinkedAccount } from '../../store/useStore';
 import { shareReceiptAsPdf, shareReceiptAsImage } from '../../lib/receiptSharing';
 
@@ -59,7 +61,14 @@ const CARD_THEMES = [
 const LinkBankCard = ({ index, scrollX, isDark }: any) => {
   const { init } = useMonoConnect();
   const { linkedAccounts } = useBankStore();
+  const [isConfirming, setIsConfirming] = useState(false);
 
+  /**
+   * Linking a bank account is a sensitive action, so it is gated on the device
+   * fingerprint with the MiliPay PIN as the fallback. Previously this called
+   * Mono's widget straight away, so anyone holding an unlocked handset could
+   * attach an account.
+   */
   const handleLinkPress = () => {
     if (linkedAccounts.length >= 3) {
       Alert.alert(
@@ -68,6 +77,11 @@ const LinkBankCard = ({ index, scrollX, isDark }: any) => {
       );
       return;
     }
+    setIsConfirming(true);
+  };
+
+  const handleConfirmed = () => {
+    setIsConfirming(false);
     init();
   };
 
@@ -99,6 +113,13 @@ const LinkBankCard = ({ index, scrollX, isDark }: any) => {
         <Text className="text-slate-900 dark:text-white font-inter-bold text-xl mb-1">Link Bank Account</Text>
         <Text className="text-slate-500 dark:text-white/60 font-inter text-sm text-center px-8">Connect another account to use with BioPay.</Text>
       </Pressable>
+
+      <ConfirmIdentitySheet
+        visible={isConfirming}
+        reason="Confirm it is you before linking a bank account to MiliPay."
+        onConfirmed={handleConfirmed}
+        onCancel={() => setIsConfirming(false)}
+      />
     </Animated.View>
   );
 };

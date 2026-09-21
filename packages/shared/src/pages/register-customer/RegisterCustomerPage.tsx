@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { Check, Lock, ShieldAlert, Copy, Clock, Smartphone, CheckCircle } from "lucide-react";
+import {
+  Check, Lock, ShieldAlert, Clock, Smartphone, CheckCircle,
+  ScanFace, BadgeCheck, Loader2, XCircle, AlertTriangle,
+} from "lucide-react";
 import { Input } from "@milipay/shared/components/ui/Input";
 import { Select } from "@milipay/shared/components/ui/Select";
 import { Button } from "@milipay/shared/components/ui/Button";
@@ -7,16 +10,23 @@ import { Card } from "@milipay/shared/components/ui/Card";
 import { StepProgress } from "@milipay/shared/components/ui/StepProgress";
 import { NIGERIAN_STATES } from "@milipay/shared/lib/constants";
 import { validateCustomerDraft, type FieldError } from "@milipay/shared/lib/utils/validation";
-import { registerCustomer } from "@milipay/shared/features/customers/api";
-import { EMPTY_CUSTOMER_DRAFT, type CustomerDraft, type CustomerRegistrationResult } from "@milipay/shared/types";
+import { registerCustomer, verifyCustomerIdentity } from "@milipay/shared/features/customers/api";
+import {
+  EMPTY_CUSTOMER_DRAFT,
+  type CustomerDraft,
+  type CustomerRegistrationResult,
+  type IdentityVerificationResult,
+} from "@milipay/shared/types";
 import { capturePalmTemplate, PalmCaptureError } from "@milipay/shared/features/biometrics/palmScanner";
+import { captureFaceTemplate, FaceCaptureError } from "@milipay/shared/features/biometrics/faceScanner";
 
 const STEPS = [
   { id: 1, label: "Personal" },
   { id: 2, label: "Identity" },
-  { id: 3, label: "Biometric" },
-  { id: 4, label: "Contact" },
-  { id: 5, label: "Review" },
+  { id: 3, label: "Palm" },
+  { id: 4, label: "Face" },
+  { id: 5, label: "Contact" },
+  { id: 6, label: "Review" },
 ];
 
 export default function RegisterCustomerPage() {
@@ -25,7 +35,7 @@ export default function RegisterCustomerPage() {
   const [errors, setErrors] = useState<FieldError[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [registrationResult, setRegistrationResult] = useState<CustomerRegistrationResult | null>(null);
-  const [copiedPassword, setCopiedPassword] = useState(false);
+  const [isVerifyingNin, setIsVerifyingNin] = useState(false);
 
   function errorFor(field: string) {
     return errors.find((e) => e.field === field)?.message;
@@ -35,27 +45,65 @@ export default function RegisterCustomerPage() {
     setDraft((prev) => ({ ...prev, [key]: value }));
   }
 
-  function fieldsForStep(s: number): (keyof CustomerDraft)[] {
+  function fieldsForStep(s: number): string[] {
     switch (s) {
       case 1:
         return ["fullName", "dateOfBirth", "gender"];
       case 2:
-        return ["nin"];
+        return ["nin", "bvn"];
       case 3:
-        return ["palmVeinTemplate"];
+        return ["palmVein"];
       case 4:
+        return ["face"];
+      case 5:
         return ["phone", "email", "address", "state"];
       default:
         return [];
     }
   }
 
-  function handleNext() {
+  /**
+   * Run the NIN check before leaving the identity step so the agent finds out
+   * here, with the customer in front of them, rather than after submitting.
+   * The server re-runs this on submit, so a pass here is not a free pass.
+   */
+  async function verifyNin(): Promise<boolean> {
+    setIsVerifyingNin(true);
+    try {
+      const result = await verifyCustomerIdentity({
+        idType: "nin",
+        idNumber: draft.nin.trim(),
+        claimedName: draft.fullName.trim(),
+      });
+      update("ninVerification", result);
+
+      if (result.status === "failed") {
+        setErrors([{ field: "nin", message: result.failureReason ?? "This NIN could not be verified." }]);
+        return false;
+      }
+      // "unavailable" is not a rejection — the provider was unreachable. The
+      // enrolment continues and the administrator sees the unverified state.
+      return true;
+    } catch (err) {
+      setErrors([{ field: "nin", message: err instanceof Error ? err.message : "Identity check failed." }]);
+      return false;
+    } finally {
+      setIsVerifyingNin(false);
+    }
+  }
+
+  async function handleNext() {
     const allErrors = validateCustomerDraft(draft);
-    const relevant = allErrors.filter((e) => fieldsForStep(step).includes(e.field as keyof CustomerDraft));
+    const relevant = allErrors.filter((e) => fieldsForStep(step).includes(e.field));
     setErrors(relevant);
     if (relevant.length > 0) return;
-    setStep((s) => Math.min(s + 1, 5));
+
+    if (step === 2 && draft.ninVerification?.status !== "verified") {
+      const ok = await verifyNin();
+      if (!ok) return;
+    }
+
+    setStep((s) => Math.min(s + 1, 6));
   }
 
   async function handleSubmit() {
@@ -79,16 +127,7 @@ export default function RegisterCustomerPage() {
     setDraft(EMPTY_CUSTOMER_DRAFT);
     setErrors([]);
     setRegistrationResult(null);
-    setCopiedPassword(false);
   }
-
-  const copyPassword = async (pass: string) => {
-    try {
-      await navigator.clipboard.writeText(pass);
-      setCopiedPassword(true);
-      setTimeout(() => setCopiedPassword(false), 2500);
-    } catch (_) {}
-  };
 
   // ── Success screen ──────────────────────────────────────────
   if (registrationResult) {
@@ -119,35 +158,39 @@ export default function RegisterCustomerPage() {
                 Pending Admin KYC Verification
               </div>
               <p className="text-xs text-ink-muted leading-relaxed">
-                Biometric templates and NIN identity data have been uploaded to the network. An administrator will review and verify this enrollment. Once approved, the login password will be dispatched to <strong className="text-white">{draft.phone}</strong> via SMS.
+                Biometric templates and NIN identity data have been uploaded to the network. An administrator will review and verify this enrollment. Once approved, a one-time password is sent to <strong className="text-white">{draft.phone}</strong> on WhatsApp, falling back to SMS.
               </p>
             </div>
           ) : (
             <div className="mb-8 rounded-xl border border-white/[0.08] bg-ledger-line/50 p-5 text-left space-y-4">
               <div className="flex items-center gap-2 text-signal-bright text-xs font-semibold uppercase tracking-wider">
                 <Smartphone className="w-4 h-4" />
-                SMS Credentials Dispatched
+                Credentials sent to the customer
               </div>
               <p className="text-xs text-ink-muted leading-relaxed">
-                The customer account is active and can log into the MiliPay Mobile App with their phone number. An SMS notification has been sent.
+                A one-time password has been sent to <strong className="text-white">{draft.phone}</strong>.
+                The customer signs in to the MiliPay app with their phone number and that password.
               </p>
+            </div>
+          )}
 
-              {registrationResult.tempPassword && (
-                <div className="p-3 bg-ledger rounded-lg border border-signal/30 flex items-center justify-between gap-3">
-                  <div>
-                    <span className="block text-[10px] text-ink-faint uppercase font-semibold">Generated Temporary Password</span>
-                    <code className="font-mono text-sm font-bold text-signal-bright">{registrationResult.tempPassword}</code>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => copyPassword(registrationResult.tempPassword!)}
-                    className="flex items-center gap-1 text-xs font-semibold text-ink hover:text-white bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded transition-colors"
-                  >
-                    {copiedPassword ? <Check className="w-3.5 h-3.5 text-status-ok" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copiedPassword ? "Copied" : "Copy"}
-                  </button>
-                </div>
-              )}
+          <div className="mb-6 rounded-xl border border-white/[0.08] bg-ledger-line/40 p-4 text-left flex gap-3">
+            <Lock className="h-4 w-4 shrink-0 text-ink-faint mt-0.5" />
+            <p className="text-xs leading-relaxed text-ink-muted">
+              The password is never shown here. It goes to the customer&apos;s phone and
+              nowhere else. If it does not arrive, an administrator can reissue it from
+              the customer&apos;s profile.
+            </p>
+          </div>
+
+          {registrationResult.ninVerificationMode === "simulated" && (
+            <div className="mb-6 rounded-xl border border-status-warn/30 bg-status-warn/10 p-4 text-left flex gap-3">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-status-warn mt-0.5" />
+              <p className="text-xs leading-relaxed text-ink-muted">
+                <strong className="text-status-warn">NIN check was simulated.</strong> No
+                government database was contacted. This enrolment is flagged and will need
+                re-verification once live identity lookups are switched on.
+              </p>
             </div>
           )}
 
@@ -156,11 +199,11 @@ export default function RegisterCustomerPage() {
               What happens next
             </p>
             {[
-              "Password sent via SMS within 24 hours",
-              "Customer logs in with phone number + password",
-              "Customer creates their 4–5 digit transaction PIN",
-              "Account linked to up to 5 bank accounts via Mono",
-              "Customer can transact at any registered POS terminal",
+              "One-time password sent by WhatsApp, or SMS if that fails",
+              "Customer logs in with their phone number and that password",
+              "They must change the password before anything else",
+              "They set a 4-digit PIN, then enable fingerprint unlock",
+              "They link a bank account — confirmed by fingerprint or PIN",
             ].map((item, i) => (
               <div key={item} className="mb-2 flex items-start gap-3 last:mb-0">
                 <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-signal/15 text-[11px] font-bold text-signal-bright">
@@ -243,10 +286,29 @@ export default function RegisterCustomerPage() {
               maxLength={11}
               placeholder="12345678901"
               value={draft.nin}
-              onChange={(e) => update("nin", e.target.value)}
+              onChange={(e) => {
+                update("nin", e.target.value);
+                // Editing the number invalidates the check that was run on it.
+                if (draft.ninVerification) update("ninVerification", undefined);
+              }}
               error={errorFor("nin")}
-              hint="Found on NIN slip or National ID card"
+              hint="Checked against the identity service when you continue"
             />
+
+            <div className="mt-5">
+              <Input
+                label="Bank Verification Number (BVN)"
+                mono
+                maxLength={11}
+                placeholder="12345678901"
+                value={draft.bvn}
+                onChange={(e) => update("bvn", e.target.value)}
+                error={errorFor("bvn")}
+                hint="Optional — required later for Tier 3"
+              />
+            </div>
+
+            <NinVerificationNotice result={draft.ninVerification} isChecking={isVerifyingNin} />
           </div>
         )}
 
@@ -276,6 +338,31 @@ export default function RegisterCustomerPage() {
         )}
 
         {step === 4 && (
+          <div className="animate-rise-in">
+            <h2 className="mb-1.5 font-display text-xl font-bold text-ink">Facial Capture</h2>
+            <p className="mb-5 text-sm text-ink-muted">
+              Capture the customer&apos;s face with the enrolment device&apos;s camera.
+            </p>
+
+            <div className="mb-8 flex gap-3 rounded-lg border border-signal/25 bg-signal/[0.06] px-4 py-3">
+              <Lock className="h-4 w-4 shrink-0 text-signal-bright" />
+              <p className="text-xs leading-relaxed text-ink-muted">
+                Only the feature template is kept — the photograph itself is never stored.
+                The SDK rejects a printed photo or a screen, so the customer must be present.
+              </p>
+            </div>
+
+            <div className="py-6">
+              <FaceScanner
+                template={draft.faceTemplate}
+                onCapture={(hash) => update("faceTemplate", hash)}
+                error={errorFor("face")}
+              />
+            </div>
+          </div>
+        )}
+
+        {step === 5 && (
           <div className="animate-rise-in">
             <h2 className="mb-1.5 font-display text-xl font-bold text-ink">Contact details</h2>
             <p className="mb-7 text-sm text-ink-muted">
@@ -326,7 +413,7 @@ export default function RegisterCustomerPage() {
           </div>
         )}
 
-        {step === 5 && (
+        {step === 6 && (
           <div className="animate-rise-in">
             <h2 className="mb-1.5 font-display text-xl font-bold text-ink">Review &amp; submit</h2>
             <p className="mb-6 text-sm text-ink-muted">
@@ -341,12 +428,29 @@ export default function RegisterCustomerPage() {
 
             <ReviewSection title="Identity">
               <ReviewRow label="NIN" value={draft.nin ? `••••${draft.nin.slice(-4)}` : ""} mono />
+              <ReviewRow label="BVN" value={draft.bvn ? `••••${draft.bvn.slice(-4)}` : "—"} mono />
+              <ReviewRow
+                label="NIN check"
+                value={
+                  draft.ninVerification?.status === "verified"
+                    ? draft.ninVerification.simulated
+                      ? "Verified (simulated)"
+                      : "Verified"
+                    : draft.ninVerification?.status === "unavailable"
+                    ? "Service unavailable"
+                    : "Not checked"
+                }
+              />
             </ReviewSection>
 
             <ReviewSection title="Biometric">
               <ReviewRow
                 label="Palm Vein"
                 value={draft.palmVeinTemplate ? "Captured Successfully" : "Not completed"}
+              />
+              <ReviewRow
+                label="Face"
+                value={draft.faceTemplate ? "Captured Successfully" : "Not completed"}
               />
             </ReviewSection>
 
@@ -362,6 +466,14 @@ export default function RegisterCustomerPage() {
                 <ShieldAlert className="h-4 w-4 shrink-0 text-status-fail" />
                 <p className="text-xs text-status-fail">
                   Incomplete biometric capture. Go back to step 3 to complete Palm Vein registration.
+                </p>
+              </div>
+            )}
+            {!draft.faceTemplate && (
+              <div className="mb-2 flex gap-3 rounded-lg border border-status-fail/30 bg-status-fail/10 px-4 py-3">
+                <ShieldAlert className="h-4 w-4 shrink-0 text-status-fail" />
+                <p className="text-xs text-status-fail">
+                  Incomplete facial capture. Go back to step 4 to complete it.
                 </p>
               </div>
             )}
@@ -381,12 +493,14 @@ export default function RegisterCustomerPage() {
             </Button>
           )}
           <div className="ml-auto">
-            {step < 5 ? (
-              <Button onClick={handleNext}>Continue →</Button>
+            {step < 6 ? (
+              <Button onClick={handleNext} isLoading={isVerifyingNin}>
+                {isVerifyingNin ? "Checking NIN…" : "Continue →"}
+              </Button>
             ) : (
               <Button
                 isLoading={isSubmitting}
-                disabled={!draft.palmVeinTemplate}
+                disabled={!draft.palmVeinTemplate || !draft.faceTemplate}
                 onClick={handleSubmit}
               >
                 {isSubmitting ? "Registering…" : "Submit registration →"}
@@ -604,6 +718,214 @@ function PalmVeinScanner({
           {wasSimulated && !isScanning && (
             <p className="text-xs text-status-warn font-semibold uppercase tracking-wide">
               Simulated capture — no scanner attached. Not valid for a live enrollment.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Outcome of the pre-submit NIN check.
+ *
+ * "Verified (simulated)" is worded so nobody mistakes it for a real match —
+ * a simulated pass is a placeholder until live lookups are switched on.
+ */
+function NinVerificationNotice({
+  result,
+  isChecking,
+}: {
+  result?: IdentityVerificationResult;
+  isChecking: boolean;
+}) {
+  if (isChecking) {
+    return (
+      <div className="mt-5 flex items-center gap-3 rounded-lg border border-signal/25 bg-signal/[0.06] px-4 py-3">
+        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-signal-bright" />
+        <p className="text-xs text-ink-muted">Checking this NIN…</p>
+      </div>
+    );
+  }
+
+  if (!result) return null;
+
+  if (result.status === "failed") {
+    return (
+      <div className="mt-5 flex gap-3 rounded-lg border border-status-fail/30 bg-status-fail/10 px-4 py-3">
+        <XCircle className="h-4 w-4 shrink-0 text-status-fail" />
+        <div>
+          <p className="text-xs font-semibold text-status-fail">NIN could not be verified</p>
+          <p className="mt-1 text-xs text-ink-muted">{result.failureReason}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (result.status === "unavailable") {
+    return (
+      <div className="mt-5 flex gap-3 rounded-lg border border-status-warn/30 bg-status-warn/10 px-4 py-3">
+        <AlertTriangle className="h-4 w-4 shrink-0 text-status-warn" />
+        <div>
+          <p className="text-xs font-semibold text-status-warn">Identity service unavailable</p>
+          <p className="mt-1 text-xs text-ink-muted">
+            You can continue — the enrolment will be marked unverified for the administrator
+            to review. {result.failureReason}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`mt-5 flex gap-3 rounded-lg border px-4 py-3 ${
+        result.simulated
+          ? "border-status-warn/30 bg-status-warn/10"
+          : "border-status-ok/30 bg-status-ok/10"
+      }`}
+    >
+      <BadgeCheck
+        className={`h-4 w-4 shrink-0 ${result.simulated ? "text-status-warn" : "text-status-ok"}`}
+      />
+      <div>
+        <p
+          className={`text-xs font-semibold ${
+            result.simulated ? "text-status-warn" : "text-status-ok"
+          }`}
+        >
+          {result.simulated ? "Verified — SIMULATED" : "NIN verified"}
+        </p>
+        {result.matchedName && (
+          <p className="mt-1 text-xs text-ink-muted">Name on record: {result.matchedName}</p>
+        )}
+        {result.simulated && (
+          <p className="mt-1 text-xs text-ink-muted">
+            No government database was contacted. This enrolment is flagged for
+            re-verification once live lookups are enabled.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FaceScanner({
+  template,
+  onCapture,
+  error,
+}: {
+  template?: string;
+  onCapture: (hash: string) => void;
+  error?: string;
+}) {
+  const [isScanning, setIsScanning] = useState(false);
+  const [captureError, setCaptureError] = useState<string | null>(null);
+  const [wasSimulated, setWasSimulated] = useState(false);
+
+  const startScan = async () => {
+    setIsScanning(true);
+    setCaptureError(null);
+    try {
+      const capture = await captureFaceTemplate();
+      setWasSimulated(capture.simulated);
+      onCapture(capture.template);
+    } catch (err) {
+      setCaptureError(
+        err instanceof FaceCaptureError ? err.message : "Facial capture failed. Please try again."
+      );
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center space-y-8">
+      <style>{`
+        @keyframes face-sweep {
+          0% { transform: translateY(-40%); opacity: 0; }
+          15% { opacity: 1; }
+          85% { opacity: 1; }
+          100% { transform: translateY(40%); opacity: 0; }
+        }
+      `}</style>
+
+      <div className="relative flex h-64 w-64 items-center justify-center overflow-hidden rounded-2xl border border-signal/20 bg-[#0A0D14] shadow-[inset_0_0_50px_rgba(33,219,154,0.08)]">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.04]"
+          style={{
+            backgroundImage:
+              "linear-gradient(#0bc298 1px, transparent 1px), linear-gradient(90deg, #0bc298 1px, transparent 1px)",
+            backgroundSize: "16px 16px",
+          }}
+        />
+
+        <ScanFace
+          className={`z-10 h-40 w-40 transition-all duration-700 ${
+            template
+              ? "scale-95 text-status-ok drop-shadow-[0_0_12px_rgba(33,219,154,0.8)]"
+              : isScanning
+              ? "text-signal-bright drop-shadow-[0_0_15px_rgba(33,219,154,0.9)]"
+              : "text-signal/40"
+          }`}
+          strokeWidth={1.1}
+        />
+
+        {/* Corner reticle */}
+        <div className="pointer-events-none absolute inset-8 z-0">
+          {["left-0 top-0 border-l-2 border-t-2", "right-0 top-0 border-r-2 border-t-2",
+            "left-0 bottom-0 border-l-2 border-b-2", "right-0 bottom-0 border-r-2 border-b-2"].map((pos) => (
+            <div key={pos} className={`absolute h-6 w-6 border-signal/50 ${pos}`} />
+          ))}
+        </div>
+
+        {isScanning && (
+          <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
+            <div
+              className="mx-auto h-[3px] w-[80%] rounded-full bg-[#1e5eb3] shadow-[0_0_12px_3px_rgba(30,94,179,0.7)]"
+              style={{
+                animation: "face-sweep 1.6s ease-in-out infinite alternate",
+                position: "absolute",
+                top: "50%",
+                left: "10%",
+              }}
+            />
+          </div>
+        )}
+
+        {template && !isScanning && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-ledger/30 backdrop-blur-[2px] transition-all duration-300">
+            <div className="rounded-full border border-status-ok/30 bg-ledger/90 p-4 shadow-2xl">
+              <CheckCircle className="h-12 w-12 text-status-ok" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-4 text-center">
+        <Button
+          variant={template ? "secondary" : "primary"}
+          onClick={startScan}
+          disabled={isScanning}
+          className="w-56"
+        >
+          {isScanning ? "Capturing…" : template ? "Recapture Face" : "Start Face Capture"}
+        </Button>
+
+        <div className="min-h-[1rem] space-y-2">
+          {(captureError || error) && !isScanning && (
+            <p className="text-xs font-semibold uppercase tracking-wide text-status-fail">
+              {captureError ?? error}
+            </p>
+          )}
+          {isScanning && (
+            <p className="animate-pulse font-data text-xs uppercase tracking-widest text-signal-bright">
+              Checking liveness…
+            </p>
+          )}
+          {wasSimulated && !isScanning && (
+            <p className="text-xs font-semibold uppercase tracking-wide text-status-warn">
+              Simulated capture — no camera attached. Not valid for a live enrolment.
             </p>
           )}
         </div>

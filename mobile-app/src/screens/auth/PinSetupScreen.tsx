@@ -36,7 +36,9 @@ const PinWell = ({ filled, isError }: { filled: boolean, isError: boolean }) => 
   );
 };
 
-export default function PinSetupScreen({ navigation }: any) {
+export default function PinSetupScreen({ navigation, route }: any) {
+  // Reached from Settings ("Change PIN") rather than first-login onboarding.
+  const isChangeMode = route?.params?.mode === 'change';
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [step, setStep] = useState<1 | 2>(1);
@@ -120,7 +122,13 @@ export default function PinSetupScreen({ navigation }: any) {
     }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setTimeout(() => navigation.navigate('BiometricSetup'), 500);
+    setTimeout(() => {
+      if (isChangeMode) {
+        navigation.goBack();
+      } else {
+        navigation.navigate('BiometricSetup');
+      }
+    }, 500);
   };
 
   const animatedShake = useAnimatedStyle(() => ({
@@ -134,7 +142,7 @@ export default function PinSetupScreen({ navigation }: any) {
       <View className="flex-1 justify-between py-12">
         <View className="items-center px-6 mt-8">
           <Text className="text-white/50 text-sm font-inter-semibold uppercase tracking-widest mb-4">
-            Step 2 of 3
+            {isChangeMode ? 'Change PIN' : 'Step 2 of 3'}
           </Text>
           <Text className="text-white text-3xl font-inter-bold tracking-tight mb-2 text-center">
             {step === 1 ? 'Set Secondary Lock' : 'Confirm Secondary Lock'}

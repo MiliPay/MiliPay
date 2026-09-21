@@ -13,6 +13,7 @@ import TransactionsScreen from '../screens/main/TransactionsScreen';
 import ProfileSettingsScreen from '../screens/main/ProfileSettingsScreen';
 import SupportScreen from '../screens/main/SupportScreen';
 import AccountLimitsScreen from '../screens/main/AccountLimitsScreen';
+import PinSetupScreen from '../screens/auth/PinSetupScreen';
 import QuickServiceScreen from '../screens/main/QuickServiceScreen';
 
 const Tab = createBottomTabNavigator();
@@ -40,6 +41,11 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen name="ProfileSettings" component={ProfileSettingsScreen} />
       <SettingsStack.Screen name="SupportScreen" component={SupportScreen} />
       <SettingsStack.Screen name="AccountLimits" component={AccountLimitsScreen} />
+      <SettingsStack.Screen
+        name="ChangePin"
+        component={PinSetupScreen}
+        initialParams={{ mode: 'change' }}
+      />
     </SettingsStack.Navigator>
   );
 }

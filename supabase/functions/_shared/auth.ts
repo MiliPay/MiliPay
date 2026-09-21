@@ -26,11 +26,20 @@ export class ApiError extends Error {
 }
 
 export function adminClient(): SupabaseClient {
-  return createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    { auth: { persistSession: false } },
-  );
+  // Both names are accepted: some functions were deployed reading
+  // SERVICE_ROLE_KEY before this helper existed, and a project that only has
+  // that one set would otherwise get an unauthenticated client and fail at the
+  // first query rather than at startup.
+  const serviceKey =
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SERVICE_ROLE_KEY") ?? "";
+
+  if (!serviceKey) {
+    console.error("[auth] no service role key in the environment");
+  }
+
+  return createClient(Deno.env.get("SUPABASE_URL") ?? "", serviceKey, {
+    auth: { persistSession: false },
+  });
 }
 
 export interface Caller {
@@ -108,8 +117,14 @@ export interface CustomerProfile {
   id: string;
   kycTier: number;
   pinThreshold: number;
+  /** Customer's own cap, or null to use the tier default. Never above the tier. */
+  singleLimit: number | null;
+  dailyLimit: number | null;
   source: "customers" | "users";
 }
+
+const optionalAmount = (value: unknown): number | null =>
+  value === null || value === undefined ? null : Number(value);
 
 export async function loadCustomerProfile(
   admin: SupabaseClient,
@@ -117,7 +132,7 @@ export async function loadCustomerProfile(
 ): Promise<CustomerProfile | null> {
   const { data: customer } = await admin
     .from("customers")
-    .select("id, kyc_tier, pin_threshold, status")
+    .select("id, kyc_tier, pin_threshold, single_limit, daily_limit, status")
     .eq("auth_user_id", authUserId)
     .maybeSingle();
 
@@ -133,13 +148,15 @@ export async function loadCustomerProfile(
       id: customer.id,
       kycTier: Number(customer.kyc_tier) || 2,
       pinThreshold: Number(customer.pin_threshold) || 10_000,
+      singleLimit: optionalAmount(customer.single_limit),
+      dailyLimit: optionalAmount(customer.daily_limit),
       source: "customers",
     };
   }
 
   const { data: user } = await admin
     .from("users")
-    .select("id, kyc_tier, pin_threshold")
+    .select("id, kyc_tier, pin_threshold, single_limit, daily_limit")
     .eq("id", authUserId)
     .maybeSingle();
 
@@ -148,6 +165,8 @@ export async function loadCustomerProfile(
       id: user.id,
       kycTier: Number(user.kyc_tier) || 2,
       pinThreshold: Number(user.pin_threshold) || 10_000,
+      singleLimit: optionalAmount(user.single_limit),
+      dailyLimit: optionalAmount(user.daily_limit),
       source: "users",
     };
   }

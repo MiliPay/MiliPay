@@ -50,7 +50,26 @@ export interface Customer {
   status: CustomerStatus;
   kycTier?: 1 | 2 | 3;
   pinThreshold?: number;
-  palmVeinTemplate?: string;
+  /** Customer's own caps. undefined means the tier default applies. */
+  singleLimit?: number;
+  dailyLimit?: number;
+  dateOfBirth?: string;
+  gender?: "male" | "female";
+  bvnLast4?: string;
+  /**
+   * Presence flags, not the templates. The raw palm-vein and facial templates
+   * are withheld from portal sessions at the column level.
+   */
+  hasPalmTemplate?: boolean;
+  hasFaceTemplate?: boolean;
+  palmSimulated?: boolean;
+  faceSimulated?: boolean;
+  ninVerified?: boolean;
+  bvnVerified?: boolean;
+  mustChangePassword?: boolean;
+  passwordDeliveryChannel?: string;
+  passwordDeliveryStatus?: string;
+  passwordDeliveredAt?: string;
   linkedAccountCount: number;
   createdAt: string;
   authUserId?: string;
@@ -113,9 +132,23 @@ export const TIER_LIMITS: Record<number, TierLimitConfig> = {
 export interface CustomerRegistrationResult {
   customerId: string;
   status: CustomerStatus;
-  tempPassword?: string;
-  smsDispatched: boolean;
   requiresAdminVerification: boolean;
+  kycTier: 1 | 2 | 3;
+  ninVerified: boolean;
+  /** "simulated" until a live NIMC/Mono lookup is configured. */
+  ninVerificationMode: "simulated" | "live";
+  bvnVerified: boolean;
+}
+
+export type IdentityVerificationStatus = "verified" | "failed" | "unavailable";
+
+export interface IdentityVerificationResult {
+  verificationId: string;
+  status: IdentityVerificationStatus;
+  mode: "simulated" | "live";
+  simulated: boolean;
+  matchedName: string | null;
+  failureReason: string | null;
 }
 
 export type TransactionStatus = "success" | "failed" | "pending";
@@ -143,11 +176,16 @@ export interface CustomerDraft {
   dateOfBirth: string;
   gender: "male" | "female" | "";
   nin: string;
+  /** Optional at enrolment. Required for Tier 3 once that opens. */
+  bvn: string;
   phone: string;
   email: string;
   address: string;
   state: string;
   palmVeinTemplate: string;
+  faceTemplate: string;
+  /** Result of the pre-submit NIN check, for display only. The server re-checks. */
+  ninVerification?: IdentityVerificationResult;
 }
 
 export const EMPTY_CUSTOMER_DRAFT: CustomerDraft = {
@@ -155,11 +193,14 @@ export const EMPTY_CUSTOMER_DRAFT: CustomerDraft = {
   dateOfBirth: "",
   gender: "",
   nin: "",
+  bvn: "",
   phone: "",
   email: "",
   address: "",
   state: "",
   palmVeinTemplate: "",
+  faceTemplate: "",
+  ninVerification: undefined,
 };
 
 export type TicketStatus = "open" | "in_progress" | "resolved";

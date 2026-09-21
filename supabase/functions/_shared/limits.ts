@@ -35,18 +35,34 @@ export async function enforceTransactionLimits(
     amount: number;
     kycTier: number;
     pinThreshold: number;
+    /** Customer's own caps. null means "use the tier default". */
+    singleLimit?: number | null;
+    dailyLimit?: number | null;
     pin?: string;
   },
 ): Promise<void> {
   const { authUserId, customerId, amount, kycTier, pinThreshold, pin } = opts;
-  const limits = tierFor(kycTier);
+  const tier = tierFor(kycTier);
+
+  // A customer may tighten their own limits but never loosen them, so the
+  // effective cap is whichever is lower. set_transaction_limits already clamps
+  // on write; taking the minimum again here means a stale or hand-edited row
+  // still cannot raise a cap above the tier.
+  const limits = {
+    ...tier,
+    maxSingle: Math.min(tier.maxSingle, opts.singleLimit ?? tier.maxSingle),
+    maxDaily: Math.min(tier.maxDaily, opts.dailyLimit ?? tier.maxDaily),
+  };
 
   if (amount > limits.maxSingle) {
+    const isCustomerSet = limits.maxSingle < tier.maxSingle;
     throw new ApiError(
-      `Transaction of ${naira(amount)} exceeds your ${limits.name} limit of ${naira(limits.maxSingle)} per transaction.`,
+      isCustomerSet
+        ? `Transaction of ${naira(amount)} exceeds the ${naira(limits.maxSingle)} per-transaction limit you set. Raise it in the app to continue.`
+        : `Transaction of ${naira(amount)} exceeds your ${tier.name} limit of ${naira(limits.maxSingle)} per transaction.`,
       400,
       "EXCEEDS_SINGLE_LIMIT",
-      { maxSingle: limits.maxSingle, tier: kycTier },
+      { maxSingle: limits.maxSingle, tierMaxSingle: tier.maxSingle, tier: kycTier, customerSet: isCustomerSet },
     );
   }
 
@@ -99,11 +115,20 @@ export async function enforceTransactionLimits(
   const spentToday = Number(spent ?? 0);
   if (spentToday + amount > limits.maxDaily) {
     const remaining = Math.max(0, limits.maxDaily - spentToday);
+    const isCustomerSet = limits.maxDaily < tier.maxDaily;
     throw new ApiError(
-      `Daily limit of ${naira(limits.maxDaily)} reached for ${limits.name}. Remaining today: ${naira(remaining)}. Resets at 00:00 WAT.`,
+      `Daily limit of ${naira(limits.maxDaily)} reached${isCustomerSet ? " (limit you set)" : ` for ${tier.name}`}. ` +
+        `Remaining today: ${naira(remaining)}. Resets at 00:00 WAT.`,
       400,
       "EXCEEDS_DAILY_LIMIT",
-      { dailySpent: spentToday, maxDaily: limits.maxDaily, remainingLimit: remaining, tier: kycTier },
+      {
+        dailySpent: spentToday,
+        maxDaily: limits.maxDaily,
+        tierMaxDaily: tier.maxDaily,
+        remainingLimit: remaining,
+        tier: kycTier,
+        customerSet: isCustomerSet,
+      },
     );
   }
 }

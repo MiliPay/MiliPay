@@ -26,12 +26,32 @@ const PRESETS = [
   { label: '₦150,000', value: 150000 },
 ];
 
+/**
+ * Tier ceilings, mirrored from public.tier_caps and
+ * supabase/functions/_shared/limits.ts. Display only — every limit is clamped
+ * again server-side, so a stale copy here cannot raise anyone's cap.
+ */
+const TIER_CAPS: Record<number, { maxSingle: number; maxDaily: number }> = {
+  1: { maxSingle: 50000, maxDaily: 200000 },
+  2: { maxSingle: 150000, maxDaily: 500000 },
+  3: { maxSingle: 250000, maxDaily: 1000000 },
+};
+
 export default function AccountLimitsScreen({ navigation }: any) {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
 
   const user = useAuthStore((state) => state.user);
+  const onboarding = useAuthStore((state) => state.onboarding);
   const updatePinThreshold = useAuthStore((state) => state.updatePinThreshold);
+  const setTransactionLimits = useAuthStore((state) => state.setTransactionLimits);
+
+  const tier = onboarding?.kycTier ?? user?.kycTier ?? 2;
+  const caps = TIER_CAPS[tier] ?? TIER_CAPS[2];
+
+  // null means "no personal limit set", so the tier ceiling applies.
+  const currentSingle = onboarding?.singleLimit ?? caps.maxSingle;
+  const currentDaily = onboarding?.dailyLimit ?? caps.maxDaily;
 
   const initialThreshold = user?.pinThreshold || 10000;
   const [selectedAmount, setSelectedAmount] = useState<number>(initialThreshold);
@@ -39,9 +59,20 @@ export default function AccountLimitsScreen({ navigation }: any) {
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
+  const [singleLimit, setSingleLimit] = useState<number>(currentSingle);
+  const [dailyLimit, setDailyLimit] = useState<number>(currentDaily);
+  const [isSavingLimits, setIsSavingLimits] = useState(false);
+  const [limitsError, setLimitsError] = useState<string | null>(null);
+
+  // The PIN threshold can never exceed the single-transaction limit, or there
+  // would be no amount that both clears the limit and triggers the PIN.
+  const thresholdCeiling = Math.min(caps.maxSingle, singleLimit || caps.maxSingle);
+
   const isModified = selectedAmount !== initialThreshold;
-  const isOverLimit = selectedAmount > 150000;
+  const isOverLimit = selectedAmount > thresholdCeiling;
   const isInvalid = !selectedAmount || selectedAmount <= 0;
+
+  const limitsModified = singleLimit !== currentSingle || dailyLimit !== currentDaily;
 
   useEffect(() => {
     if (user?.pinThreshold) {
@@ -49,6 +80,44 @@ export default function AccountLimitsScreen({ navigation }: any) {
       setCustomAmount(user.pinThreshold.toLocaleString());
     }
   }, [user?.pinThreshold]);
+
+  useEffect(() => {
+    setSingleLimit(currentSingle);
+    setDailyLimit(currentDaily);
+  }, [currentSingle, currentDaily]);
+
+  const handleSaveLimits = async () => {
+    setLimitsError(null);
+
+    if (singleLimit <= 0 || dailyLimit <= 0) {
+      setLimitsError('Limits must be greater than zero.');
+      return;
+    }
+    if (singleLimit > caps.maxSingle) {
+      setLimitsError(`Single-transaction limit cannot exceed your Tier ${tier} cap of ₦${caps.maxSingle.toLocaleString()}.`);
+      return;
+    }
+    if (dailyLimit > caps.maxDaily) {
+      setLimitsError(`Daily limit cannot exceed your Tier ${tier} cap of ₦${caps.maxDaily.toLocaleString()}.`);
+      return;
+    }
+    if (singleLimit > dailyLimit) {
+      setLimitsError('Single-transaction limit cannot exceed your daily limit.');
+      return;
+    }
+
+    setIsSavingLimits(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const result = await setTransactionLimits(singleLimit, dailyLimit);
+    setIsSavingLimits(false);
+
+    if (result.success) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowSuccessModal(true);
+    } else {
+      setLimitsError(result.error || 'Could not update your limits. Please try again.');
+    }
+  };
 
   const handleSelectPreset = (value: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -76,8 +145,11 @@ export default function AccountLimitsScreen({ navigation }: any) {
       return;
     }
 
-    if (amount > 150000) {
-      Alert.alert('Limit Exceeded', 'The maximum threshold for Tier 2 is ₦150,000.');
+    if (amount > thresholdCeiling) {
+      Alert.alert(
+        'Limit Exceeded',
+        `Your PIN threshold cannot exceed your single-transaction limit of ₦${thresholdCeiling.toLocaleString()}.`
+      );
       return;
     }
 
@@ -142,7 +214,7 @@ export default function AccountLimitsScreen({ navigation }: any) {
             <View className="flex-row items-center justify-between mb-4">
               <View className="flex-row items-center">
                 <Text className="text-white font-inter-bold text-2xl mr-2.5">
-                  Tier 2
+                  Tier {tier}
                 </Text>
                 <View className="bg-emerald-700/80 px-3 py-1 rounded-full border border-emerald-500/30">
                   <Text className="text-emerald-100 font-inter-semibold text-xs">
@@ -164,18 +236,85 @@ export default function AccountLimitsScreen({ navigation }: any) {
                   Daily Limit
                 </Text>
                 <Text className="text-white font-inter-bold text-2xl">
-                  ₦500,000
+                  ₦{currentDaily.toLocaleString()}
                 </Text>
+                {onboarding?.dailyLimit != null && onboarding.dailyLimit < caps.maxDaily && (
+                  <Text className="text-emerald-100/70 font-inter text-[10px] mt-0.5">
+                    you set this · cap ₦{caps.maxDaily.toLocaleString()}
+                  </Text>
+                )}
               </View>
               <View className="flex-1 pl-4 border-l border-emerald-500/50">
                 <Text className="text-emerald-100 font-inter-medium text-xs mb-1">
                   Single Limit
                 </Text>
                 <Text className="text-white font-inter-bold text-2xl">
-                  ₦150,000
+                  ₦{currentSingle.toLocaleString()}
                 </Text>
+                {onboarding?.singleLimit != null && onboarding.singleLimit < caps.maxSingle && (
+                  <Text className="text-emerald-100/70 font-inter text-[10px] mt-0.5">
+                    you set this · cap ₦{caps.maxSingle.toLocaleString()}
+                  </Text>
+                )}
               </View>
             </View>
+          </View>
+
+          {/* Customer-set transaction limits */}
+          <View className="bg-white dark:bg-zinc-900 rounded-3xl p-6 mb-6 border border-slate-200 dark:border-zinc-800">
+            <Text className="text-slate-900 dark:text-white font-inter-bold text-lg mb-1.5">
+              Your Transaction Limits
+            </Text>
+            <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs leading-relaxed mb-5">
+              Tighten your own limits below your Tier {tier} ceiling. You can lower them at
+              any time; raising them past the ceiling needs a KYC upgrade.
+            </Text>
+
+            <LimitField
+              label="Per transaction"
+              value={singleLimit}
+              cap={caps.maxSingle}
+              isDark={isDark}
+              onChange={setSingleLimit}
+            />
+
+            <View className="h-4" />
+
+            <LimitField
+              label="Per day"
+              value={dailyLimit}
+              cap={caps.maxDaily}
+              isDark={isDark}
+              onChange={setDailyLimit}
+            />
+
+            {limitsError && (
+              <View className="flex-row items-start mt-3 px-1">
+                <AlertCircle color="#ef4444" size={13} style={{ marginTop: 2 }} />
+                <Text className="text-red-500 dark:text-red-400 font-inter-medium text-xs ml-1.5 flex-1">
+                  {limitsError}
+                </Text>
+              </View>
+            )}
+
+            <Pressable
+              onPress={handleSaveLimits}
+              disabled={isSavingLimits || !limitsModified}
+              className={`h-14 rounded-2xl flex-row items-center justify-center mt-5 ${
+                !limitsModified
+                  ? 'bg-slate-200 dark:bg-zinc-800 opacity-60'
+                  : 'bg-emerald-500 active:bg-emerald-600'
+              } ${isSavingLimits ? 'opacity-70' : ''}`}
+            >
+              {isSavingLimits ? (
+                <ActivityIndicator color="#000" size="small" />
+              ) : (
+                <View className="flex-row items-center">
+                  <Check color="#000" size={18} strokeWidth={2.5} />
+                  <Text className="text-black font-inter-bold text-base ml-2">Save limits</Text>
+                </View>
+              )}
+            </Pressable>
           </View>
 
           {/* Payment PIN Security Section */}
@@ -211,7 +350,7 @@ export default function AccountLimitsScreen({ navigation }: any) {
               <View className="flex-row items-center mb-3 px-1">
                 <AlertCircle color="#f59e0b" size={13} />
                 <Text className="text-amber-600 dark:text-amber-400 font-inter-medium text-xs ml-1.5">
-                  Maximum threshold for Tier 2 is ₦150,000
+                  Threshold cannot exceed your single-transaction limit of ₦{thresholdCeiling.toLocaleString()}
                 </Text>
               </View>
             )}
@@ -489,5 +628,74 @@ export default function AccountLimitsScreen({ navigation }: any) {
         </View>
       </Modal>
     </SafeAreaView>
+  );
+}
+
+/**
+ * One editable limit, shown against its tier ceiling.
+ *
+ * Deliberately permits typing a number above the cap so the inline validation
+ * can explain why it is refused, rather than silently swallowing keystrokes.
+ */
+function LimitField({
+  label,
+  value,
+  cap,
+  isDark,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  cap: number;
+  isDark: boolean;
+  onChange: (next: number) => void;
+}) {
+  const [text, setText] = useState<string>(value ? value.toLocaleString() : '');
+
+  useEffect(() => {
+    setText(value ? value.toLocaleString() : '');
+  }, [value]);
+
+  const handleChange = (input: string) => {
+    const digits = input.replace(/[^0-9]/g, '');
+    const parsed = parseInt(digits, 10);
+    if (Number.isNaN(parsed)) {
+      setText('');
+      onChange(0);
+      return;
+    }
+    setText(parsed.toLocaleString());
+    onChange(parsed);
+  };
+
+  const overCap = value > cap;
+
+  return (
+    <View>
+      <View className="flex-row items-center justify-between mb-1.5 px-1">
+        <Text className="text-slate-700 dark:text-slate-300 font-inter-medium text-sm">
+          {label}
+        </Text>
+        <Text className="text-slate-400 dark:text-zinc-500 font-inter text-[11px]">
+          max ₦{cap.toLocaleString()}
+        </Text>
+      </View>
+      <View
+        className={`flex-row items-center h-14 px-4 rounded-2xl bg-slate-50 dark:bg-zinc-800 border ${
+          overCap ? 'border-red-500' : 'border-slate-200 dark:border-zinc-700'
+        }`}
+      >
+        <Text className="text-slate-500 dark:text-zinc-400 font-inter-bold text-base mr-2">₦</Text>
+        <TextInput
+          value={text}
+          onChangeText={handleChange}
+          keyboardType="number-pad"
+          placeholder={cap.toLocaleString()}
+          placeholderTextColor={isDark ? '#52525b' : '#94a3b8'}
+          className="flex-1 text-slate-900 dark:text-white font-inter-bold text-base"
+          accessibilityLabel={label}
+        />
+      </View>
+    </View>
   );
 }

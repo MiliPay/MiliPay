@@ -127,6 +127,8 @@ serve(handler(async (req) => {
     amount,
     kycTier: profile.kycTier,
     pinThreshold: profile.pinThreshold,
+    singleLimit: profile.singleLimit,
+    dailyLimit: profile.dailyLimit,
     pin: body.pin,
   });
 

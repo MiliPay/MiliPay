@@ -16,22 +16,70 @@ interface User {
   pinThreshold?: number;
 }
 
+/**
+ * What the customer still has to do before they can use the app.
+ *
+ * Authoritative on the server (public.customers), not in user_metadata, which
+ * the customer can write themselves.
+ */
+export interface OnboardingState {
+  found: boolean;
+  mustChangePassword: boolean;
+  hasPin: boolean;
+  biometricEnrolled: boolean;
+  onboardingComplete: boolean;
+  kycTier: number;
+  pinThreshold: number;
+  singleLimit: number | null;
+  dailyLimit: number | null;
+  status: string;
+}
+
+export interface TransactionLimits {
+  singleLimit: number;
+  dailyLimit: number;
+  maxSingle: number;
+  maxDaily: number;
+  pinThreshold: number;
+}
+
 interface AuthState {
   isAuthenticated: boolean;
   user: User | null;
   isLoading: boolean;
+  onboarding: OnboardingState | null;
   initialize: () => void;
   login: (phoneOrEmail: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   updatePinThreshold: (threshold: number) => Promise<boolean>;
   setPin: (pin: string) => Promise<{ success: boolean; error?: string }>;
   hasPin: () => Promise<boolean>;
+  refreshOnboarding: () => Promise<OnboardingState | null>;
+  changePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  verifyPin: (pin: string) => Promise<{ valid: boolean; error?: string; attemptsRemaining?: number }>;
+  setBiometricEnrolled: (enrolled: boolean) => Promise<void>;
+  completeOnboarding: () => Promise<boolean>;
+  setTransactionLimits: (
+    single: number | null,
+    daily: number | null
+  ) => Promise<{ success: boolean; error?: string; limits?: TransactionLimits }>;
 }
+
+/**
+ * Columns a customer session may read. `select('*')` no longer works: the raw
+ * NIN/BVN, the biometric templates and the PIN hash are withheld at the column
+ * level by migration 20260921000000.
+ */
+const CUSTOMER_COLUMNS =
+  'id, first_name, last_name, phone, email, address, state, nin_last_4, ' +
+  'kyc_tier, pin_threshold, single_limit, daily_limit, status, ' +
+  'must_change_password, biometric_enrolled_at, onboarding_completed_at';
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: false,
   user: null,
   isLoading: true,
+  onboarding: null,
   
   initialize: async () => {
     try {
@@ -52,13 +100,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         try {
           const { data } = await supabase
             .from('customers')
-            .select('*')
+            .select(CUSTOMER_COLUMNS)
             .eq('auth_user_id', session.user.id)
             .maybeSingle();
           customerData = data;
         } catch (err) {
           console.warn('Could not fetch customer details:', err);
         }
+
+        // Resolved before the navigator renders, so the first frame after a
+        // restored session already knows whether onboarding is outstanding.
+        await get().refreshOnboarding();
         
         set({ 
           isAuthenticated: true, 
@@ -99,13 +151,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         try {
           const { data } = await supabase
             .from('customers')
-            .select('*')
+            .select(CUSTOMER_COLUMNS)
             .eq('auth_user_id', session.user.id)
             .maybeSingle();
           customerData = data;
         } catch (err) {
           console.warn('Could not fetch customer details in auth change:', err);
         }
+
+        await get().refreshOnboarding();
         
         set({ 
           isAuthenticated: true, 
@@ -164,7 +218,128 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   
   logout: async () => {
     await supabase.auth.signOut();
-    set({ isAuthenticated: false, user: null });
+    set({ isAuthenticated: false, user: null, onboarding: null });
+  },
+
+  refreshOnboarding: async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_onboarding_state');
+      if (error) {
+        console.warn('Could not load onboarding state:', error.message);
+        return null;
+      }
+
+      const state: OnboardingState = {
+        found: Boolean(data?.found),
+        mustChangePassword: Boolean(data?.mustChangePassword),
+        hasPin: Boolean(data?.hasPin),
+        biometricEnrolled: Boolean(data?.biometricEnrolled),
+        onboardingComplete: Boolean(data?.onboardingComplete),
+        kycTier: Number(data?.kycTier) || 2,
+        pinThreshold: Number(data?.pinThreshold) || 10000,
+        singleLimit: data?.singleLimit === null || data?.singleLimit === undefined
+          ? null
+          : Number(data.singleLimit),
+        dailyLimit: data?.dailyLimit === null || data?.dailyLimit === undefined
+          ? null
+          : Number(data.dailyLimit),
+        status: data?.status || 'active',
+      };
+
+      set({ onboarding: state });
+      return state;
+    } catch (err) {
+      console.warn('Onboarding state error:', err);
+      return null;
+    }
+  },
+
+  /**
+   * Change the password, then clear the server-side flag.
+   *
+   * The flag is only cleared once Supabase has accepted the new password, so a
+   * failed change leaves the customer on the change-password screen.
+   */
+  changePassword: async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    const { error: rpcError } = await supabase.rpc('mark_password_changed');
+    if (rpcError) {
+      // The password did change; only the flag write failed. Say so rather than
+      // implying the new password did not take.
+      console.warn('Password changed but flag not cleared:', rpcError.message);
+    }
+
+    await get().refreshOnboarding();
+    return { success: true };
+  },
+
+  verifyPin: async (pin: string) => {
+    const { data, error } = await supabase.rpc('verify_own_pin', { p_pin: pin });
+    if (error) {
+      return { valid: false, error: error.message };
+    }
+    if (data?.valid) {
+      return { valid: true };
+    }
+
+    const code = data?.code ?? 'PIN_INCORRECT';
+    const message =
+      code === 'PIN_LOCKED'
+        ? 'Too many incorrect attempts. Your PIN is locked for 15 minutes.'
+        : code === 'PIN_NOT_SET'
+        ? 'No PIN is set on this account.'
+        : `Incorrect PIN. ${data?.attemptsRemaining ?? 0} attempt(s) remaining.`;
+
+    return { valid: false, error: message, attemptsRemaining: data?.attemptsRemaining };
+  },
+
+  setBiometricEnrolled: async (enrolled: boolean) => {
+    const { error } = await supabase.rpc('set_biometric_enrolled', { p_enrolled: enrolled });
+    if (error) {
+      console.warn('Could not record biometric enrolment:', error.message);
+      return;
+    }
+    await get().refreshOnboarding();
+  },
+
+  completeOnboarding: async () => {
+    const { data, error } = await supabase.rpc('complete_onboarding');
+    if (error || !data?.success) {
+      console.warn('Could not complete onboarding:', error?.message ?? data?.error);
+      return false;
+    }
+    await get().refreshOnboarding();
+    return true;
+  },
+
+  setTransactionLimits: async (single: number | null, daily: number | null) => {
+    const { data, error } = await supabase.rpc('set_transaction_limits', {
+      p_single: single,
+      p_daily: daily,
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    const limits: TransactionLimits = {
+      singleLimit: Number(data?.singleLimit),
+      dailyLimit: Number(data?.dailyLimit),
+      maxSingle: Number(data?.maxSingle),
+      maxDaily: Number(data?.maxDaily),
+      pinThreshold: Number(data?.pinThreshold),
+    };
+
+    set((state) => ({
+      user: state.user ? { ...state.user, pinThreshold: limits.pinThreshold } : null,
+    }));
+    await get().refreshOnboarding();
+
+    return { success: true, limits };
   },
 
   updatePinThreshold: async (newThreshold: number) => {

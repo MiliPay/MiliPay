@@ -5,7 +5,7 @@ import {
   ShieldCheck, Clock, Trash2, AlertTriangle, XCircle, 
   ShieldAlert, UserCheck, RotateCcw, FileText, Building2, 
   Activity, Ticket, Scan, Pencil, Lock, Home, ChevronRight,
-  Copy, Check, Receipt
+  Copy, Check, Receipt, Send, ScanFace
 } from "lucide-react";
 import { Card } from "@milipay/shared/components/ui/Card";
 import { StatusBadge } from "@milipay/shared/components/ui/StatusBadge";
@@ -20,6 +20,7 @@ import {
   updateCustomerStatus, 
   deleteCustomer,
   approveCustomer,
+  resendCustomerCredentials,
   rejectCustomer,
   updateCustomerProfile
 } from "@milipay/shared/features/customers/api";
@@ -52,6 +53,8 @@ export default function CustomerDetailsPage() {
 
   // Approval state
   const [showApproveModal, setShowApproveModal] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [dispatchNotice, setDispatchNotice] = useState<string | null>(null);
   const [isApproving, setIsApproving] = useState(false);
   const [approvalError, setApprovalError] = useState<string | null>(null);
 
@@ -153,18 +156,55 @@ export default function CustomerDetailsPage() {
     }
   };
 
+  /**
+   * Approve.
+   *
+   * The second argument used to be user.id, which the API treated as
+   * customPassword — so the administrator's own UUID became the login password
+   * of every customer they approved, and that UUID is visible to any staff
+   * member as customers.verified_by. approveCustomer now takes the id alone
+   * and the password goes to the customer's phone.
+   */
   const handleApprove = async () => {
     if (!isAdmin || !customer || !id || !user) return;
     setIsApproving(true);
     setApprovalError(null);
-    const success = await approveCustomer(id, user.id);
-    if (success) {
-      setCustomer({ ...customer, status: 'active', verifiedAt: new Date().toISOString(), verifiedBy: user.id });
+    try {
+      const result = await approveCustomer(id);
+      setCustomer({
+        ...customer,
+        status: 'active',
+        verifiedAt: new Date().toISOString(),
+        verifiedBy: user.id,
+        passwordDeliveryStatus: result.delivered ? 'delivered' : 'failed',
+        passwordDeliveryChannel: result.deliveryChannel ?? undefined,
+      });
       setShowApproveModal(false);
-    } else {
-      setApprovalError("Failed to approve customer. Please try again.");
+      setDispatchNotice(result.message);
+    } catch (err: any) {
+      setApprovalError(err?.message || "Failed to approve customer. Please try again.");
+    } finally {
+      setIsApproving(false);
     }
-    setIsApproving(false);
+  };
+
+  const handleResendCredentials = async () => {
+    if (!isAdmin || !customer || !id) return;
+    setIsResending(true);
+    setDispatchNotice(null);
+    try {
+      const result = await resendCustomerCredentials(id);
+      setCustomer({
+        ...customer,
+        passwordDeliveryStatus: result.delivered ? 'delivered' : 'failed',
+        passwordDeliveryChannel: result.deliveryChannel ?? undefined,
+      });
+      setDispatchNotice(result.message);
+    } catch (err: any) {
+      setDispatchNotice(err?.message || "Could not resend credentials.");
+    } finally {
+      setIsResending(false);
+    }
   };
 
   const handleReject = async () => {
@@ -333,6 +373,18 @@ export default function CustomerDetailsPage() {
                 </Button>
               </>
             )}
+            {isAdmin && customer.status === 'active' && (
+              <Button
+                onClick={handleResendCredentials}
+                variant="secondary"
+                disabled={isResending}
+                className="gap-1.5 sm:gap-2 text-xs sm:text-sm"
+                title="Issue a fresh one-time password and send it to the customer's phone"
+              >
+                <Send className="w-4 h-4" />
+                {isResending ? "Sending…" : "Resend credentials"}
+              </Button>
+            )}
 
             {isAdmin && customer.status === 'active' && (
               <Button 
@@ -378,6 +430,22 @@ export default function CustomerDetailsPage() {
             )}
           </div>
         </div>
+
+        {dispatchNotice && (
+          <div className="bg-signal/10 border border-signal/30 rounded-2xl p-4 flex gap-3 items-start">
+            <Send className="w-5 h-5 text-signal-bright shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-ink text-sm">{dispatchNotice}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDispatchNotice(null)}
+              className="text-ink-faint hover:text-ink text-xs"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {customer.status === 'rejected' && customer.rejectionReason && (
           <div className="bg-status-fail/10 border border-status-fail/30 rounded-2xl p-4 sm:p-6 flex gap-3 sm:gap-4 items-start">
@@ -453,16 +521,60 @@ export default function CustomerDetailsPage() {
                 <span className="text-xs text-ink-faint uppercase tracking-wider font-semibold">Biometrics (Palm Vein)</span>
                 <div className="flex items-center gap-2 text-ink">
                   <Scan className="w-4 h-4 text-signal" />
-                  {customer.palmVeinTemplate ? (
+                  {customer.hasPalmTemplate ? (
                     <div className="flex items-center gap-2">
                       <span className="text-status-ok text-sm font-medium">Palm Vein Enrolled</span>
-                      <span className="text-[10px] text-ink-muted uppercase tracking-wider font-mono bg-white/[0.05] border border-white/[0.08] px-1.5 py-0.5 rounded">VP930Pro</span>
+                      <span className="text-[10px] text-ink-muted uppercase tracking-wider font-mono bg-white/[0.05] border border-white/[0.08] px-1.5 py-0.5 rounded">
+                        {customer.palmSimulated ? "SIMULATED" : "VP930Pro"}
+                      </span>
                     </div>
                   ) : (
                     <span className="text-status-warning text-sm">No Biometrics Enrolled</span>
                   )}
                 </div>
               </div>
+
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-ink-faint uppercase tracking-wider font-semibold">Biometrics (Face)</span>
+                <div className="flex items-center gap-2 text-ink">
+                  <ScanFace className="w-4 h-4 text-signal" />
+                  {customer.hasFaceTemplate ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-status-ok text-sm font-medium">Face Enrolled</span>
+                      {customer.faceSimulated && (
+                        <span className="text-[10px] text-status-warn uppercase tracking-wider font-mono bg-status-warn/10 border border-status-warn/25 px-1.5 py-0.5 rounded">SIMULATED</span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-status-warning text-sm">No Facial Capture</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-ink-faint uppercase tracking-wider font-semibold">Identity check</span>
+                <div className="flex items-center gap-2 text-ink">
+                  <ShieldCheck className={customer.ninVerified ? "w-4 h-4 text-status-ok" : "w-4 h-4 text-status-warning"} />
+                  <span className="text-sm">
+                    {customer.ninVerified ? "NIN verified" : "NIN not verified"}
+                    {customer.bvnLast4 && (customer.bvnVerified ? " · BVN verified" : " · BVN not verified")}
+                  </span>
+                </div>
+              </div>
+
+              {customer.passwordDeliveryStatus && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-ink-faint uppercase tracking-wider font-semibold">Credential delivery</span>
+                  <div className="flex items-center gap-2 text-ink">
+                    <Send className={customer.passwordDeliveryStatus === "delivered" ? "w-4 h-4 text-status-ok" : "w-4 h-4 text-status-fail"} />
+                    <span className="text-sm">
+                      {customer.passwordDeliveryStatus === "delivered"
+                        ? "Sent by " + (customer.passwordDeliveryChannel ?? "unknown channel")
+                        : "Delivery failed — use Resend credentials"}
+                    </span>
+                  </div>
+                </div>
+              )}
               
               <div className="flex flex-col gap-1 pt-2 border-t border-white/[0.05]">
                 <span className="text-xs text-ink-faint uppercase tracking-wider font-semibold">Registration Date</span>
@@ -697,7 +809,11 @@ export default function CustomerDetailsPage() {
           <div className="space-y-4">
             <div className="bg-status-ok/10 text-status-ok p-4 rounded-xl flex gap-3 text-sm border border-status-ok/20">
               <UserCheck className="w-5 h-5 shrink-0" />
-              <p>You are about to verify this customer's KYC data. This will grant them full access to the MiliPay network.</p>
+              <p>
+                You are about to verify this customer's KYC data. This grants them full access
+                to the MiliPay network and sends a one-time password to their phone on
+                WhatsApp, falling back to SMS. The password is not shown to you.
+              </p>
             </div>
             {approvalError && <p className="text-status-fail text-sm font-medium">{approvalError}</p>}
             <div className="flex justify-end gap-3 mt-6">
@@ -846,7 +962,7 @@ export default function CustomerDetailsPage() {
               <div className="bg-white/[0.02] border border-white/[0.05] rounded-lg p-2.5 flex items-center justify-between text-xs">
                 <span className="text-ink-muted">Biometrics</span>
                 <span className="font-mono text-ink flex items-center gap-1.5">
-                  <Lock className="w-3 h-3 text-ink-faint" /> {customer.palmVeinTemplate ? "VP930Pro" : "None"}
+                  <Lock className="w-3 h-3 text-ink-faint" /> {customer.hasPalmTemplate ? "VP930Pro" : "None"}
                 </span>
               </div>
             </div>

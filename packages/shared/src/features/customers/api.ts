@@ -6,7 +6,50 @@ import type {
   CustomerRegistrationResult, 
   PaginatedResult 
 } from "@milipay/shared/types";
+import type { IdentityVerificationResult } from "@milipay/shared/types";
 import { isSimulatedTemplate, isSimulationEnabled } from "@milipay/shared/features/biometrics/palmScanner";
+import { isSimulatedFaceTemplate } from "@milipay/shared/features/biometrics/faceScanner";
+
+/**
+ * Supabase wraps a non-2xx Edge Function reply in a FunctionsHttpError whose
+ * message is always "Edge Function returned a non-2xx status code". The useful
+ * part is the response body, which carries our ApiError message and code.
+ */
+async function readFunctionError(error: unknown, fallback: string): Promise<string> {
+  const context = (error as { context?: Response })?.context;
+  if (context && typeof context.json === "function") {
+    try {
+      const body = await context.json();
+      if (body?.error) return String(body.error);
+      if (body?.message) return String(body.message);
+    } catch {
+      // Body was not JSON; fall through to the generic message.
+    }
+  }
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+/**
+ * Columns a portal session is allowed to read.
+ *
+ * The raw NIN and BVN, the palm-vein and facial templates and the PIN hash are
+ * withheld at the column level by migration 20260921000000, so `select('*')`
+ * now fails outright. has_palm_template / has_face_template are generated
+ * columns that answer "is one on file?" without exposing the template.
+ */
+const CUSTOMER_COLUMNS = [
+  "id", "first_name", "last_name", "phone", "email", "address", "state",
+  "nin_last_4", "bvn_last_4", "date_of_birth", "gender",
+  "status", "kyc_tier", "pin_threshold", "single_limit", "daily_limit",
+  "nin_verified", "nin_verified_at", "bvn_verified", "bvn_verified_at",
+  "face_captured_at", "face_simulated", "palm_simulated",
+  "has_palm_template", "has_face_template",
+  "must_change_password", "password_changed_at", "biometric_enrolled_at",
+  "onboarding_completed_at", "password_delivery_channel",
+  "password_delivery_status", "password_delivered_at",
+  "auth_user_id", "registered_by", "verified_by", "verified_at",
+  "rejection_reason", "created_at",
+].join(", ");
 
 interface FetchCustomersOptions {
   page?: number;
@@ -21,7 +64,7 @@ export async function fetchCustomers(
 ): Promise<PaginatedResult<Customer>> {
   const { page = 1, pageSize = 10, search = "", status = "", registeredBy } = options;
   
-  let query = supabase.from('customers').select('*', { count: 'exact' });
+  let query = supabase.from('customers').select(CUSTOMER_COLUMNS, { count: 'exact' });
   
   if (status) {
     query = query.eq('status', status);
@@ -91,7 +134,21 @@ export async function fetchCustomers(
       status: row.status as CustomerStatus,
       kycTier: (row.kyc_tier || 2) as 1 | 2 | 3,
       pinThreshold: Number(row.pin_threshold) || 10000,
-      palmVeinTemplate: row.palm_vein_template,
+      hasPalmTemplate: Boolean(row.has_palm_template),
+      hasFaceTemplate: Boolean(row.has_face_template),
+      palmSimulated: Boolean(row.palm_simulated),
+      faceSimulated: Boolean(row.face_simulated),
+      ninVerified: Boolean(row.nin_verified),
+      bvnVerified: Boolean(row.bvn_verified),
+      bvnLast4: row.bvn_last_4 || undefined,
+      dateOfBirth: row.date_of_birth || undefined,
+      gender: row.gender || undefined,
+      singleLimit: row.single_limit === null ? undefined : Number(row.single_limit),
+      dailyLimit: row.daily_limit === null ? undefined : Number(row.daily_limit),
+      passwordDeliveryChannel: row.password_delivery_channel || undefined,
+      passwordDeliveryStatus: row.password_delivery_status || undefined,
+      passwordDeliveredAt: row.password_delivered_at || undefined,
+      mustChangePassword: Boolean(row.must_change_password),
       linkedAccountCount: 0, 
       authUserId: row.auth_user_id,
       registeredBy: row.registered_by,
@@ -130,213 +187,186 @@ export async function fetchPendingCustomerCount(registeredBy?: string): Promise<
   return count || 0;
 }
 
+/**
+ * Agent / administrator enrolment.
+ *
+ * Everything security-relevant — status, KYC tier, NIN verification — is
+ * decided by the enrol-customer Edge Function. The portal no longer writes
+ * public.customers directly, because the RLS insert policy checked only who
+ * the caller was and not what they were writing: an agent could post
+ * status:'active' and skip approval entirely.
+ */
 export async function registerCustomer(
   draft: CustomerDraft
 ): Promise<CustomerRegistrationResult> {
   if (!draft.palmVeinTemplate) {
     throw new Error("Palm vein scan is required before registration.");
   }
+  if (!draft.faceTemplate) {
+    throw new Error("Facial capture is required before registration.");
+  }
 
-  // A simulated template belongs to nobody, so it must never reach a real
-  // customer record outside an explicitly simulation-enabled environment.
-  if (isSimulatedTemplate(draft.palmVeinTemplate) && !isSimulationEnabled()) {
+  // A simulated capture belongs to nobody. The Edge Function refuses these too;
+  // this is the early, friendlier failure.
+  const simulated =
+    isSimulatedTemplate(draft.palmVeinTemplate) || isSimulatedFaceTemplate(draft.faceTemplate);
+  if (simulated && !isSimulationEnabled()) {
     throw new Error(
-      "This palm capture was simulated and cannot be used to enrol a customer. " +
-        "Connect an HFSecurity scanner and capture again."
+      "This capture was simulated and cannot be used to enrol a customer. " +
+        "Connect the enrolment hardware and capture again."
     );
   }
 
-  // Get current staff session
-  const { data: sessionData } = await supabase.auth.getSession();
-  const session = sessionData.session;
-  const currentUserId = session?.user?.id;
-  const userRole = session?.user?.app_metadata?.role;
-
-  const isAdmin = userRole === 'admin' || userRole === 'super_admin' || userRole === 'superAdmin';
-
-  // Split name for DB
-  const nameParts = draft.fullName.trim().split(" ");
-  const firstName = nameParts[0] || "Unknown";
-  const lastName = nameParts.slice(1).join(" ") || "Unknown";
-  const ninLast4 = draft.nin.slice(-4);
-
-  // Status is 'pending' when enrolled by an Agent, or 'active' when enrolled by Admin
-  const initialStatus: CustomerStatus = isAdmin ? 'active' : 'pending';
-
-  const { data, error } = await supabase.from('customers').insert({
-    first_name: firstName,
-    last_name: lastName,
-    phone: draft.phone,
-    email: draft.email || null,
-    address: draft.address || null,
-    nin_last_4: ninLast4,
-    state: draft.state,
-    status: initialStatus,
-    kyc_tier: 2,
-    pin_threshold: 10000.00,
-    palm_vein_template: draft.palmVeinTemplate,
-    registered_by: currentUserId || null,
-    verified_by: isAdmin ? currentUserId : null,
-    verified_at: isAdmin ? new Date().toISOString() : null,
-  }).select('id').single();
+  const { data, error } = await supabase.functions.invoke("enrol-customer", {
+    body: {
+      fullName: draft.fullName.trim(),
+      dateOfBirth: draft.dateOfBirth,
+      gender: draft.gender,
+      nin: draft.nin.trim(),
+      bvn: draft.bvn?.trim() || undefined,
+      phone: draft.phone.trim(),
+      email: draft.email?.trim() || undefined,
+      address: draft.address.trim(),
+      state: draft.state,
+      palmVeinTemplate: draft.palmVeinTemplate,
+      faceTemplate: draft.faceTemplate,
+    },
+  });
 
   if (error) {
-    console.error("Error registering customer:", error);
-    throw new Error(error.message);
+    throw new Error(await readFunctionError(error, "Registration failed."));
+  }
+  if (!data?.customerId) {
+    throw new Error(data?.error || "Registration failed.");
   }
 
-  // If Admin direct registration, immediately trigger auth creation and SMS dispatch
-  if (isAdmin) {
-    try {
-      const approvalResult = await approveCustomer(data.id);
-      return {
-        customerId: data.id,
-        status: 'active',
-        tempPassword: approvalResult.tempPassword,
-        smsDispatched: true,
-        requiresAdminVerification: false,
-      };
-    } catch (approvalErr: any) {
-      console.warn("Direct admin approval SMS/Auth notice:", approvalErr.message);
-      return {
-        customerId: data.id,
-        status: 'active',
-        smsDispatched: false,
-        requiresAdminVerification: false,
-      };
-    }
-  }
-
-  // Field Agent registration — requires Admin KYC approval
   return {
-    customerId: data.id,
-    status: 'pending',
-    smsDispatched: false,
-    requiresAdminVerification: true,
+    customerId: data.customerId,
+    status: data.status,
+    requiresAdminVerification: Boolean(data.requiresAdminVerification),
+    kycTier: data.kycTier,
+    ninVerified: Boolean(data.ninVerified),
+    ninVerificationMode: data.ninVerificationMode,
+    bvnVerified: Boolean(data.bvnVerified),
   };
 }
 
-export async function approveCustomer(
-  customerId: string, 
-  customPassword?: string
-): Promise<{ success: boolean; tempPassword?: string; smsDispatched?: boolean }> {
-  const { data: session } = await supabase.auth.getSession();
-  const accessToken = session.session?.access_token;
-
-  if (accessToken) {
-    try {
-      const { data: responseData, error: funcError } = await supabase.functions.invoke('approve-customer', {
-        body: { customerId, customPassword },
-        headers: {
-          Authorization: `Bearer ${accessToken}`
-        }
-      });
-
-      if (!funcError && responseData?.success) {
-        return {
-          success: true,
-          tempPassword: responseData.tempPassword,
-          smsDispatched: responseData.smsDispatched ?? true,
-        };
-      }
-    } catch (edgeErr) {
-      console.warn("Edge function approve-customer error, falling back to RPC:", edgeErr);
-    }
-  }
-
-  // Fallback to database RPC function
-  const { error: rpcError } = await supabase.rpc('approve_customer_kyc', {
-    target_customer_id: customerId,
+/**
+ * Pre-submit NIN / BVN check, so the agent gets an answer before the review
+ * step. Advisory only: enrol-customer re-runs it server-side.
+ */
+export async function verifyCustomerIdentity(params: {
+  idType: "nin" | "bvn";
+  idNumber: string;
+  claimedName: string;
+  customerId?: string;
+}): Promise<IdentityVerificationResult> {
+  const { data, error } = await supabase.functions.invoke("verify-identity", {
+    body: params,
   });
 
-  if (rpcError) {
-    console.error("RPC approve_customer_kyc error:", rpcError);
-    // Direct table update fallback
-    const { error: dbError } = await supabase
-      .from('customers')
-      .update({
-        status: 'active',
-        verified_at: new Date().toISOString(),
-        rejection_reason: null,
-      })
-      .eq('id', customerId);
+  if (error) {
+    throw new Error(await readFunctionError(error, "Identity check failed."));
+  }
 
-    if (dbError) {
-      throw new Error(dbError.message || "Failed to approve customer");
-    }
+  return {
+    verificationId: data.verificationId,
+    status: data.status,
+    mode: data.mode,
+    simulated: Boolean(data.simulated),
+    matchedName: data.matchedName ?? null,
+    failureReason: data.failureReason ?? null,
+  };
+}
+
+export interface ApprovalResult {
+  success: boolean;
+  /** Whether the one-time password reached the customer. */
+  delivered: boolean;
+  deliveryChannel: "whatsapp" | "sms" | null;
+  message: string;
+}
+
+/**
+ * Approve a pending enrolment.
+ *
+ * Three things are deliberately absent compared with the previous version:
+ * there is no customPassword argument (the portal was passing the
+ * administrator's own user id into it, making that UUID the password of every
+ * customer they approved), the password is not returned, and there is no RPC
+ * or direct-table fallback — a fallback that only flipped `status` used to
+ * report the literal "Password12$" as the customer's password.
+ */
+export async function approveCustomer(customerId: string): Promise<ApprovalResult> {
+  const { data, error } = await supabase.functions.invoke("approve-customer", {
+    body: { customerId, action: "approve" },
+  });
+
+  if (error) {
+    throw new Error(await readFunctionError(error, "Failed to approve customer."));
+  }
+  if (!data?.success) {
+    throw new Error(data?.error || "Failed to approve customer.");
   }
 
   return {
     success: true,
-    tempPassword: customPassword || "Password12$",
-    smsDispatched: true,
+    delivered: Boolean(data.delivered),
+    deliveryChannel: data.deliveryChannel ?? null,
+    message: data.message ?? "Customer approved.",
   };
 }
 
-export async function rejectCustomer(
-  customerId: string, 
-  reason: string
-): Promise<boolean> {
-  const { data: session } = await supabase.auth.getSession();
-  const accessToken = session.session?.access_token;
-  const rejectionReason = reason.trim() || "Did not meet identity verification criteria.";
-
-  if (accessToken) {
-    try {
-      const { data: responseData, error: funcError } = await supabase.functions.invoke('reject-customer', {
-        body: { customerId, reason: rejectionReason },
-        headers: {
-          Authorization: `Bearer ${accessToken}`
-        }
-      });
-
-      if (!funcError && responseData?.success) {
-        return true;
-      }
-    } catch (edgeErr) {
-      console.warn("Edge function reject-customer error, falling back to RPC:", edgeErr);
-    }
-  }
-
-  // Fallback to database RPC function
-  const { error: rpcError } = await supabase.rpc('reject_customer_kyc', {
-    target_customer_id: customerId,
-    reason: rejectionReason,
+/** Reissue a fresh one-time password for a customer who never received theirs. */
+export async function resendCustomerCredentials(customerId: string): Promise<ApprovalResult> {
+  const { data, error } = await supabase.functions.invoke("approve-customer", {
+    body: { customerId, action: "resend" },
   });
 
-  if (rpcError) {
-    console.error("RPC reject_customer_kyc error:", rpcError);
-    // Direct table update fallback
-    const { error: dbError } = await supabase
-      .from('customers')
-      .update({
-        status: 'rejected',
-        verified_at: new Date().toISOString(),
-        rejection_reason: rejectionReason,
-      })
-      .eq('id', customerId);
-
-    if (dbError) {
-      throw new Error(dbError.message || "Failed to reject customer");
-    }
+  if (error) {
+    throw new Error(await readFunctionError(error, "Failed to resend credentials."));
+  }
+  if (!data?.success) {
+    throw new Error(data?.error || "Failed to resend credentials.");
   }
 
-  console.log(`[SMS DISPATCH SIMULATOR - REJECTION] Customer ${customerId} notified of rejection: "${rejectionReason}"`);
+  return {
+    success: true,
+    delivered: Boolean(data.delivered),
+    deliveryChannel: data.deliveryChannel ?? null,
+    message: data.message ?? "Credentials resent.",
+  };
+}
+
+export async function rejectCustomer(customerId: string, reason: string): Promise<boolean> {
+  const { data, error } = await supabase.functions.invoke("reject-customer", {
+    body: { customerId, reason: reason.trim() || undefined },
+  });
+
+  if (error) {
+    throw new Error(await readFunctionError(error, "Failed to reject customer."));
+  }
+  if (!data?.success) {
+    throw new Error(data?.error || "Failed to reject customer.");
+  }
 
   return true;
 }
 
+
 export async function fetchCustomerById(id: string): Promise<Customer | null> {
-  const { data, error } = await supabase
+  const { data: row, error } = await supabase
     .from('customers')
-    .select('*')
+    .select(CUSTOMER_COLUMNS)
     .eq('id', id)
     .single();
 
-  if (error || !data) {
+  if (error || !row) {
     console.error("Error fetching customer by id:", error);
     return null;
   }
+
+  const data = row as any;
 
   let registeredByName: string | undefined;
   let registeredByEmail: string | undefined;
@@ -382,7 +412,21 @@ export async function fetchCustomerById(id: string): Promise<Customer | null> {
     status: data.status as CustomerStatus,
     kycTier: (data.kyc_tier || 2) as 1 | 2 | 3,
     pinThreshold: Number(data.pin_threshold) || 10000,
-    palmVeinTemplate: data.palm_vein_template,
+    hasPalmTemplate: Boolean(data.has_palm_template),
+    hasFaceTemplate: Boolean(data.has_face_template),
+    palmSimulated: Boolean(data.palm_simulated),
+    faceSimulated: Boolean(data.face_simulated),
+    ninVerified: Boolean(data.nin_verified),
+    bvnVerified: Boolean(data.bvn_verified),
+    bvnLast4: data.bvn_last_4 || undefined,
+    dateOfBirth: data.date_of_birth || undefined,
+    gender: data.gender || undefined,
+    singleLimit: data.single_limit === null ? undefined : Number(data.single_limit),
+    dailyLimit: data.daily_limit === null ? undefined : Number(data.daily_limit),
+    passwordDeliveryChannel: data.password_delivery_channel || undefined,
+    passwordDeliveryStatus: data.password_delivery_status || undefined,
+    passwordDeliveredAt: data.password_delivered_at || undefined,
+    mustChangePassword: Boolean(data.must_change_password),
     linkedAccountCount: 0,
     authUserId: data.auth_user_id,
     registeredBy: data.registered_by,
