@@ -142,24 +142,9 @@
       "columns": [
         "account_name",
         "account_number",
-        "balance",
+        "balance_as_of",
         "bank_name",
-        "created_at",
-        "id",
-        "is_active",
-        "mono_account_id",
-        "user_id"
-      ],
-      "grantee": "authenticated",
-      "privilege": "INSERT",
-      "table": "linked_accounts"
-    },
-    {
-      "columns": [
-        "account_name",
-        "account_number",
-        "balance",
-        "bank_name",
+        "cached_balance",
         "created_at",
         "id",
         "is_active",
@@ -168,14 +153,6 @@
       ],
       "grantee": "authenticated",
       "privilege": "SELECT",
-      "table": "linked_accounts"
-    },
-    {
-      "columns": [
-        "is_active"
-      ],
-      "grantee": "authenticated",
-      "privilege": "UPDATE",
       "table": "linked_accounts"
     },
     {
@@ -333,6 +310,23 @@
     },
     {
       "columns": [
+        "amount",
+        "attempts",
+        "created_at",
+        "id",
+        "last_error",
+        "next_attempt_at",
+        "reason",
+        "reference",
+        "resolved_at",
+        "transaction_id"
+      ],
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "refund_queue"
+    },
+    {
+      "columns": [
         "created_at",
         "email",
         "full_name",
@@ -537,20 +531,55 @@
       "grantee": "authenticated",
       "privilege": "UPDATE",
       "table": "ticket_messages"
+    },
+    {
+      "columns": [
+        "actor",
+        "from_status",
+        "id",
+        "metadata",
+        "occurred_at",
+        "reason",
+        "reference",
+        "to_status",
+        "transaction_id"
+      ],
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "transaction_events"
     },
     {
       "columns": [
         "account_used",
         "amount",
+        "base_amount",
+        "beneficiary",
         "created_at",
         "customer_id",
+        "failure_reason",
+        "fee_amount",
+        "fulfilled_at",
+        "fulfilment_provider",
         "id",
+        "initiated_at",
         "merchant_id",
         "merchant_name",
+        "mono_payment_id",
+        "operator_reference",
+        "paid_at",
+        "payment_provider",
+        "payment_reference",
+        "provider",
         "reference",
+        "refunded_at",
+        "service_type",
         "status",
         "terminal_id",
-        "user_id"
+        "token",
+        "units",
+        "updated_at",
+        "user_id",
+        "variation_code"
       ],
       "grantee": "authenticated",
       "privilege": "SELECT",
@@ -613,25 +642,9 @@
     },
     {
       "anon_execute": false,
-      "args": "p_account_id uuid, p_amount numeric",
-      "authenticated_execute": false,
-      "name": "credit_linked_account",
-      "search_path_pinned": true,
-      "security_definer": true
-    },
-    {
-      "anon_execute": false,
       "args": "",
       "authenticated_execute": true,
       "name": "customer_has_pin",
-      "search_path_pinned": true,
-      "security_definer": true
-    },
-    {
-      "anon_execute": false,
-      "args": "p_account_id uuid, p_user_id uuid, p_amount numeric",
-      "authenticated_execute": false,
-      "name": "debit_linked_account",
       "search_path_pinned": true,
       "security_definer": true
     },
@@ -706,6 +719,14 @@
       "name": "palm_enrolment_state",
       "search_path_pinned": true,
       "security_definer": true
+    },
+    {
+      "anon_execute": true,
+      "args": "",
+      "authenticated_execute": true,
+      "name": "reject_mutation",
+      "search_path_pinned": false,
+      "security_definer": false
     },
     {
       "anon_execute": false,
@@ -900,26 +921,6 @@
       "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['admin'::text, 'super_admin'::text, 'agent'::text, 'support'::text])))))"
     },
     {
-      "check": "(auth.uid() = user_id)",
-      "command": "INSERT",
-      "name": "Users can insert their own linked accounts",
-      "roles": [
-        "public"
-      ],
-      "table": "linked_accounts",
-      "using": ""
-    },
-    {
-      "check": "",
-      "command": "UPDATE",
-      "name": "Users can update their own linked accounts",
-      "roles": [
-        "public"
-      ],
-      "table": "linked_accounts",
-      "using": "(auth.uid() = user_id)"
-    },
-    {
       "check": "",
       "command": "SELECT",
       "name": "Users can view their own linked accounts",
@@ -1061,6 +1062,16 @@
     },
     {
       "check": "",
+      "command": "SELECT",
+      "name": "Admins can review the refund queue",
+      "roles": [
+        "authenticated"
+      ],
+      "table": "refund_queue",
+      "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles sp\n  WHERE ((sp.id = auth.uid()) AND (sp.role = ANY (ARRAY['admin'::text, 'super_admin'::text])) AND (COALESCE(sp.status, ''::text) = 'active'::text))))"
+    },
+    {
+      "check": "",
       "command": "ALL",
       "name": "Admins have full access to staff_profiles",
       "roles": [
@@ -1172,6 +1183,26 @@
     {
       "check": "",
       "command": "SELECT",
+      "name": "Customers can follow their own transactions",
+      "roles": [
+        "authenticated"
+      ],
+      "table": "transaction_events",
+      "using": "(EXISTS ( SELECT 1\n   FROM transactions t\n  WHERE ((t.id = transaction_events.transaction_id) AND (t.user_id = auth.uid()))))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Staff can review transaction events",
+      "roles": [
+        "authenticated"
+      ],
+      "table": "transaction_events",
+      "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles sp\n  WHERE ((sp.id = auth.uid()) AND (sp.role = ANY (ARRAY['admin'::text, 'super_admin'::text, 'support'::text])) AND (COALESCE(sp.status, ''::text) = 'active'::text))))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
       "name": "Merchants can view own transactions",
       "roles": [
         "public"
@@ -1273,16 +1304,6 @@
     },
     {
       "grantee": "authenticated",
-      "privilege": "DELETE",
-      "table": "linked_accounts"
-    },
-    {
-      "grantee": "authenticated",
-      "privilege": "INSERT",
-      "table": "linked_accounts"
-    },
-    {
-      "grantee": "authenticated",
       "privilege": "SELECT",
       "table": "linked_accounts"
     },
@@ -1327,6 +1348,11 @@
       "table": "pos_terminals"
     },
     {
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "refund_queue"
+    },
+    {
       "grantee": "anon",
       "privilege": "DELETE",
       "table": "staff_profiles"
@@ -1405,6 +1431,11 @@
       "grantee": "authenticated",
       "privilege": "UPDATE",
       "table": "ticket_messages"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "transaction_events"
     },
     {
       "grantee": "authenticated",
@@ -1444,6 +1475,11 @@
       "rls_forced": false
     },
     {
+      "name": "mono_mandates",
+      "rls_enabled": true,
+      "rls_forced": true
+    },
+    {
       "name": "palm_match_events",
       "rls_enabled": true,
       "rls_forced": true
@@ -1459,9 +1495,19 @@
       "rls_forced": false
     },
     {
+      "name": "provider_catalogue_cache",
+      "rls_enabled": true,
+      "rls_forced": true
+    },
+    {
       "name": "rate_limits",
       "rls_enabled": true,
       "rls_forced": false
+    },
+    {
+      "name": "refund_queue",
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "name": "staff_profiles",
@@ -1479,6 +1525,11 @@
       "rls_forced": false
     },
     {
+      "name": "transaction_events",
+      "rls_enabled": true,
+      "rls_forced": true
+    },
+    {
       "name": "transactions",
       "rls_enabled": true,
       "rls_forced": false
@@ -1487,6 +1538,11 @@
       "name": "vtu_settings",
       "rls_enabled": true,
       "rls_forced": false
+    },
+    {
+      "name": "webhook_events",
+      "rls_enabled": true,
+      "rls_forced": true
     }
   ]
 }

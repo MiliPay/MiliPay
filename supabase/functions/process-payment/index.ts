@@ -119,7 +119,7 @@ serve(handler(async (req) => {
   if (existing) {
     return json({
       success: existing.status === "success",
-      status: existing.status === "success" ? "APPROVED" : "DECLINED",
+      status: existing.status === "delivered" ? "APPROVED" : "DECLINED",
       idempotent: true,
       reference,
       amount: Number(existing.amount),
@@ -215,7 +215,10 @@ serve(handler(async (req) => {
     account_used: body.accountId ?? null,
     terminal_id: terminal?.terminal_id ?? null,
     amount,
-    status: "success",
+    // A merchant palm payment settles synchronously, so it goes straight to
+    // the terminal state. 'success' was the old vocabulary; the state machine
+    // in 20260922000000 constrains this column now.
+    status: "delivered",
     reference,
     created_at: new Date().toISOString(),
   });

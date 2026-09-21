@@ -571,9 +571,9 @@ export async function deleteCustomer(id: string): Promise<boolean> {
     await supabase.from("transactions").delete().eq("customer_id", id);
   } catch (_) { /* ignore */ }
 
-  try {
-    await supabase.from("linked_accounts").delete().eq("customer_id", id);
-  } catch (_) { /* ignore */ }
+  // The direct delete that used to sit here relied on a client DELETE grant
+  // on linked_accounts that no longer exists. delete_customer_user cascades,
+  // so this was already redundant.
 
   // 3. Delete customer row
   const { error } = await supabase

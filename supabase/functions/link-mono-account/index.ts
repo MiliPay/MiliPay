@@ -109,9 +109,13 @@ serve(async (req) => {
     const accountNumber = acct.account_number || acct.accountNumber || '0000000000';
     const accountName = acct.name || 'Unknown User';
 
-    // Mono reports balances in kobo. linked_accounts.balance is Naira
-    // numeric(12,2) per the project currency invariant, so convert at the
-    // boundary rather than letting kobo leak into the ledger.
+    // Mono reports balances in kobo. cached_balance is Naira numeric(12,2)
+    // per the project currency invariant, so convert at the boundary rather
+    // than letting kobo leak into the database.
+    //
+    // This figure is DISPLAY ONLY and goes stale the moment it is taken. It
+    // used to be the thing vtu-service spent from, which meant MiliPay was
+    // vending real airtime against a number copied out of a read-only API.
     const balanceNgn = Math.round((Number(acct.balance) || 0)) / 100;
 
     // --- Database: save everything using admin client (bypasses RLS) ---
@@ -123,7 +127,8 @@ serve(async (req) => {
       bank_name: bankName,
       account_number: accountNumber,
       account_name: accountName,
-      balance: balanceNgn,
+      cached_balance: balanceNgn,
+      balance_as_of: new Date().toISOString(),
     }).select().single();
 
     if (error) {

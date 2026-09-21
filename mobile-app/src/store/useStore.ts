@@ -429,7 +429,9 @@ export const useBankStore = create<BankState>((set, get) => ({
       if (error) throw error;
       
       const accounts = (data || []).map((acc: any) => {
-        const naira = Number(acc.balance) || 0;
+        // Display only, and possibly stale — see balance_as_of. Nothing spends
+        // from this; a purchase debits the bank through Mono.
+        const naira = Number(acc.cached_balance) || 0;
         return {
           id: acc.id,
           bankName: acc.bank_name,
@@ -457,13 +459,14 @@ export const useBankStore = create<BankState>((set, get) => ({
       });
 
       if (rpcError || (data && !data.success)) {
-        const { error: dbError } = await supabase
-          .from('linked_accounts')
-          .update({ is_active: false })
-          .eq('id', id);
-        if (dbError) {
-          console.error("Failed to update is_active in supabase:", dbError);
-        }
+        // There used to be a direct table UPDATE here as a fallback. It only
+        // worked because 'authenticated' held an UPDATE grant on
+        // linked_accounts with no WITH CHECK — the same grant that let anyone
+        // set their own balance to whatever they liked. The grant is gone, so
+        // unlink_bank_account is the only path, and a failure is surfaced
+        // rather than worked around.
+        console.error("Failed to unlink account:", rpcError?.message ?? data?.error);
+        throw new Error("Could not unlink this account. Please try again.");
       }
     } catch (err) {
       console.error("Error unlinking account:", err);
