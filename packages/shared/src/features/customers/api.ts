@@ -451,9 +451,10 @@ export async function updateCustomerProfile(params: {
   email?: string;
   address?: string;
   state: string;
-  authUserId?: string;
 }): Promise<boolean> {
-  const { id, firstName, lastName, phone, email, address, state, authUserId } = params;
+  // authUserId used to be taken here only to mirror the write into
+  // public.users. That table is gone, so the caller no longer needs to pass it.
+  const { id, firstName, lastName, phone, email, address, state } = params;
 
   const trimmedFirstName = firstName.trim();
   const trimmedLastName = lastName.trim();
@@ -485,22 +486,10 @@ export async function updateCustomerProfile(params: {
     throw new Error(customerError.message || "Failed to update customer profile");
   }
 
-  // 2. Dual-sync with public.users table if authUserId is present
-  if (authUserId) {
-    try {
-      await supabase
-        .from('users')
-        .update({
-          full_name: `${trimmedFirstName} ${trimmedLastName}`.trim(),
-          phone: trimmedPhone,
-          email: trimmedEmail || undefined,
-          state: trimmedState,
-        })
-        .eq('id', authUserId);
-    } catch (userErr) {
-      console.warn("Could not sync profile changes to public.users:", userErr);
-    }
-  }
+  // The dual-sync write to public.users that used to follow has been removed.
+  // That table modelled the same human as public.customers, always held zero
+  // rows, and the write was wrapped in an ignored catch — silent dead weight
+  // that forced every read path to check two tables. Dropped in 20260921120000.
 
   return true;
 }
@@ -600,16 +589,6 @@ export async function updateCustomerPinThreshold(
   if (custErr) {
     console.error("Error updating customer pin threshold:", custErr);
     throw new Error(custErr.message);
-  }
-
-  // Also sync to users table if auth_user_id matches
-  try {
-    await supabase
-      .from("users")
-      .update({ pin_threshold: newThreshold })
-      .eq("id", customerIdOrAuthId);
-  } catch (_) {
-    // Ignore if not present in users table
   }
 
   return true;

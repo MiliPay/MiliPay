@@ -1,4 +1,4 @@
--- Migration: 20260921110000_merchant_control_columns.sql
+-- Migration: 20260921092631_merchant_control_columns.sql
 -- Description:
 --   A merchant could rewrite their own commercial terms.
 --

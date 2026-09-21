@@ -1,4 +1,4 @@
--- Migration: 20260921093000_retire_create_staff_user_default_password.sql
+-- Migration: 20260921090920_retire_create_staff_user_default_password.sql
 -- Description:
 --   create_staff_user carried `p_password text DEFAULT 'Password12$'`, so a
 --   caller who omitted the argument silently provisioned a staff account with

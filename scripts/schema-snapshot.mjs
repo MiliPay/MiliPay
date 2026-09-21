@@ -109,7 +109,7 @@ async function fetchSnapshot() {
     if (response.status === 404) {
       console.error(
         "The security_snapshot() function is missing. Apply migration\n" +
-          "20260921100000_security_snapshot_function.sql first."
+          "20260921092010_security_snapshot_function.sql first."
       );
     } else if (body) {
       console.error(body.slice(0, 500));

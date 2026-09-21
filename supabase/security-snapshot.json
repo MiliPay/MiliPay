@@ -514,59 +514,6 @@
     },
     {
       "columns": [
-        "bvn",
-        "created_at",
-        "daily_limit",
-        "email",
-        "id",
-        "is_verified",
-        "kyc_tier",
-        "nin",
-        "phone",
-        "pin_failed_attempts",
-        "pin_hash",
-        "pin_locked_until",
-        "pin_threshold",
-        "single_limit"
-      ],
-      "grantee": "authenticated",
-      "privilege": "INSERT",
-      "table": "users"
-    },
-    {
-      "columns": [
-        "bvn",
-        "created_at",
-        "daily_limit",
-        "email",
-        "id",
-        "is_verified",
-        "kyc_tier",
-        "nin",
-        "phone",
-        "pin_failed_attempts",
-        "pin_hash",
-        "pin_locked_until",
-        "pin_threshold",
-        "single_limit"
-      ],
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "table": "users"
-    },
-    {
-      "columns": [
-        "bvn",
-        "email",
-        "is_verified",
-        "nin"
-      ],
-      "grantee": "authenticated",
-      "privilege": "UPDATE",
-      "table": "users"
-    },
-    {
-      "columns": [
         "airtime_surcharge_percent",
         "cable_surcharge_ngn",
         "data_surcharge_ngn",
@@ -1171,36 +1118,6 @@
       "using": "((auth.uid() = user_id) OR (customer_id IN ( SELECT customers.id\n   FROM customers\n  WHERE (customers.auth_user_id = auth.uid()))))"
     },
     {
-      "check": "",
-      "command": "SELECT",
-      "name": "Staff can view all users",
-      "roles": [
-        "public"
-      ],
-      "table": "users",
-      "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['admin'::text, 'super_admin'::text, 'agent'::text, 'support'::text])))))"
-    },
-    {
-      "check": "",
-      "command": "UPDATE",
-      "name": "Users can update their own profile",
-      "roles": [
-        "public"
-      ],
-      "table": "users",
-      "using": "(auth.uid() = id)"
-    },
-    {
-      "check": "",
-      "command": "SELECT",
-      "name": "Users can view their own profile",
-      "roles": [
-        "public"
-      ],
-      "table": "users",
-      "using": "(auth.uid() = id)"
-    },
-    {
       "check": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['admin'::text, 'super_admin'::text])))))",
       "command": "INSERT",
       "name": "Admins can insert vtu_settings",
@@ -1406,21 +1323,6 @@
       "grantee": "authenticated",
       "privilege": "SELECT",
       "table": "transactions"
-    },
-    {
-      "grantee": "authenticated",
-      "privilege": "DELETE",
-      "table": "users"
-    },
-    {
-      "grantee": "authenticated",
-      "privilege": "INSERT",
-      "table": "users"
-    },
-    {
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "table": "users"
     }
   ],
   "tables": [
@@ -1481,11 +1383,6 @@
     },
     {
       "name": "transactions",
-      "rls_enabled": true,
-      "rls_forced": false
-    },
-    {
-      "name": "users",
       "rls_enabled": true,
       "rls_forced": false
     },

@@ -110,8 +110,11 @@ export async function requireStaffRole(
 
 /**
  * Resolve the customer profile backing an authenticated user.
- * Mirrors the app's dual identity model: public.customers (agent-enrolled)
- * falling back to public.users (self-service).
+ *
+ * public.customers is the only identity table. There used to be a second,
+ * public.users, and every caller had to look in one then fall back to the
+ * other — a dance that was already a source of bugs. It held no rows and
+ * nothing referenced it, so it was dropped in 20260921120000.
  */
 export interface CustomerProfile {
   id: string;
@@ -120,7 +123,6 @@ export interface CustomerProfile {
   /** Customer's own cap, or null to use the tier default. Never above the tier. */
   singleLimit: number | null;
   dailyLimit: number | null;
-  source: "customers" | "users";
 }
 
 const optionalAmount = (value: unknown): number | null =>
@@ -150,24 +152,6 @@ export async function loadCustomerProfile(
       pinThreshold: Number(customer.pin_threshold) || 10_000,
       singleLimit: optionalAmount(customer.single_limit),
       dailyLimit: optionalAmount(customer.daily_limit),
-      source: "customers",
-    };
-  }
-
-  const { data: user } = await admin
-    .from("users")
-    .select("id, kyc_tier, pin_threshold, single_limit, daily_limit")
-    .eq("id", authUserId)
-    .maybeSingle();
-
-  if (user) {
-    return {
-      id: user.id,
-      kycTier: Number(user.kyc_tier) || 2,
-      pinThreshold: Number(user.pin_threshold) || 10_000,
-      singleLimit: optionalAmount(user.single_limit),
-      dailyLimit: optionalAmount(user.daily_limit),
-      source: "users",
     };
   }
 

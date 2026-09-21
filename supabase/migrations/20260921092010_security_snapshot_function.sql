@@ -1,4 +1,4 @@
--- Migration: 20260921100000_security_snapshot_function.sql
+-- Migration: 20260921092010_security_snapshot_function.sql
 -- Description:
 --   Schema drift detection.
 --

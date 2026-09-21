@@ -1,4 +1,4 @@
--- Migration: 20260921103000_close_snapshot_risks.sql
+-- Migration: 20260921092216_close_snapshot_risks.sql
 -- Description:
 --   The four risks the new schema-snapshot audit flagged on its first run.
 --

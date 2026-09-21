@@ -264,7 +264,6 @@ export default function CustomerDetailsPage() {
         email: editEmail.trim() || undefined,
         address: editAddress.trim(),
         state: editState.trim(),
-        authUserId: customer.authUserId,
       });
 
       setCustomer({
