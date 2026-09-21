@@ -389,7 +389,7 @@ export default function CustomerDetailsPage() {
               <Button 
                 onClick={() => handleStatusChange('suspended')} 
                 variant="secondary" 
-                className="border-status-warning/30 text-status-warning hover:bg-status-warning/10 gap-1.5 sm:gap-2 text-xs sm:text-sm"
+                className="border-status-warn/30 text-status-warn hover:bg-status-warn/10 gap-1.5 sm:gap-2 text-xs sm:text-sm"
                 disabled={isUpdatingStatus}
               >
                 <Ban className="w-4 h-4" /> Suspend Account
@@ -528,7 +528,7 @@ export default function CustomerDetailsPage() {
                       </span>
                     </div>
                   ) : (
-                    <span className="text-status-warning text-sm">No Biometrics Enrolled</span>
+                    <span className="text-status-warn text-sm">No Biometrics Enrolled</span>
                   )}
                 </div>
               </div>
@@ -545,7 +545,7 @@ export default function CustomerDetailsPage() {
                       )}
                     </div>
                   ) : (
-                    <span className="text-status-warning text-sm">No Facial Capture</span>
+                    <span className="text-status-warn text-sm">No Facial Capture</span>
                   )}
                 </div>
               </div>
@@ -553,7 +553,7 @@ export default function CustomerDetailsPage() {
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-ink-faint uppercase tracking-wider font-semibold">Identity check</span>
                 <div className="flex items-center gap-2 text-ink">
-                  <ShieldCheck className={customer.ninVerified ? "w-4 h-4 text-status-ok" : "w-4 h-4 text-status-warning"} />
+                  <ShieldCheck className={customer.ninVerified ? "w-4 h-4 text-status-ok" : "w-4 h-4 text-status-warn"} />
                   <span className="text-sm">
                     {customer.ninVerified ? "NIN verified" : "NIN not verified"}
                     {customer.bvnLast4 && (customer.bvnVerified ? " · BVN verified" : " · BVN not verified")}
@@ -829,7 +829,7 @@ export default function CustomerDetailsPage() {
       {isAdmin && (
         <Modal isOpen={showRejectModal} onClose={() => !isRejecting && setShowRejectModal(false)} title="Reject Customer">
           <div className="space-y-4">
-            <div className="bg-status-warning/10 text-status-warning p-4 rounded-xl flex gap-3 text-sm border border-status-warning/20">
+            <div className="bg-status-warn/10 text-status-warn p-4 rounded-xl flex gap-3 text-sm border border-status-warn/20">
               <FileText className="w-5 h-5 shrink-0" />
               <p>Please select a reason for rejection. This will be visible to the customer and field agents.</p>
             </div>
@@ -863,7 +863,7 @@ export default function CustomerDetailsPage() {
             {rejectError && <p className="text-status-fail text-sm font-medium">{rejectError}</p>}
             <div className="flex justify-end gap-3 mt-6">
               <Button variant="secondary" onClick={() => setShowRejectModal(false)} disabled={isRejecting}>Cancel</Button>
-              <Button onClick={handleReject} className="bg-status-warning text-ledger hover:bg-status-warning/90" disabled={isRejecting}>
+              <Button onClick={handleReject} className="bg-status-warn text-ledger hover:bg-status-warn/90" disabled={isRejecting}>
                 {isRejecting ? "Rejecting..." : "Confirm Rejection"}
               </Button>
             </div>

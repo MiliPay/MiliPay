@@ -437,7 +437,9 @@ export async function fetchMerchantTransactions(
       terminalId: t.terminal_id,
       merchantId: t.merchant_id,
       merchantName: t.merchant_name || "Merchant Store",
-      status: t.status || "success",
+      // A row with no status is a row we do not understand. Defaulting it to
+      // "success" showed failed and pending payments as completed.
+      status: t.status || "unknown",
       timestamp: t.created_at,
     };
   });
@@ -470,7 +472,9 @@ export async function fetchTerminalTransactions(
       terminalId: t.terminal_id,
       merchantId: t.merchant_id,
       merchantName: t.merchant_name || "Merchant Store",
-      status: t.status || "success",
+      // A row with no status is a row we do not understand. Defaulting it to
+      // "success" showed failed and pending payments as completed.
+      status: t.status || "unknown",
       timestamp: t.created_at,
     };
   });

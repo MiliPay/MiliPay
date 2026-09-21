@@ -25,7 +25,7 @@ export function MyCasesPage() {
   const getSLAColor = (createdAt: string) => {
     const hoursOpen = (new Date().getTime() - new Date(createdAt).getTime()) / (1000 * 60 * 60);
     if (hoursOpen >= 4) return "bg-status-fail/10 text-status-fail border-status-fail/20";
-    if (hoursOpen >= 2) return "bg-status-warning/10 text-status-warning border-status-warning/20";
+    if (hoursOpen >= 2) return "bg-status-warn/10 text-status-warn border-status-warn/20";
     return "bg-white/[0.05] text-ink border-white/[0.1]";
   };
 

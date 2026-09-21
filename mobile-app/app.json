@@ -1,18 +1,20 @@
 {
   "expo": {
-    "name": "BioPay",
+    "name": "MiliPay",
     "slug": "biopay",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon-black.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.alashabeeb.biopay"
     },
     "android": {
       "package": "com.alashabeeb.biopay",
-      "permissions": ["android.permission.USE_BIOMETRIC"],
+      "permissions": [
+        "android.permission.USE_BIOMETRIC"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/icon-black.png"
@@ -45,6 +47,10 @@
         "projectId": "4b20c2a7-4c6e-4f04-8f8a-143b6edb139c"
       }
     },
-    "owner": "b.stallon"
+    "owner": "b.stallon",
+    "description": "Pay with your palm. Airtime, data, electricity and TV, paid straight from your bank account.",
+    "scheme": "milipay",
+    "primaryColor": "#10b981",
+    "backgroundColor": "#000000"
   }
 }

@@ -75,7 +75,7 @@ export function ServiceLayout() {
           )}
           <button 
             onClick={() => setIsLogoutModalOpen(true)}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:text-status-warning hover:bg-status-warning/10 transition-colors w-full text-left text-xs font-medium"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:text-status-warn hover:bg-status-warn/10 transition-colors w-full text-left text-xs font-medium"
           >
             <LogOut className="w-5 h-5" />
             <span className="font-medium text-sm">Log Out</span>

@@ -119,16 +119,26 @@ export async function fetchRecentTransactions(): Promise<PaginatedResult<Transac
 export interface DashboardStats {
   totalCustomers: number;
   transactionsToday: number;
-  volumeMTD: number; // kobo
-  systemHealth: number; // 0–100
+  /** Naira. The project stores Naira numeric(12,2) and never kobo. */
+  volumeMTD: number;
   dailyRegistrations: number[];
   pendingKYC: number;
   activeStaff: number;
+  /**
+   * Transactions where the customer's money has been taken and nothing has
+   * been delivered yet.
+   *
+   * This replaces a "system health" tile that returned a hardcoded 99.98 —
+   * a number nobody measured, on a financial dashboard, which is worse than
+   * showing nothing. This one is counted, and when it is not zero somebody
+   * should look.
+   */
+  inFlight: number;
 }
 
 export async function fetchDashboardStats(): Promise<DashboardStats> {
   const now = new Date();
-  
+
   // 1. Total Customers
   const { count: totalCustomers } = await supabase
     .from("customers")
@@ -144,18 +154,21 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
 
   // 3. Volume Month-to-Date
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  // 'delivered' is the settled state. This filtered on 'success', which was
+  // the vocabulary before the payment-rail migration renamed it — so every
+  // completed transaction was being excluded and the figure read zero.
   const { data: mtdTransactions } = await supabase
     .from("transactions")
     .select("amount")
     .gte("created_at", startOfMonth.toISOString())
-    .eq("status", "success");
-    
-  const volumeMTD = (mtdTransactions || []).reduce((acc, txn) => acc + (txn.amount || 0), 0);
+    .eq("status", "delivered");
+
+  const volumeMTD = (mtdTransactions || []).reduce((acc, txn) => acc + (Number(txn.amount) || 0), 0);
 
   // 4. Daily Registrations (Last 7 Days)
   const sevenDaysAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
   sevenDaysAgo.setHours(0, 0, 0, 0);
-  
+
   const { data: recentCustomers, error: regError } = await supabase
     .from("customers")
     .select("created_at")
@@ -196,14 +209,20 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
     .select("*", { count: "exact", head: true })
     .eq("status", "active");
 
+  // Money taken, nothing delivered. Counted, not invented.
+  const { count: inFlight } = await supabase
+    .from("transactions")
+    .select("*", { count: "exact", head: true })
+    .in("status", ["initiated", "paid", "fulfilling", "fulfilment_pending", "refund_pending"]);
+
   return {
     totalCustomers: totalCustomers || 0,
     transactionsToday: transactionsToday || 0,
     volumeMTD,
-    systemHealth: 99.98,
     dailyRegistrations,
     pendingKYC: pendingKYC || 0,
     activeStaff: activeStaff || 0,
+    inFlight: inFlight || 0,
   };
 }
 

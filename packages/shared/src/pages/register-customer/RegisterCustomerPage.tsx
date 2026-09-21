@@ -141,7 +141,7 @@ export default function RegisterCustomerPage() {
       <div className="flex min-h-screen items-center justify-center bg-ledger p-6">
         <Card raised className="w-full max-w-lg p-8 md:p-10 text-center animate-rise-in">
           <div className={`mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full border ${
-            isPending ? "border-status-warning bg-status-warning/10 text-status-warning" : "border-status-ok bg-status-ok/10 text-status-ok"
+            isPending ? "border-status-warn bg-status-warn/10 text-status-warn" : "border-status-ok bg-status-ok/10 text-status-ok"
           }`}>
             {isPending ? <Clock className="h-8 w-8 stroke-[2.5]" /> : <Check className="h-8 w-8 stroke-[3]" />}
           </div>
@@ -156,8 +156,8 @@ export default function RegisterCustomerPage() {
           <p className="mb-6 text-xs text-ink-faint font-data">ID: {registrationResult.customerId}</p>
 
           {isPending ? (
-            <div className="mb-8 rounded-xl border border-status-warning/25 bg-status-warning/5 p-5 text-left space-y-3">
-              <div className="flex items-center gap-2 text-status-warning text-xs font-semibold uppercase tracking-wider">
+            <div className="mb-8 rounded-xl border border-status-warn/25 bg-status-warn/5 p-5 text-left space-y-3">
+              <div className="flex items-center gap-2 text-status-warn text-xs font-semibold uppercase tracking-wider">
                 <Clock className="w-4 h-4" />
                 Pending Admin KYC Verification
               </div>

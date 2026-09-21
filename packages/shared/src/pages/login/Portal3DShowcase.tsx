@@ -18,41 +18,37 @@ const PORTAL_CONFIGS: Record<PortalType, PortalConfig> = {
     portalLabel: "Field Agent Network",
     badgeColor: "text-signal bg-signal/10 border-signal/20",
     badgeDot: "bg-signal",
-    headline: "Biometric onboarding at the point of contact.",
+    headline: "Register customers where they are.",
     description:
-      "Equipped for handheld palm vein capture, instant identity verification, and on-site merchant terminal deployment in the field.",
-    statement:
-      "Empowering Field Agents to register customers, onboard merchants, and resolve walk-in cases on-site with sub-second palm verification.",
+      "Capture a palm and a face, verify the NIN, and send the enrolment for approval — from a handheld, in the field.",
+    statement: "MiliPay Agent Portal",
   },
   admin: {
-    portalLabel: "Central Governance Console",
+    portalLabel: "Admin",
     badgeColor: "text-status-warn bg-status-warn/10 border-status-warn/20",
     badgeDot: "bg-status-warn",
-    headline: "Unified financial switch governance & risk.",
+    headline: "Approve, oversee, and settle.",
     description:
-      "Supervisory oversight over merchant KYB reviews, POS hardware fleet security, and master settlement ledgers.",
-    statement:
-      "Providing executive clearance, compliance monitoring, and master ledger auditing across the entire MiliPay ecosystem.",
+      "Approve enrolments, manage merchants and staff, and decide the payments that could not resolve themselves.",
+    statement: "MiliPay Admin",
   },
   support: {
-    portalLabel: "Customer Care Switch",
+    portalLabel: "Support",
     badgeColor: "text-status-info bg-status-info/10 border-status-info/20",
     badgeDot: "bg-status-info",
-    headline: "Omnichannel customer resolution & care.",
+    headline: "Answer the customer in front of you.",
     description:
-      "Dedicated support console for handling real-time mobile customer chat queues and two-tier ticket escalations.",
-    statement:
-      "Connecting support staff directly with customers to provide rapid assistance and seamless dispute resolution.",
+      "Live chats, the ticket queue, and a clear path to escalate anything you cannot resolve.",
+    statement: "MiliPay Service Portal",
   },
   merchant: {
-    portalLabel: "Merchant Store Console",
+    portalLabel: "Merchant",
     badgeColor: "text-status-ok bg-status-ok/10 border-status-ok/20",
     badgeDot: "bg-status-ok",
-    headline: "Real-time store sales & smart POS management.",
+    headline: "Your sales, your terminals, your money.",
     description:
-      "Track daily customer transactions, monitor connected smart terminal health, and audit automated Mono DirectPay settlements.",
-    statement:
-      "Delivering instant split settlements, smart POS terminal management, and clear revenue insights for retail stores.",
+      "Every sale as it happens, the health of each terminal, and what has actually been settled to your account.",
+    statement: "MiliPay for Business",
   },
 };
 
@@ -93,9 +89,7 @@ export function Portal3DShowcase({ portal }: Portal3DShowcaseProps) {
         </p>
 
         <div className="mt-8 pt-8 border-t border-white/[0.08]">
-          <p className="text-sm text-ink-faint leading-relaxed italic">
-            "{cfg.statement}"
-          </p>
+          <p className="text-sm text-ink-faint tracking-wide">{cfg.statement}</p>
         </div>
       </div>
 

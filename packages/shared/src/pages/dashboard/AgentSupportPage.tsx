@@ -158,7 +158,7 @@ export function AgentSupportPage() {
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize ${
                             isResolved ? 'bg-status-ok/10 text-status-ok border border-status-ok/20' :
                             isInProgress ? 'bg-status-info/10 text-status-info border border-status-info/20' :
-                            'bg-status-warning/10 text-status-warning border border-status-warning/20'
+                            'bg-status-warn/10 text-status-warn border border-status-warn/20'
                           }`}>
                             {t.status.replace("_", " ")}
                           </span>

@@ -51,7 +51,7 @@ export function ComplaintsDesk() {
   const getSLAColor = (createdAt: string) => {
     const hoursOpen = (new Date().getTime() - new Date(createdAt).getTime()) / (1000 * 60 * 60);
     if (hoursOpen >= 4) return "bg-status-fail/10 text-status-fail border-status-fail/20"; // Red (Critical)
-    if (hoursOpen >= 2) return "bg-status-warning/10 text-status-warning border-status-warning/20"; // Yellow (Warning)
+    if (hoursOpen >= 2) return "bg-status-warn/10 text-status-warn border-status-warn/20"; // Yellow (Warning)
     return "bg-white/[0.05] text-ink border-white/[0.1]"; // Default (Normal)
   };
 
@@ -62,7 +62,7 @@ export function ComplaintsDesk() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-display text-ink tracking-tight flex items-center gap-3">
-              <MessageSquareWarning className="w-7 h-7 sm:w-8 sm:h-8 text-status-warning" />
+              <MessageSquareWarning className="w-7 h-7 sm:w-8 sm:h-8 text-status-warn" />
               Complaints Desk
             </h1>
             <p className="text-ink-muted text-xs sm:text-sm mt-1">Manage and resolve issues submitted from the MiliPay app.</p>

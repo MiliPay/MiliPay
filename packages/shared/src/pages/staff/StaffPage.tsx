@@ -15,7 +15,7 @@ function RoleBadge({ role }: { role: Role }) {
   const styles = {
     agent: "bg-signal/10 text-signal-bright border-signal/20",
     support: "bg-status-info/10 text-status-info border-status-info/20",
-    admin: "bg-status-warning/10 text-status-warning border-status-warning/20",
+    admin: "bg-status-warn/10 text-status-warn border-status-warn/20",
     super_admin: "bg-status-fail/10 text-status-fail border-status-fail/20",
   };
 

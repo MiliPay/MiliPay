@@ -186,7 +186,7 @@ export function AgentTicketDetailsPage() {
                 isResolved ? "bg-status-ok/10 text-status-ok border border-status-ok/20" :
                 ticket.isEscalated ? "bg-status-fail/10 text-status-fail border border-status-fail/20" :
                 ticket.status === "in_progress" ? "bg-status-info/10 text-status-info border border-status-info/20" :
-                "bg-status-warning/10 text-status-warning border border-status-warning/20"
+                "bg-status-warn/10 text-status-warn border border-status-warn/20"
               )}>
                 {isResolved ? "Resolved" : ticket.isEscalated ? "Escalated to Admin" : ticket.status.replace("_", " ")}
               </span>
@@ -223,7 +223,7 @@ export function AgentTicketDetailsPage() {
               <Button 
                 onClick={handleBumpPriority} 
                 disabled={isBumping}
-                className="bg-status-warning hover:brightness-110 text-ledger font-semibold gap-2 text-xs sm:text-sm"
+                className="bg-status-warn hover:brightness-110 text-ledger font-semibold gap-2 text-xs sm:text-sm"
               >
                 <AlertTriangle className="w-4 h-4" /> {isBumping ? "Bumping..." : "Flag Critical"}
               </Button>
@@ -233,7 +233,7 @@ export function AgentTicketDetailsPage() {
 
         {/* 24-hour SLA Warning Banner */}
         {canBumpPriority && (
-          <div className="bg-status-warning/10 border border-status-warning/20 rounded-2xl p-4 flex gap-3 text-status-warning text-xs sm:text-sm">
+          <div className="bg-status-warn/10 border border-status-warn/20 rounded-2xl p-4 flex gap-3 text-status-warn text-xs sm:text-sm">
             <AlertTriangle className="w-5 h-5 flex-shrink-0" />
             <p>This complaint has been active for over 24 hours without resolution. You can flag its priority as Critical to prioritize administrative review.</p>
           </div>
@@ -369,7 +369,7 @@ export function AgentTicketDetailsPage() {
                   <span className={clsx("capitalize text-xs font-semibold",
                     isResolved ? "text-status-ok" :
                     ticket.isEscalated ? "text-status-fail" :
-                    ticket.status === "in_progress" ? "text-status-info" : "text-status-warning"
+                    ticket.status === "in_progress" ? "text-status-info" : "text-status-warn"
                   )}>
                     {ticket.status.replace("_", " ")}
                   </span>

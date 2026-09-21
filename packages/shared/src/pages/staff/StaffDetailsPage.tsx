@@ -43,7 +43,7 @@ function RoleBadge({ role }: { role: Role }) {
   const styles = {
     agent: "bg-signal/10 text-signal-bright border-signal/20",
     support: "bg-status-info/10 text-status-info border-status-info/20",
-    admin: "bg-status-warning/10 text-status-warning border-status-warning/20",
+    admin: "bg-status-warn/10 text-status-warn border-status-warn/20",
     super_admin: "bg-status-fail/10 text-status-fail border-status-fail/20",
   };
 
@@ -382,11 +382,11 @@ export default function StaffDetailsPage() {
                 <p className="text-[11px] text-ink-faint mt-1">Total registrations</p>
               </div>
 
-              <div className="bg-status-warning/[0.03] border border-status-warning/20 rounded-2xl p-5 backdrop-blur-xl">
-                <span className="text-xs font-semibold text-status-warning uppercase tracking-wider block flex items-center gap-1">
+              <div className="bg-status-warn/[0.03] border border-status-warn/20 rounded-2xl p-5 backdrop-blur-xl">
+                <span className="text-xs font-semibold text-status-warn uppercase tracking-wider block flex items-center gap-1">
                   <Clock className="w-3.5 h-3.5" /> Pending
                 </span>
-                <span className="text-3xl font-display text-status-warning font-bold mt-2 block">{agentStats.pendingKYC}</span>
+                <span className="text-3xl font-display text-status-warn font-bold mt-2 block">{agentStats.pendingKYC}</span>
                 <p className="text-[11px] text-ink-faint mt-1">Awaiting admin review</p>
               </div>
 

@@ -195,7 +195,7 @@ export function AdminSupportPage() {
                             CRITICAL
                           </span>
                         ) : (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-status-warning/10 text-status-warning border border-status-warning/20">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-status-warn/10 text-status-warn border border-status-warn/20">
                             HIGH
                           </span>
                         )}
@@ -260,7 +260,7 @@ export function AdminSupportPage() {
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium capitalize ${
                           ticket.status === 'resolved' ? 'bg-status-ok/10 text-status-ok border border-status-ok/20' :
                           ticket.status === 'in_progress' ? 'bg-status-info/10 text-status-info border border-status-info/20' :
-                          'bg-status-warning/10 text-status-warning border border-status-warning/20'
+                          'bg-status-warn/10 text-status-warn border border-status-warn/20'
                         }`}>
                           {ticket.status.replace("_", " ")}
                         </span>

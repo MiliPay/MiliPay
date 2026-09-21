@@ -94,8 +94,8 @@ export function SupportDashboard() {
           </div>
           
           <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl p-6 backdrop-blur-xl">
-            <div className="w-10 h-10 rounded-full bg-status-warning/10 flex items-center justify-center mb-4 border border-status-warning/20">
-              <Clock className="w-5 h-5 text-status-warning" />
+            <div className="w-10 h-10 rounded-full bg-status-warn/10 flex items-center justify-center mb-4 border border-status-warn/20">
+              <Clock className="w-5 h-5 text-status-warn" />
             </div>
             <h3 className="text-sm font-medium text-ink-muted uppercase tracking-wider">Avg Resolution</h3>
             <div className="mt-2">

@@ -340,7 +340,7 @@ export function WeeklyRegistrationsChart({
         </div>
         {peakVal > 0 && (
           <div className="flex items-center gap-1.5 font-mono text-[11px]">
-            <Award className="w-3.5 h-3.5 text-status-warning" />
+            <Award className="w-3.5 h-3.5 text-status-warn" />
             <span className="text-ink-faint">Peak:</span>
             <span className="text-white font-semibold">{peakVal} in 24h</span>
           </div>

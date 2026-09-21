@@ -71,13 +71,13 @@ export function AgentDashboard() {
           </div>
 
           {/* Pending Approval */}
-          <div className="bg-status-warning/[0.03] border border-status-warning/20 rounded-2xl p-5 backdrop-blur-xl">
+          <div className="bg-status-warn/[0.03] border border-status-warn/20 rounded-2xl p-5 backdrop-blur-xl">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold text-status-warning uppercase tracking-wider">Pending</h3>
-              <Clock className="w-4 h-4 text-status-warning" />
+              <h3 className="text-xs font-semibold text-status-warn uppercase tracking-wider">Pending</h3>
+              <Clock className="w-4 h-4 text-status-warn" />
             </div>
             <div className="mt-3 flex items-baseline gap-2">
-              {isLoading ? <Skeleton className="h-8 w-12" /> : <span className="text-3xl font-display text-status-warning font-bold">{pendingCount}</span>}
+              {isLoading ? <Skeleton className="h-8 w-12" /> : <span className="text-3xl font-display text-status-warn font-bold">{pendingCount}</span>}
             </div>
             <p className="text-[11px] text-ink-faint mt-1">Awaiting admin review</p>
           </div>
@@ -177,7 +177,7 @@ export function AgentDashboard() {
                           </span>
                         )}
                         {customer.status === "pending" && (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-status-warning/10 text-status-warning border border-status-warning/20">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-status-warn/10 text-status-warn border border-status-warn/20">
                             <Clock className="w-3.5 h-3.5" />
                             Pending Admin Review
                           </span>

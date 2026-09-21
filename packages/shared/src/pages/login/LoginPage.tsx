@@ -42,55 +42,55 @@ interface PortalMetadata {
 const PORTAL_META: Record<PortalType, PortalMetadata> = {
   agent: {
     name: "Agent Portal",
-    portalBadge: "FIELD AGENT PORTAL • ROAMING ID",
+    portalBadge: "AGENT PORTAL",
     badgeClass: "bg-signal/15 text-signal-bright border-signal/30",
     iconColor: "text-signal-bright",
     glowColor: "rgba(0, 200, 150, 0.15)",
-    title: "Field Agent Console",
-    description: "Sign in with your Field Agent credentials to register customers, verify merchants, and formalize walk-in cases.",
-    emailPlaceholder: "agent.john@milipay.app",
-    roleNotice: "Strictly for Field Agents. Use HF-FP08PV / VP930Pro terminal hardware for biometric capture.",
+    title: "Sign in",
+    description: "Register customers, capture biometrics and submit enrolments for approval.",
+    emailPlaceholder: "you@milipay.app",
+    roleNotice: "Enrolment needs a palm scanner connected to this device.",
     roleNoticeBg: "bg-signal/10 border-signal/20 text-signal-bright",
-    terminalHint: "Handheld Terminal Active (HF-FP08PV / VP930Pro)",
+    terminalHint: "Agent Portal",
   },
   admin: {
     name: "Admin Panel",
-    portalBadge: "ADMIN PANEL • MASTER CLEARANCE",
+    portalBadge: "ADMIN",
     badgeClass: "bg-status-warn/15 text-status-warn border-status-warn/30",
     iconColor: "text-status-warn",
     glowColor: "rgba(255, 180, 84, 0.15)",
-    title: "Supervisory Sign In",
-    description: "Authenticate with administrative clearance to manage KYB reviews, merchant blacklisting, and master ledgers.",
-    emailPlaceholder: "admin@milipay.app",
-    roleNotice: "Restricted Access. All administrative actions and audit trails are logged under NDPA protocols.",
+    title: "Sign in",
+    description: "Approve enrolments, manage merchants and staff, and resolve payments that need a decision.",
+    emailPlaceholder: "you@milipay.app",
+    roleNotice: "Every action here is recorded against your account.",
     roleNoticeBg: "bg-status-warn/10 border-status-warn/20 text-status-warn",
-    terminalHint: "Master Financial Switch Clearance Level 1",
+    terminalHint: "Admin Panel",
   },
   support: {
     name: "Service Portal",
-    portalBadge: "SERVICE PORTAL • CUSTOMER DESK",
+    portalBadge: "SUPPORT",
     badgeClass: "bg-status-info/15 text-status-info border-status-info/30",
     iconColor: "text-status-info",
     glowColor: "rgba(59, 130, 246, 0.15)",
-    title: "Customer Support Desk",
-    description: "Sign in to monitor live customer chat queues, resolve disputes, and manage two-tier ticket escalations.",
-    emailPlaceholder: "support.sarah@milipay.app",
-    roleNotice: "Strictly for Support Staff. Online live chats and tier-1 ticket resolutions.",
+    title: "Sign in",
+    description: "Answer customer chats, work the ticket queue and escalate what you cannot resolve.",
+    emailPlaceholder: "you@milipay.app",
+    roleNotice: "For the support team.",
     roleNoticeBg: "bg-status-info/10 border-status-info/20 text-status-info",
-    terminalHint: "Two-Tier Formal Dispute Switch Active",
+    terminalHint: "Service Portal",
   },
   merchant: {
     name: "Merchant Portal",
-    portalBadge: "MERCHANT PORTAL • STORE MANAGER",
+    portalBadge: "MERCHANT",
     badgeClass: "bg-status-ok/15 text-status-ok border-status-ok/30",
     iconColor: "text-status-ok",
     glowColor: "rgba(51, 224, 181, 0.15)",
-    title: "Merchant Store Console",
-    description: "Sign in to track real-time store transactions, monitor HFSecurity HP605PV terminals, and review Mono payouts.",
-    emailPlaceholder: "store@merchant.com",
-    roleNotice: "Registered Merchant Account. Split settlements (98.5%) and terminal telemetry.",
+    title: "Sign in",
+    description: "See your sales, your terminals and what has been settled to your account.",
+    emailPlaceholder: "you@yourbusiness.com",
+    roleNotice: "For registered merchants.",
     roleNoticeBg: "bg-status-ok/10 border-status-ok/20 text-status-ok",
-    terminalHint: "Smart POS Fleet Connected (HP605PV / HF-MP50)",
+    terminalHint: "Merchant Portal",
   },
 };
 
@@ -252,8 +252,8 @@ export default function LoginPage({ portal }: LoginPageProps) {
             <span>{meta.portalBadge}</span>
           </div>
 
-          <span className="text-[11px] font-mono text-ink-faint">
-            TLS 1.3 • AES-256
+          <span className="text-[11px] text-ink-faint">
+            {meta.name}
           </span>
         </div>
 
@@ -286,7 +286,7 @@ export default function LoginPage({ portal }: LoginPageProps) {
                   {meta.title}
                 </h1>
                 <p className="text-xs text-ink-muted leading-tight">
-                  {meta.name} • Sovereign Node
+                  {meta.description}
                 </p>
               </div>
             </div>
@@ -310,7 +310,7 @@ export default function LoginPage({ portal }: LoginPageProps) {
               <div className="relative">
                 <Mail className="absolute left-4 top-[42px] w-[18px] h-[18px] text-ink-faint pointer-events-none" />
                 <Input
-                  label="Authorized Email"
+                  label="Email"
                   type="email"
                   placeholder={meta.emailPlaceholder}
                   value={email}
@@ -323,7 +323,7 @@ export default function LoginPage({ portal }: LoginPageProps) {
               <div className="relative">
                 <KeyRound className="absolute left-4 top-[42px] w-[18px] h-[18px] text-ink-faint pointer-events-none" />
                 <Input
-                  label="Password Clearance"
+                  label="Password"
                   type="password"
                   placeholder="••••••••••••"
                   value={password}
@@ -340,7 +340,7 @@ export default function LoginPage({ portal }: LoginPageProps) {
                 disabled={!!lockoutTime}
                 className="w-full mt-2 font-semibold shadow-lg"
               >
-                {lockoutTime ? `Locked (${lockoutCountdown}s)` : "Authenticate & Enter"}
+                {lockoutTime ? `Locked — try again in ${lockoutCountdown}s` : "Sign in"}
               </Button>
             </form>
 
@@ -359,7 +359,7 @@ export default function LoginPage({ portal }: LoginPageProps) {
         <div className="mt-8 pt-6 border-t border-white/[0.06] flex flex-col gap-4">
           <div>
             <span className="text-[11px] font-mono uppercase tracking-wider text-ink-faint block mb-2">
-              Switch Management Console:
+              Other portals
             </span>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {PORTAL_LINKS.map((p) => {
@@ -389,7 +389,7 @@ export default function LoginPage({ portal }: LoginPageProps) {
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-between text-[11px] font-mono text-ink-faint gap-2">
-            <span>NDPA Data Sovereign • Sub-200ms Biometric In-Memory Verification</span>
+            <span>Biometric data is held in Nigeria and never leaves MiliPay infrastructure.</span>
             <span>MiliPay Financial Switch v2.4</span>
           </div>
         </div>

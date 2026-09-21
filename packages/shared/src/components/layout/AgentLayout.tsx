@@ -79,7 +79,7 @@ export function AgentLayout() {
           )}
           <button 
             onClick={() => setIsLogoutModalOpen(true)}
-            className="flex items-center gap-3 px-3 py-2 rounded-xl text-ink-muted hover:text-status-warning hover:bg-status-warning/10 transition-colors w-full text-left text-xs font-medium"
+            className="flex items-center gap-3 px-3 py-2 rounded-xl text-ink-muted hover:text-status-warn hover:bg-status-warn/10 transition-colors w-full text-left text-xs font-medium"
           >
             <LogOut className="w-4 h-4" />
             <span>Sign Out</span>

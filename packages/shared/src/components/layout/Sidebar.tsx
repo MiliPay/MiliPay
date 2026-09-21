@@ -59,7 +59,7 @@ export function Sidebar() {
           </NavLink>
           <NavLink to={ROUTES.terminals} className={navLinkClasses}>
             <Cpu className="w-[18px] h-[18px]" />
-            POS Terminals
+            POS terminals
           </NavLink>
           <NavLink to={ROUTES.transactions} className={navLinkClasses}>
             <TrendingUp className="w-[18px] h-[18px]" />
@@ -75,7 +75,7 @@ export function Sidebar() {
             <>
               <NavLink to={ROUTES.staff} className={navLinkClasses}>
                 <Shield className="w-[18px] h-[18px]" />
-                Team Management
+                Staff
               </NavLink>
 
               <NavLink to={ROUTES.operations} className={navLinkClasses}>
@@ -85,7 +85,7 @@ export function Sidebar() {
 
               <NavLink to={ROUTES.support} className={navLinkClasses}>
                 <Ticket className="w-[18px] h-[18px]" />
-                Support & Escalations
+                Support
               </NavLink>
               <NavLink to={ROUTES.settings} className={navLinkClasses}>
                 <Settings className="w-[18px] h-[18px]" />
@@ -99,7 +99,7 @@ export function Sidebar() {
       <div className="p-4 border-t border-white/[0.05]">
         <button
           onClick={() => setIsLogoutModalOpen(true)}
-          className="flex items-center w-full gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:text-status-warning hover:bg-status-warning/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-status-warning focus-visible:outline-offset-2"
+          className="flex items-center w-full gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:text-status-warn hover:bg-status-warn/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-status-warn focus-visible:outline-offset-2"
         >
           <LogOut className="w-5 h-5" />
           <span className="font-medium text-sm">Log out</span>

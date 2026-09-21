@@ -1,6 +1,17 @@
 import { useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { LayoutGrid, Users, TrendingUp, UserPlus, Shield, Ticket, Settings } from "lucide-react";
+import {
+  LayoutGrid,
+  Users,
+  TrendingUp,
+  UserPlus,
+  Shield,
+  Ticket,
+  Settings,
+  Store,
+  Cpu,
+  Activity,
+} from "lucide-react";
 import { Sidebar } from "@milipay/shared/components/layout/Sidebar";
 import { MobileNav } from "@milipay/shared/components/layout/MobileNav";
 import { MobileHeader, type MobileNavItem } from "@milipay/shared/components/layout/MobileHeader";
@@ -16,10 +27,13 @@ export default function DashboardLayout() {
   const navItems: MobileNavItem[] = [
     { name: "Dashboard", path: ROUTES.dashboard, icon: LayoutGrid, end: true },
     { name: "Customers", path: ROUTES.customers, icon: Users },
+    { name: "Merchants", path: ROUTES.merchants, icon: Store },
+    { name: "POS terminals", path: ROUTES.terminals, icon: Cpu },
     { name: "Transactions", path: ROUTES.transactions, icon: TrendingUp },
-    { name: "Register Customer", path: ROUTES.register, icon: UserPlus },
-    { name: "Team Management", path: ROUTES.staff, icon: Shield },
-    { name: "Support & Escalations", path: ROUTES.support, icon: Ticket },
+    { name: "Operations", path: ROUTES.operations, icon: Activity },
+    { name: "Register", path: ROUTES.register, icon: UserPlus },
+    { name: "Staff", path: ROUTES.staff, icon: Shield },
+    { name: "Support", path: ROUTES.support, icon: Ticket },
     { name: "Settings", path: ROUTES.settings, icon: Settings },
   ];
 
