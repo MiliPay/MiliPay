@@ -1039,8 +1039,24 @@ export default function HomeScreen({ navigation }: any) {
       try {
         const code = data.getAuthCode();
         await linkMonoAccount(code);
+
+        // Linking is the moment a customer is thinking about how much this
+        // account should be allowed to move, so offer the limits screen here
+        // rather than leaving it buried in Settings.
+        Alert.alert(
+          'Bank account linked',
+          'Would you like to set your transaction limits now? You can always change them later in Settings.',
+          [
+            { text: 'Later', style: 'cancel' },
+            { text: 'Set limits', onPress: () => navigation.navigate('AccountLimits') },
+          ]
+        );
       } catch (err) {
         console.error("Mono link error", err);
+        Alert.alert(
+          'Could not link account',
+          err instanceof Error ? err.message : 'Please try again.'
+        );
       }
     }
   };
