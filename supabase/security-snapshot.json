@@ -604,6 +604,14 @@
   "functions": [
     {
       "anon_execute": false,
+      "args": "p_reference text, p_action text, p_note text",
+      "authenticated_execute": true,
+      "name": "admin_resolve_transaction",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
       "args": "p_merchant_id uuid, p_status text, p_fee_percent numeric",
       "authenticated_execute": true,
       "name": "admin_update_merchant_controls",
@@ -723,6 +731,14 @@
       "security_definer": true
     },
     {
+      "anon_execute": false,
+      "args": "p_candidate text",
+      "authenticated_execute": false,
+      "name": "reconcile_secret_matches",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
       "anon_execute": true,
       "args": "",
       "authenticated_execute": true,
@@ -735,6 +751,14 @@
       "args": "",
       "authenticated_execute": false,
       "name": "rls_auto_enable",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "p_task text",
+      "authenticated_execute": false,
+      "name": "run_reconcile_task",
       "search_path_pinned": true,
       "security_definer": true
     },
@@ -807,6 +831,14 @@
       "args": "p_pin text",
       "authenticated_execute": true,
       "name": "verify_own_pin",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "p_hours integer",
+      "authenticated_execute": true,
+      "name": "vtu_operations_snapshot",
       "search_path_pinned": true,
       "security_definer": true
     }

@@ -25,4 +25,5 @@ export const ROUTES = {
   staffDetails: "/dashboard/staff/:id",
   support: "/dashboard/support",
   supportDetails: "/dashboard/support/:id",
+  operations: "/dashboard/operations",
 } as const;

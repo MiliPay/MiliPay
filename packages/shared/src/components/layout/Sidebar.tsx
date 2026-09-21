@@ -1,6 +1,18 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutGrid, LogOut, Settings, UserPlus, Users, TrendingUp, Shield, Ticket, Store, Cpu } from "lucide-react";
+import {
+  LayoutGrid,
+  LogOut,
+  Settings,
+  UserPlus,
+  Users,
+  TrendingUp,
+  Shield,
+  Ticket,
+  Store,
+  Cpu,
+  Activity,
+} from "lucide-react";
 import { useAuth } from "@milipay/shared/features/auth/AuthContext";
 import { ROUTES } from "@milipay/shared/lib/constants";
 import { LogoutModal } from "@milipay/shared/components/layout/LogoutModal";
@@ -64,6 +76,11 @@ export function Sidebar() {
               <NavLink to={ROUTES.staff} className={navLinkClasses}>
                 <Shield className="w-[18px] h-[18px]" />
                 Team Management
+              </NavLink>
+
+              <NavLink to={ROUTES.operations} className={navLinkClasses}>
+                <Activity className="w-[18px] h-[18px]" />
+                Operations
               </NavLink>
 
               <NavLink to={ROUTES.support} className={navLinkClasses}>
