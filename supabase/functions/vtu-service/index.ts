@@ -13,6 +13,10 @@ import {
 } from "../_shared/auth.ts";
 import { enforceTransactionLimits } from "../_shared/limits.ts";
 import {
+  disabledMessage,
+  readFulfilmentEnvironment,
+} from "../_shared/environment.ts";
+import {
   bigisubNetworkId,
   fetchSmePlans,
   fetchVtpassVariations,
@@ -301,6 +305,30 @@ serve(handler(async (req) => {
   }
 
   // ---- Purchase ---------------------------------------------------------
+  //
+  // Vending spends MiliPay's own money at VTPass/BigiSub, and until the Mono
+  // debit rail exists it spends it against linked_accounts.balance — a figure
+  // copied once from the customer's bank at link time and never reconciled.
+  // That is not a ledger, so this path stays shut until the rail is built.
+  //
+  // Catalogue browsing above is unaffected: it moves no money.
+  const { mode, coherence } = readFulfilmentEnvironment(Deno.env);
+
+  if (!coherence.ok) {
+    // Misconfiguration, not a customer problem. Loud in logs, vague to the
+    // caller, and it must never fall through to a provider call.
+    console.error("[vtu] refusing to fulfil:", coherence.reason);
+    throw new ApiError(
+      "Quick services are misconfigured and have been disabled.",
+      503,
+      "FULFILMENT_MISCONFIGURED",
+    );
+  }
+
+  if (mode !== "live") {
+    throw new ApiError(disabledMessage(mode), 503, "FULFILMENT_DISABLED");
+  }
+
   const input = parse(purchaseSchema, body);
 
   await rateLimit(admin, `vtu:purchase:${caller.id}`, 10, 60);

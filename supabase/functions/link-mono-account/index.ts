@@ -100,7 +100,8 @@ serve(async (req) => {
     }
 
     const accountData = await accountRes.json();
-    console.log("Mono Account Response:", JSON.stringify(accountData));
+    // The full Mono payload carries the customer's account number, name and
+    // balance. It used to be written to the function log in full.
     
     // v2 structure: { data: { account: { name, account_number, balance, institution: { name } }, meta: {...} } }
     const acct = accountData?.data?.account || accountData?.data || accountData;
