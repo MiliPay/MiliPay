@@ -141,9 +141,15 @@ export function rejectionMessage(fullName: string, reason: string): string {
 /** Cryptographically secure temporary password. Math.random() is not. */
 export function generateTempPassword(): string {
   // No look-alike characters: this gets read off a phone screen and typed.
+  // 0/O and 1/l/I are all excluded, including from the trailing digit — that
+  // used to be picked with % 10, which put a 0 or a 1 back in and defeated the
+  // whole point of the alphabet.
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const digits = "23456789";
+
   const bytes = crypto.getRandomValues(new Uint8Array(12));
   const body = Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
-  const digit = crypto.getRandomValues(new Uint8Array(1))[0] % 10;
+  const digit = digits[crypto.getRandomValues(new Uint8Array(1))[0] % digits.length];
+
   return `${body}#${digit}`;
 }

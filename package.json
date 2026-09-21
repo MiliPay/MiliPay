@@ -14,7 +14,9 @@
     "scan-secrets": "node scripts/scan-secrets.mjs --history",
     "scan-secrets:staged": "node scripts/scan-secrets.mjs --staged",
     "check-migrations": "node scripts/check-migrations.mjs",
-    "schema-snapshot": "node scripts/schema-snapshot.mjs"
+    "schema-snapshot": "node scripts/schema-snapshot.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "dotenv": "^17.4.2"
@@ -23,6 +25,7 @@
     "@rollup/rollup-win32-x64-msvc": "^4.62.5"
   },
   "devDependencies": {
-    "pgsql-parser": "^13.19.1"
+    "pgsql-parser": "^13.19.1",
+    "vitest": "^2.1.9"
   }
 }

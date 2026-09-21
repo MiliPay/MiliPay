@@ -81,6 +81,23 @@ jobs:
       - name: Validate migrations
         run: npm run check-migrations
 
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci || npm install
+
+      # Covers the tier ceilings, the customer-limit clamp and the payment
+      # split — the arithmetic that decides how much money moves — plus the
+      # agreement between the four independent copies of the tier table.
+      - run: npm test
+
   schema-drift:
     name: Schema drift
     runs-on: ubuntu-latest

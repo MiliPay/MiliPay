@@ -9,6 +9,7 @@ import {
   staffRole,
 } from "../_shared/auth.ts";
 import { enforceTransactionLimits } from "../_shared/limits.ts";
+import { splitPayment } from "../_shared/tier-math.ts";
 import { matchPalm } from "../_shared/biometrics.ts";
 
 /**
@@ -133,9 +134,14 @@ serve(handler(async (req) => {
   });
 
   // 6. Split settlement. Stored in Naira, numeric(12,2).
-  const feePercent = Number(merchant.platform_fee_percent ?? 1.5);
-  const feeAmount = Math.round(amount * (feePercent / 100) * 100) / 100;
-  const netMerchantAmount = Math.round((amount - feeAmount) * 100) / 100;
+  //    splitPayment derives the merchant's net by subtraction rather than
+  //    rounding it independently, so fee + net is always exactly the amount
+  //    charged. It lives in tier-math.ts, which the test suite exercises
+  //    directly, so these are the same numbers the tests assert.
+  const { feePercent, feeAmount, netMerchantAmount } = splitPayment(
+    amount,
+    Number(merchant.platform_fee_percent ?? 1.5),
+  );
   const authCode = `APPR-${100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000)}`;
 
   // 7. Record the transaction. A ledger write that fails must decline the

@@ -1,23 +1,13 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { ApiError } from "./auth.ts";
+import { effectiveLimits, tierFor } from "./tier-math.ts";
 
-export interface TierLimit {
-  tier: number;
-  name: string;
-  maxSingle: number;
-  maxDaily: number;
-}
-
-/** CBN-aligned KYC tiers. Mirrors TIER_LIMITS in packages/shared/src/types. */
-export const TIER_LIMITS: Record<number, TierLimit> = {
-  1: { tier: 1, name: "Tier 1", maxSingle: 50_000, maxDaily: 200_000 },
-  2: { tier: 2, name: "Tier 2", maxSingle: 150_000, maxDaily: 500_000 },
-  3: { tier: 3, name: "Tier 3", maxSingle: 250_000, maxDaily: 1_000_000 },
-};
-
-export function tierFor(kycTier: number): TierLimit {
-  return TIER_LIMITS[kycTier] ?? TIER_LIMITS[2];
-}
+// The tier table and the clamping arithmetic live in tier-math.ts, which has
+// no imports so the test suite can exercise the exact code that enforces a
+// payment rather than a copy of it. Re-exported here so existing importers of
+// this module keep working.
+export { TIER_LIMITS, tierFor, effectiveLimits } from "./tier-math.ts";
+export type { TierLimit } from "./tier-math.ts";
 
 const naira = (n: number) => "₦" + n.toLocaleString("en-NG");
 
@@ -43,19 +33,10 @@ export async function enforceTransactionLimits(
 ): Promise<void> {
   const { authUserId, customerId, amount, kycTier, pinThreshold, pin } = opts;
   const tier = tierFor(kycTier);
-
-  // A customer may tighten their own limits but never loosen them, so the
-  // effective cap is whichever is lower. set_transaction_limits already clamps
-  // on write; taking the minimum again here means a stale or hand-edited row
-  // still cannot raise a cap above the tier.
-  const limits = {
-    ...tier,
-    maxSingle: Math.min(tier.maxSingle, opts.singleLimit ?? tier.maxSingle),
-    maxDaily: Math.min(tier.maxDaily, opts.dailyLimit ?? tier.maxDaily),
-  };
+  const limits = effectiveLimits(kycTier, opts.singleLimit, opts.dailyLimit);
 
   if (amount > limits.maxSingle) {
-    const isCustomerSet = limits.maxSingle < tier.maxSingle;
+    const isCustomerSet = limits.singleIsCustomerSet;
     throw new ApiError(
       isCustomerSet
         ? `Transaction of ${naira(amount)} exceeds the ${naira(limits.maxSingle)} per-transaction limit you set. Raise it in the app to continue.`
@@ -115,7 +96,7 @@ export async function enforceTransactionLimits(
   const spentToday = Number(spent ?? 0);
   if (spentToday + amount > limits.maxDaily) {
     const remaining = Math.max(0, limits.maxDaily - spentToday);
-    const isCustomerSet = limits.maxDaily < tier.maxDaily;
+    const isCustomerSet = limits.dailyIsCustomerSet;
     throw new ApiError(
       `Daily limit of ${naira(limits.maxDaily)} reached${isCustomerSet ? " (limit you set)" : ` for ${tier.name}`}. ` +
         `Remaining today: ${naira(remaining)}. Resets at 00:00 WAT.`,
