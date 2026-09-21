@@ -241,16 +241,35 @@ export async function onboardMerchant(draft: MerchantDraft): Promise<OnboardMerc
 }
 
 
+/**
+ * Merchant status, blacklisting and the platform fee all go through one
+ * role-checked definer RPC.
+ *
+ * They used to be direct client updates against public.merchants, where
+ * `authenticated` held unrestricted UPDATE and a policy let a merchant session
+ * write its own row — so a merchant could set platform_fee_percent to 0, undo
+ * their own blacklisting, or point settlements at a different bank account.
+ * The client no longer holds UPDATE on that table at all.
+ */
+async function setMerchantControls(
+  merchantId: string,
+  controls: { status?: MerchantStatus; feePercent?: number }
+): Promise<void> {
+  const { data, error } = await supabase.rpc("admin_update_merchant_controls", {
+    p_merchant_id: merchantId,
+    p_status: controls.status ?? null,
+    p_fee_percent: controls.feePercent ?? null,
+  });
+
+  if (error) throw new Error(error.message);
+  if (!data?.success) throw new Error(data?.error || "Could not update the merchant.");
+}
+
 export async function updateMerchantStatus(
   merchantId: string,
   status: MerchantStatus
 ): Promise<void> {
-  const { error } = await supabase
-    .from("merchants")
-    .update({ status, updated_at: new Date().toISOString() })
-    .eq("id", merchantId);
-
-  if (error) throw error;
+  await setMerchantControls(merchantId, { status });
 }
 
 export async function blacklistMerchant(
@@ -258,62 +277,52 @@ export async function blacklistMerchant(
   blacklist: boolean
 ): Promise<void> {
   const status: MerchantStatus = blacklist ? "blacklisted" : "active";
-  const { error } = await supabase
-    .from("merchants")
-    .update({ status, updated_at: new Date().toISOString() })
-    .eq("id", merchantId);
+  await setMerchantControls(merchantId, { status });
 
-  if (error) throw error;
-
-  // When blacklisting, lock down all attached POS terminals immediately
+  // Lock the attached terminals down immediately. This is a second statement
+  // and could in principle fail on its own, but a blacklisted merchant already
+  // cannot take payment: process-payment rejects any merchant whose status is
+  // not 'active' before it looks at the palm. So a terminal left showing as
+  // live here is a display concern, not an open till.
   if (blacklist) {
-    await supabase
+    const { error } = await supabase
       .from("pos_terminals")
       .update({ is_active: false })
       .eq("merchant_id", merchantId);
+
+    if (error) {
+      console.error("Merchant blacklisted but terminals were not deactivated:", error.message);
+    }
   }
 }
 
+/**
+ * Delete a merchant and everything hanging off it.
+ *
+ * The client-side cascade that used to run when the RPC failed has been
+ * removed. It began by setting transactions.merchant_id = NULL for every
+ * payment the merchant had ever taken — destroying the link between a payment
+ * and who received it, which is exactly the record a payments system must keep
+ * — and then deleted terminals and the merchant row in separate unatomic
+ * statements. Since `authenticated` has no UPDATE on transactions, the first
+ * step silently did nothing and the rest ran anyway, leaving orphans.
+ *
+ * The RPC does the whole cascade in one transaction. If it fails, nothing
+ * happened, and that is the correct outcome.
+ */
 export async function deleteMerchant(merchantId: string): Promise<void> {
-  // Call the cascade RPC function first (handles decoupling transactions, terminals, auth.users)
   const { error } = await supabase.rpc("delete_merchant_cascade", {
     target_merchant_id: merchantId,
   });
 
-  if (error) {
-    console.warn("RPC delete_merchant_cascade failed or not present, executing client-side cascade fallback:", error);
-    // Fallback: Decouple transactions first
-    await supabase
-      .from("transactions")
-      .update({ merchant_id: null })
-      .eq("merchant_id", merchantId);
-
-    // Delete terminals
-    await supabase
-      .from("pos_terminals")
-      .delete()
-      .eq("merchant_id", merchantId);
-
-    // Delete merchant
-    const { error: delErr } = await supabase
-      .from("merchants")
-      .delete()
-      .eq("id", merchantId);
-
-    if (delErr) throw delErr;
-  }
+  if (error) throw new Error(error.message || "Could not delete the merchant.");
 }
 
 export async function updateMerchantFee(
   merchantId: string,
   feePercent: number
 ): Promise<void> {
-  const { error } = await supabase
-    .from("merchants")
-    .update({ platform_fee_percent: feePercent, updated_at: new Date().toISOString() })
-    .eq("id", merchantId);
-
-  if (error) throw error;
+  await setMerchantControls(merchantId, { feePercent });
 }
 
 export async function fetchAllTerminals(): Promise<POSTerminal[]> {

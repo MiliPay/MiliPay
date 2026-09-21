@@ -203,93 +203,6 @@
         "status",
         "updated_at"
       ],
-      "grantee": "anon",
-      "privilege": "INSERT",
-      "table": "merchants"
-    },
-    {
-      "columns": [
-        "address",
-        "auth_user_id",
-        "business_name",
-        "cac_rc_number",
-        "category",
-        "created_at",
-        "director_bvn",
-        "director_name",
-        "director_phone",
-        "email",
-        "id",
-        "mono_subaccount_id",
-        "onboarded_by",
-        "platform_fee_percent",
-        "settlement_account_name",
-        "settlement_account_number",
-        "settlement_bank_code",
-        "settlement_bank_name",
-        "settlement_schedule",
-        "state",
-        "status",
-        "updated_at"
-      ],
-      "grantee": "anon",
-      "privilege": "SELECT",
-      "table": "merchants"
-    },
-    {
-      "columns": [
-        "address",
-        "auth_user_id",
-        "business_name",
-        "cac_rc_number",
-        "category",
-        "created_at",
-        "director_bvn",
-        "director_name",
-        "director_phone",
-        "email",
-        "id",
-        "mono_subaccount_id",
-        "onboarded_by",
-        "platform_fee_percent",
-        "settlement_account_name",
-        "settlement_account_number",
-        "settlement_bank_code",
-        "settlement_bank_name",
-        "settlement_schedule",
-        "state",
-        "status",
-        "updated_at"
-      ],
-      "grantee": "anon",
-      "privilege": "UPDATE",
-      "table": "merchants"
-    },
-    {
-      "columns": [
-        "address",
-        "auth_user_id",
-        "business_name",
-        "cac_rc_number",
-        "category",
-        "created_at",
-        "director_bvn",
-        "director_name",
-        "director_phone",
-        "email",
-        "id",
-        "mono_subaccount_id",
-        "onboarded_by",
-        "platform_fee_percent",
-        "settlement_account_name",
-        "settlement_account_number",
-        "settlement_bank_code",
-        "settlement_bank_name",
-        "settlement_schedule",
-        "state",
-        "status",
-        "updated_at"
-      ],
       "grantee": "authenticated",
       "privilege": "INSERT",
       "table": "merchants"
@@ -322,86 +235,6 @@
       "grantee": "authenticated",
       "privilege": "SELECT",
       "table": "merchants"
-    },
-    {
-      "columns": [
-        "address",
-        "auth_user_id",
-        "business_name",
-        "cac_rc_number",
-        "category",
-        "created_at",
-        "director_bvn",
-        "director_name",
-        "director_phone",
-        "email",
-        "id",
-        "mono_subaccount_id",
-        "onboarded_by",
-        "platform_fee_percent",
-        "settlement_account_name",
-        "settlement_account_number",
-        "settlement_bank_code",
-        "settlement_bank_name",
-        "settlement_schedule",
-        "state",
-        "status",
-        "updated_at"
-      ],
-      "grantee": "authenticated",
-      "privilege": "UPDATE",
-      "table": "merchants"
-    },
-    {
-      "columns": [
-        "assigned_by",
-        "created_at",
-        "device_model",
-        "device_serial_number",
-        "id",
-        "is_active",
-        "last_heartbeat",
-        "merchant_id",
-        "terminal_api_key_hash",
-        "terminal_id"
-      ],
-      "grantee": "anon",
-      "privilege": "INSERT",
-      "table": "pos_terminals"
-    },
-    {
-      "columns": [
-        "assigned_by",
-        "created_at",
-        "device_model",
-        "device_serial_number",
-        "id",
-        "is_active",
-        "last_heartbeat",
-        "merchant_id",
-        "terminal_api_key_hash",
-        "terminal_id"
-      ],
-      "grantee": "anon",
-      "privilege": "SELECT",
-      "table": "pos_terminals"
-    },
-    {
-      "columns": [
-        "assigned_by",
-        "created_at",
-        "device_model",
-        "device_serial_number",
-        "id",
-        "is_active",
-        "last_heartbeat",
-        "merchant_id",
-        "terminal_api_key_hash",
-        "terminal_id"
-      ],
-      "grantee": "anon",
-      "privilege": "UPDATE",
-      "table": "pos_terminals"
     },
     {
       "columns": [
@@ -660,24 +493,6 @@
       "grantee": "authenticated",
       "privilege": "UPDATE",
       "table": "ticket_messages"
-    },
-    {
-      "columns": [
-        "account_used",
-        "amount",
-        "created_at",
-        "customer_id",
-        "id",
-        "merchant_id",
-        "merchant_name",
-        "reference",
-        "status",
-        "terminal_id",
-        "user_id"
-      ],
-      "grantee": "anon",
-      "privilege": "SELECT",
-      "table": "transactions"
     },
     {
       "columns": [
@@ -765,6 +580,14 @@
     }
   ],
   "functions": [
+    {
+      "anon_execute": false,
+      "args": "p_merchant_id uuid, p_status text, p_fee_percent numeric",
+      "authenticated_execute": true,
+      "name": "admin_update_merchant_controls",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
     {
       "anon_execute": false,
       "args": "",
@@ -1139,16 +962,6 @@
     },
     {
       "check": "",
-      "command": "UPDATE",
-      "name": "Merchants can update own business record",
-      "roles": [
-        "public"
-      ],
-      "table": "merchants",
-      "using": "((auth_user_id = auth.uid()) OR ((((auth.jwt() -> 'app_metadata'::text) ->> 'merchant_id'::text))::uuid = id))"
-    },
-    {
-      "check": "",
       "command": "SELECT",
       "name": "Merchants can view own business record",
       "roles": [
@@ -1475,26 +1288,6 @@
       "table": "linked_accounts"
     },
     {
-      "grantee": "anon",
-      "privilege": "DELETE",
-      "table": "merchants"
-    },
-    {
-      "grantee": "anon",
-      "privilege": "INSERT",
-      "table": "merchants"
-    },
-    {
-      "grantee": "anon",
-      "privilege": "SELECT",
-      "table": "merchants"
-    },
-    {
-      "grantee": "anon",
-      "privilege": "UPDATE",
-      "table": "merchants"
-    },
-    {
       "grantee": "authenticated",
       "privilege": "DELETE",
       "table": "merchants"
@@ -1508,31 +1301,6 @@
       "grantee": "authenticated",
       "privilege": "SELECT",
       "table": "merchants"
-    },
-    {
-      "grantee": "authenticated",
-      "privilege": "UPDATE",
-      "table": "merchants"
-    },
-    {
-      "grantee": "anon",
-      "privilege": "DELETE",
-      "table": "pos_terminals"
-    },
-    {
-      "grantee": "anon",
-      "privilege": "INSERT",
-      "table": "pos_terminals"
-    },
-    {
-      "grantee": "anon",
-      "privilege": "SELECT",
-      "table": "pos_terminals"
-    },
-    {
-      "grantee": "anon",
-      "privilege": "UPDATE",
-      "table": "pos_terminals"
     },
     {
       "grantee": "authenticated",
@@ -1633,11 +1401,6 @@
       "grantee": "authenticated",
       "privilege": "UPDATE",
       "table": "ticket_messages"
-    },
-    {
-      "grantee": "anon",
-      "privilege": "SELECT",
-      "table": "transactions"
     },
     {
       "grantee": "authenticated",
