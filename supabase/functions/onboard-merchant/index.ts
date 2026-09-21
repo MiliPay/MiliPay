@@ -1,5 +1,11 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import {
+  credentialMessage,
+  dispatchCredential,
+  generateTempPassword,
+  type DispatchResult,
+} from "../_shared/notify.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -62,7 +68,6 @@ serve(async (req) => {
       directorPhone,
       directorBvn,
       email,
-      password,
       settlementBankName,
       settlementBankCode,
       settlementAccountNumber,
@@ -110,10 +115,15 @@ serve(async (req) => {
       }
     }
 
-    // Provision Merchant Auth Login Account
+    // Provision Merchant Auth Login Account.
+    //
+    // The password is generated here with crypto and sent to the director's
+    // phone. It used to default to the literal "Password12$" and was returned
+    // in this response for the portal to render on screen.
     const cleanEmail = email?.trim().toLowerCase();
-    const defaultPassword = password || "Password12$";
+    const defaultPassword = generateTempPassword();
     let authUserId: string | null = null;
+    let credentialDispatch: DispatchResult | null = null;
 
     if (cleanEmail && cleanEmail.includes("@")) {
       try {
@@ -183,6 +193,21 @@ serve(async (req) => {
 
     // 2. Insert POS Terminal if specified
     let terminal = null;
+    // The merchant row exists by this point, so a credential message can no
+    // longer be sent for an onboarding that then failed to save.
+    if (authUserId && directorPhone) {
+      credentialDispatch = await dispatchCredential(
+        directorPhone,
+        credentialMessage(directorName, defaultPassword),
+      );
+      if (!credentialDispatch.delivered) {
+        console.error(
+          `[onboard-merchant] credential dispatch failed for ${merchant.id}`,
+          credentialDispatch.attempts,
+        );
+      }
+    }
+
     if (terminalId && deviceSerialNumber) {
       const { data: createdTerminal, error: terminalError } = await adminClient
         .from('pos_terminals')
@@ -211,8 +236,9 @@ serve(async (req) => {
         terminal,
         credentials: cleanEmail ? {
           email: cleanEmail,
-          tempPassword: defaultPassword,
           portalUrl: "https://merchant.milipayz.com",
+          delivered: credentialDispatch?.delivered ?? false,
+          deliveryChannel: credentialDispatch?.channel ?? null,
         } : null,
       }),
       {

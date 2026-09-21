@@ -21,9 +21,12 @@ export interface StaffProfile extends StaffUser {
 
 export interface CreatedStaffResult {
   profile: StaffProfile;
-  tempPassword: string;
   portalUrl: string;
   portalName: string;
+  /** Whether the one-time password reached the staff member's phone. */
+  delivered: boolean;
+  deliveryChannel: "whatsapp" | "sms" | "console" | null;
+  message: string;
 }
 
 export type CustomerStatus = "pending" | "active" | "suspended" | "rejected";
@@ -326,8 +329,10 @@ export interface MerchantDraft {
 
 export interface MerchantCredentials {
   email: string;
-  tempPassword: string;
   portalUrl: string;
+  /** Whether the one-time password reached the director's phone. */
+  delivered: boolean;
+  deliveryChannel: "whatsapp" | "sms" | "console" | null;
 }
 
 export interface MerchantTransaction {

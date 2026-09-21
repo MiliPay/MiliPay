@@ -1,5 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
-import { supabase, supabaseUrl, supabaseAnonKey } from "@milipay/shared/lib/supabase";
+import { supabase } from "@milipay/shared/lib/supabase";
 import type { 
   CreatedStaffResult, 
   PaginatedResult, 
@@ -189,6 +188,36 @@ export async function fetchStaffDetails(id: string): Promise<{
   return { profile };
 }
 
+/**
+ * Supabase wraps a non-2xx Edge Function reply in a FunctionsHttpError whose
+ * message is always "Edge Function returned a non-2xx status code". The useful
+ * part is the response body, which carries our ApiError message and code.
+ */
+async function readStaffFunctionError(error: unknown, fallback: string): Promise<string> {
+  const context = (error as { context?: Response })?.context;
+  if (context && typeof context.json === "function") {
+    try {
+      const body = await context.json();
+      if (body?.error) return String(body.error);
+      if (body?.message) return String(body.message);
+    } catch {
+      // Body was not JSON; fall through to the generic message.
+    }
+  }
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+/**
+ * Create a staff account.
+ *
+ * Previously this had three fallback tiers: a SECURITY DEFINER RPC, the Edge
+ * Function, and — if both failed — a client-side `auth.signUp()` with the anon
+ * key, which created the account outside every server-side control. All three
+ * defaulted the password to the literal "Password12$" and then displayed it.
+ *
+ * There is now one path. The server generates the password and sends it to the
+ * staff member's phone; it never comes back here.
+ */
 export async function createStaffMember(data: {
   fullName: string;
   email: string;
@@ -196,157 +225,54 @@ export async function createStaffMember(data: {
   nin: string;
   role: Role;
   state?: string;
-  password?: string;
 }): Promise<CreatedStaffResult> {
   const { data: session } = await supabase.auth.getSession();
   if (!session.session) throw new Error("Not logged in");
 
   const portal = getPortalDetails(data.role);
-  const tempPassword = data.password || "Password12$";
   const cleanEmail = data.email.trim().toLowerCase();
   const cleanNin = data.nin.replace(/\D/g, "");
   const ninLast4 = cleanNin.slice(-4);
 
-  // ── Tier 1: PostgreSQL SECURITY DEFINER RPC function ─────────
-  try {
-    const { data: rpcData, error: rpcError } = await supabase.rpc('create_staff_user', {
-      p_full_name: data.fullName.trim(),
-      p_email: cleanEmail,
-      p_phone: data.phone.trim(),
-      p_nin: cleanNin,
-      p_role: data.role,
-      p_state: data.state || null,
-      p_password: tempPassword,
-    });
-
-    if (!rpcError && rpcData?.success) {
-      return {
-        profile: {
-          id: rpcData.id,
-          fullName: data.fullName.trim(),
-          email: cleanEmail,
-          phone: data.phone.trim(),
-          nin: cleanNin,
-          ninLast4: ninLast4,
-          role: data.role,
-          status: "active",
-          state: data.state,
-          createdAt: new Date().toISOString()
-        },
-        tempPassword: tempPassword,
-        portalUrl: portal.portalUrl,
-        portalName: portal.portalName,
-      };
-    }
-  } catch (_) {
-    // RPC not installed, proceed to next tier
-  }
-
-  // ── Tier 2: Edge Function create-staff ───────────────────────
-  const accessToken = session.session.access_token;
-  try {
-    const { data: responseData, error: funcError } = await supabase.functions.invoke('create-staff', {
-      body: {
-        fullName: data.fullName.trim(),
-        email: cleanEmail,
-        phone: data.phone.trim(),
-        nin: cleanNin,
-        role: data.role,
-        state: data.state,
-        password: tempPassword,
-      },
-      headers: {
-        Authorization: `Bearer ${accessToken}`
-      }
-    });
-
-    if (!funcError && responseData?.user?.id) {
-      return {
-        profile: {
-          id: responseData.user.id,
-          fullName: data.fullName.trim(),
-          email: cleanEmail,
-          phone: data.phone.trim(),
-          nin: cleanNin,
-          ninLast4: ninLast4,
-          role: data.role,
-          status: "active",
-          state: data.state,
-          createdAt: new Date().toISOString()
-        },
-        tempPassword: responseData.tempPassword || tempPassword,
-        portalUrl: portal.portalUrl,
-        portalName: portal.portalName,
-      };
-    }
-  } catch (_) {
-    // Edge function not deployed / 404, proceed to Tier 3
-  }
-
-  // ── Tier 3: Isolated Auth Client SignUp + Profile Upsert ────
-  const ephemeralClient = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    }
-  });
-
-  const { data: authData, error: authError } = await ephemeralClient.auth.signUp({
-    email: cleanEmail,
-    password: tempPassword,
-    options: {
-      data: {
-        full_name: data.fullName.trim(),
-        nin_last_4: ninLast4,
-        role: data.role,
-        must_change_password: true,
-      }
-    }
-  });
-
-  if (authError && !authError.message.toLowerCase().includes("already registered")) {
-    console.error("SignUp error:", authError);
-    throw new Error(authError.message || "Failed to create authentication user");
-  }
-
-  const userId = authData?.user?.id || crypto.randomUUID();
-
-  // Insert profile record using the authenticated admin client
-  const { error: profileError } = await supabase.from('staff_profiles').upsert({
-    id: userId,
-    full_name: data.fullName.trim(),
-    email: cleanEmail,
-    phone: data.phone.trim(),
-    nin: cleanNin,
-    nin_last_4: ninLast4,
-    role: data.role,
-    state: data.state || null,
-    status: 'active',
-  });
-
-  if (profileError) {
-    console.error("Staff profile insert error:", profileError);
-    throw new Error(profileError.message || "Failed to save staff profile record");
-  }
-
-  return {
-    profile: {
-      id: userId,
+  const { data: response, error } = await supabase.functions.invoke("create-staff", {
+    body: {
       fullName: data.fullName.trim(),
       email: cleanEmail,
       phone: data.phone.trim(),
       nin: cleanNin,
-      ninLast4: ninLast4,
+      role: data.role,
+      state: data.state || undefined,
+    },
+  });
+
+  if (error) {
+    throw new Error(await readStaffFunctionError(error, "Failed to create staff account."));
+  }
+  if (!response?.success || !response?.userId) {
+    throw new Error(response?.error || "Failed to create staff account.");
+  }
+
+  return {
+    profile: {
+      id: response.userId,
+      fullName: data.fullName.trim(),
+      email: cleanEmail,
+      phone: data.phone.trim(),
+      nin: cleanNin,
+      ninLast4,
       role: data.role,
       status: "active",
       state: data.state,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     },
-    tempPassword: tempPassword,
     portalUrl: portal.portalUrl,
     portalName: portal.portalName,
+    delivered: Boolean(response.delivered),
+    deliveryChannel: response.deliveryChannel ?? null,
+    message: response.message ?? "Staff account created.",
   };
 }
+
 
 export async function toggleStaffStatus(id: string): Promise<boolean> {
   const { data, error: fetchError } = await supabase

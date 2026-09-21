@@ -199,74 +199,47 @@ export async function fetchMerchantById(id: string): Promise<{
   return { merchant, terminals };
 }
 
+/**
+ * Onboard a merchant.
+ *
+ * The direct-insert fallback is gone. It wrote the merchant row from the
+ * client, generated a fake mono_subaccount_id, and then reported credentials
+ * of `draft.email` / "Password12$" — for an auth account it had never created.
+ * Anyone handed those details could not log in, and the literal was a
+ * guessable default wherever it did work.
+ *
+ * One path now: the Edge Function creates the login, generates the password
+ * with crypto and sends it to the director's phone.
+ */
 export async function onboardMerchant(draft: MerchantDraft): Promise<OnboardMerchantResult> {
-  // Call Edge Function
   const { data, error } = await supabase.functions.invoke("onboard-merchant", {
     body: draft,
   });
 
-  if (!error && data?.success) {
-    return {
-      merchantId: data.merchant.id,
-      terminalId: data.terminal?.terminal_id,
-      credentials: data.credentials,
-    };
+  if (error) {
+    const context = (error as { context?: Response })?.context;
+    if (context && typeof context.json === "function") {
+      try {
+        const body = await context.json();
+        if (body?.error) throw new Error(String(body.error));
+      } catch (parseErr) {
+        if (parseErr instanceof Error && parseErr.message) throw parseErr;
+      }
+    }
+    throw new Error(error instanceof Error ? error.message : "Failed to onboard merchant.");
   }
 
-  // Fallback direct DB insert for local development / offline resilience
-  console.warn("Edge function invoke failed, executing direct client insert fallback:", error);
-  const { data: { user } } = await supabase.auth.getUser();
-
-  const { data: merchant, error: mErr } = await supabase
-    .from("merchants")
-    .insert({
-      business_name: draft.businessName,
-      category: draft.category,
-      address: draft.address,
-      state: draft.state,
-      cac_rc_number: draft.cacRcNumber || null,
-      director_name: draft.directorName,
-      directorPhone: draft.directorPhone,
-      director_bvn: draft.directorBvn || null,
-      email: draft.email || null,
-      settlement_bank_name: draft.settlementBankName,
-      settlement_bank_code: draft.settlementBankCode,
-      settlement_account_number: draft.settlementAccountNumber,
-      settlement_account_name: draft.settlementAccountName || draft.businessName,
-      mono_subaccount_id: `mono_sub_${Date.now()}`,
-      platform_fee_percent: draft.platformFeePercent || 1.50,
-      settlement_schedule: draft.settlementSchedule || "instant",
-      status: "active",
-      onboarded_by: user?.id || null,
-    })
-    .select()
-    .single();
-
-  if (mErr || !merchant) {
-    throw new Error(mErr?.message || "Failed to register merchant");
-  }
-
-  if (draft.terminalId && draft.deviceSerialNumber) {
-    await supabase.from("pos_terminals").insert({
-      terminal_id: draft.terminalId,
-      merchant_id: merchant.id,
-      device_serial_number: draft.deviceSerialNumber,
-      device_model: draft.deviceModel || "HFSecurity HP605PV",
-      is_active: true,
-      assigned_by: user?.id || null,
-    });
+  if (!data?.success || !data?.merchant?.id) {
+    throw new Error(data?.error || "Failed to onboard merchant.");
   }
 
   return {
-    merchantId: merchant.id,
-    terminalId: draft.terminalId,
-    credentials: draft.email ? {
-      email: draft.email,
-      tempPassword: draft.password || "Password12$",
-      portalUrl: "https://merchant.milipayz.com",
-    } : undefined,
+    merchantId: data.merchant.id,
+    terminalId: data.terminal?.terminal_id,
+    credentials: data.credentials ?? undefined,
   };
 }
+
 
 export async function updateMerchantStatus(
   merchantId: string,

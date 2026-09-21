@@ -50,7 +50,7 @@ CREATE POLICY "Staff can view customers"
 -- DELETE was granted to anon and authenticated. Only the admin-scoped ALL
 -- policy permits it today, so this was not exploitable, but the grant has no
 -- reason to exist: customer deletion goes through delete_customer_user.
-REVOKE DELETE ON public.customers FROM anon, authenticated;
+REVOKE DELETE ON public.customers FROM PUBLIC, anon, authenticated;
 
 -- ─────────────────────────────────────────────────────────────
 -- 2. DROP THE KYC BYPASS RPCS — CORRECT SIGNATURES THIS TIME
@@ -65,26 +65,26 @@ DROP FUNCTION IF EXISTS public.reject_customer_kyc(UUID, TEXT);
 -- 3. NO SECURITY DEFINER FUNCTION IS REACHABLE WITHOUT SIGNING IN
 --    Each still enforces its own role check; this removes the outer door.
 -- ─────────────────────────────────────────────────────────────
-REVOKE EXECUTE ON FUNCTION public.create_staff_user(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) FROM anon;
-REVOKE EXECUTE ON FUNCTION public.delete_staff_user(UUID)         FROM anon;
-REVOKE EXECUTE ON FUNCTION public.delete_customer_user(UUID)      FROM anon;
-REVOKE EXECUTE ON FUNCTION public.delete_merchant_cascade(UUID)   FROM anon;
-REVOKE EXECUTE ON FUNCTION public.unlink_bank_account(UUID)       FROM anon;
+REVOKE EXECUTE ON FUNCTION public.create_staff_user(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.delete_staff_user(UUID)         FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.delete_customer_user(UUID)      FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.delete_merchant_cascade(UUID)   FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.unlink_bank_account(UUID)       FROM PUBLIC, anon;
 
 -- Trigger functions. A trigger runs them regardless of EXECUTE, so nothing
 -- needs this privilege and neither role should be able to call them directly.
-REVOKE EXECUTE ON FUNCTION public.create_partition_and_insert()          FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.on_staff_profile_delete_cascade_auth() FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.rls_auto_enable()                      FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.create_partition_and_insert()          FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.on_staff_profile_delete_cascade_auth() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.rls_auto_enable()                      FROM PUBLIC, anon, authenticated;
 
 -- Debug helper that lists RLS policies. Not something to expose over the API.
-REVOKE EXECUTE ON FUNCTION public.get_transactions_policies() FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.get_transactions_policies() FROM PUBLIC, anon, authenticated;
 
 -- Takes an arbitrary user id and returns that person's spend, with no internal
 -- authorization check at all. Only the payment functions need it, and they run
 -- as service_role. verify_own_pin is the pattern to follow if a customer ever
 -- needs their own figure: scope it to auth.uid() inside the function.
-REVOKE EXECUTE ON FUNCTION public.get_customer_daily_spend(UUID) FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.get_customer_daily_spend(UUID) FROM PUBLIC, anon, authenticated;
 
 -- ─────────────────────────────────────────────────────────────
 -- 4. tier_caps was added in 20260921000000 without a fixed search_path.

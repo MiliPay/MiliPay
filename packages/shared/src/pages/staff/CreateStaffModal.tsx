@@ -14,12 +14,13 @@ interface CreateStaffModalProps {
   onSuccess: () => void;
 }
 
-const DEFAULT_TEMP_PASSWORD = "Password12$";
 
 export function CreateStaffModal({ isOpen, onClose, onSuccess }: CreateStaffModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copiedPassword, setCopiedPassword] = useState(false);
+  // Retained so copyToClipboard can keep signalling; the password itself is no
+  // longer rendered, so the flag has no reader.
+  const [, setCopiedPassword] = useState(false);
   const [copiedAll, setCopiedAll] = useState(false);
   const [createdResult, setCreatedResult] = useState<CreatedStaffResult | null>(null);
 
@@ -80,7 +81,6 @@ export function CreateStaffModal({ isOpen, onClose, onSuccess }: CreateStaffModa
         nin: cleanNin,
         role: formData.role,
         state: formData.role === "agent" ? formData.state : undefined,
-        password: DEFAULT_TEMP_PASSWORD,
       });
 
       setCreatedResult(result);
@@ -119,10 +119,10 @@ NIN: •••••••${createdResult.profile.ninLast4}
 
 Portal Access:
 URL: ${createdResult.portalUrl} (${createdResult.portalName})
-Default Password: ${createdResult.tempPassword}
 
 IMPORTANT:
-Please log in to your designated portal using your email and the default password (${createdResult.tempPassword}). You will be required to change your password immediately upon first login.
+A one-time password has been sent to your phone. Log in to your portal with your
+email address and that password. You will be asked to change it immediately.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
   };
 
@@ -183,21 +183,17 @@ Please log in to your designated portal using your email and the default passwor
               </a>
             </div>
 
-            {/* Default Password Box */}
+            {/* Credential delivery */}
             <div className="pt-2">
-              <span className="block text-xs text-ink-muted uppercase font-semibold mb-1.5">Temporary Default Password</span>
-              <div className="flex items-center justify-between gap-3 p-3 bg-ledger rounded-lg border border-signal/30">
-                <code className="font-mono text-sm font-bold text-signal-bright tracking-wider">
-                  {createdResult.tempPassword}
-                </code>
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(createdResult.tempPassword)}
-                  className="flex items-center gap-1 text-xs font-semibold text-ink hover:text-white bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded transition-colors"
-                >
-                  {copiedPassword ? <Check className="w-3.5 h-3.5 text-status-ok" /> : <Copy className="w-3.5 h-3.5" />}
-                  {copiedPassword ? "Copied" : "Copy"}
-                </button>
+              <span className="block text-xs text-ink-muted uppercase font-semibold mb-1.5">
+                One-time password
+              </span>
+              <div className={`p-3 rounded-lg border text-xs ${
+                createdResult.delivered
+                  ? "bg-status-ok/10 border-status-ok/25 text-status-ok"
+                  : "bg-status-fail/10 border-status-fail/25 text-status-fail"
+              }`}>
+                {createdResult.message}
               </div>
             </div>
           </div>
@@ -205,7 +201,9 @@ Please log in to your designated portal using your email and the default passwor
           <div className="p-3.5 bg-status-info/10 border border-status-info/25 rounded-lg flex items-start gap-2.5 text-xs text-ink-muted">
             <KeyRound className="w-4 h-4 text-status-info shrink-0 mt-0.5" />
             <p>
-              The staff member will be prompted to change <code className="font-mono text-white">Password12$</code> upon their first login to the {createdResult.portalName}.
+              The password is never shown here — it goes to the staff member&apos;s phone
+              and nowhere else. They will be asked to change it on first login to the{" "}
+              {createdResult.portalName}.
             </p>
           </div>
 
@@ -319,15 +317,13 @@ Please log in to your designated portal using your email and the default passwor
               />
             )}
 
-            {/* Default Password Notice */}
+            {/* Credential notice */}
             <div className="p-3.5 bg-signal/5 border border-signal/20 rounded-xl flex items-start gap-2.5">
               <KeyRound className="w-4 h-4 text-signal-bright shrink-0 mt-0.5" />
               <div className="text-xs leading-relaxed text-ink-muted">
-                The account will be provisioned with default temporary password:{" "}
-                <code className="font-mono font-bold text-signal-bright bg-white/5 px-1.5 py-0.5 rounded border border-signal/30">
-                  Password12$
-                </code>
-                . The staff member will be required to change it when logging into their portal.
+                A one-time password is generated on the server and sent to the phone
+                number above on WhatsApp, falling back to SMS. It is not shown to you,
+                and the staff member must change it on first login.
               </div>
             </div>
           </div>

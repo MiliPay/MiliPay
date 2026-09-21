@@ -357,7 +357,10 @@ export default function StaffDetailsPage() {
 
             <div className="p-2.5 rounded-lg bg-ledger-line border border-white/[0.06] text-[11px] text-ink-muted flex items-start gap-2">
               <Key className="w-3.5 h-3.5 text-signal-bright shrink-0 mt-0.5" />
-              <span>Initial staff login credentials: <strong className="text-white">Password12$</strong></span>
+              <span>
+                A one-time password was sent to this staff member&apos;s phone at
+                creation. It is never displayed here.
+              </span>
             </div>
           </div>
         </Card>

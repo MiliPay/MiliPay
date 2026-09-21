@@ -158,15 +158,14 @@ export default function RegisterMerchantPage() {
   };
 
   if (registeredResult) {
-    const creds = registeredResult.credentials || (draft.email ? {
-      email: draft.email,
-      tempPassword: "Password12$",
-      portalUrl: "https://merchant.milipayz.com",
-    } : null);
+    // No local fabrication of credentials. If the Edge Function did not create
+    // a login there is nothing to show, and the password never reaches here in
+    // any case — it goes to the director's phone.
+    const creds = registeredResult.credentials ?? null;
 
     const handleCopyCredentials = () => {
       if (!creds) return;
-      const text = `MiliPay Merchant Portal Credentials\nStore: ${draft.businessName}\nPortal URL: ${creds.portalUrl}\nLogin Email: ${creds.email}\nTemporary Password: ${creds.tempPassword}\n\nPlease change your password upon initial sign-in.`;
+      const text = `MiliPay Merchant Portal\nStore: ${draft.businessName}\nPortal URL: ${creds.portalUrl}\nLogin Email: ${creds.email}\n\nA one-time password was sent to the director's phone. It must be changed on first sign-in.`;
       navigator.clipboard.writeText(text);
       setCopiedCreds(true);
       setTimeout(() => setCopiedCreds(false), 3000);
@@ -234,15 +233,26 @@ export default function RegisterMerchantPage() {
                   <span className="text-white font-bold">{creds.email}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-ink-muted">Temporary Password:</span>
-                  <span className="text-signal font-bold bg-signal/10 px-2 py-0.5 rounded border border-signal/20">
-                    {creds.tempPassword}
+                  <span className="text-ink-muted">One-time password:</span>
+                  <span
+                    className={`font-bold px-2 py-0.5 rounded border ${
+                      creds.delivered
+                        ? "text-status-ok bg-status-ok/10 border-status-ok/20"
+                        : "text-status-fail bg-status-fail/10 border-status-fail/20"
+                    }`}
+                  >
+                    {creds.delivered
+                      ? `Sent by ${creds.deliveryChannel ?? "message"}`
+                      : "Delivery failed"}
                   </span>
                 </div>
               </div>
 
               <p className="text-[11px] text-ink-muted pt-1">
-                Hand these login credentials to the store manager. They can access sales reports, view live palm transactions, and monitor their paired POS terminal.
+                The password is not shown here — it goes to the director&apos;s phone and
+                nowhere else. Give the store manager the portal URL and login email; they
+                can then access sales reports, live palm transactions and their paired POS
+                terminal.
               </p>
             </div>
           )}
