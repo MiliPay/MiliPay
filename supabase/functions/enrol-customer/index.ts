@@ -39,7 +39,61 @@ const bodySchema = z.object({
   state: z.string().trim().min(2).max(100),
   palmVeinTemplate: z.string().trim().min(1, "a palm vein capture is required"),
   faceTemplate: z.string().trim().min(1, "a facial capture is required"),
+
+  /**
+   * Everything RegisterPalm returns. Optional because agent shells are being
+   * updated to the v2 bridge in the field; when it is absent only the legacy
+   * customers.palm_vein_template column is written, and the customer will need
+   * re-enrolling before bimodal matching can be turned on.
+   */
+  palm: z
+    .object({
+      irFeatures: z.string().trim().min(1).nullable().optional(),
+      rgbFeatures: z.string().trim().min(1).nullable().optional(),
+      skeleton: z.string().trim().min(1).nullable().optional(),
+      hashIr: z.string().trim().nullable().optional(),
+      hashRgb: z.string().trim().nullable().optional(),
+      palmType: z.union([z.literal(0), z.literal(1)]),
+      recogMode: z.enum([
+        "kRegIrVSIr",
+        "kRegIrVSRgb",
+        "kRegRgbVSIr",
+        "kRegRgbVSRgb",
+        "kBiModal",
+      ]),
+      algorithmVersion: z.string().trim().min(1).max(120),
+      featureDim: z.number().int().positive().nullable().optional(),
+      qualityScore: z.number().min(0).max(1),
+      captureResult: z.number().int(),
+    })
+    .optional(),
 });
+
+/**
+ * base64 -> bytea literal. The feature columns hold a packed little-endian
+ * float32 array; PostgREST takes bytea as a hex-escaped string.
+ */
+function toByteaHex(base64: string | null | undefined): string | null {
+  if (!base64) return null;
+  const binary = atob(base64);
+  let hex = "";
+  for (let i = 0; i < binary.length; i++) {
+    hex += binary.charCodeAt(i).toString(16).padStart(2, "0");
+  }
+  return "\\x" + hex;
+}
+
+/** A simulated capture is base64-invalid by design; keep it out of bytea. */
+function isBase64(value: string | null | undefined): boolean {
+  if (!value) return false;
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return false;
+  try {
+    atob(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function normalisePhone(phone: string): string {
   const clean = phone.replace(/[^0-9+]/g, "");
@@ -74,7 +128,10 @@ serve(handler(async (req) => {
   const email = draft.email?.trim().toLowerCase() || null;
 
   const allowSimulated = Deno.env.get("ALLOW_SIMULATED_BIOMETRICS") === "true";
-  const palmSimulated = isSimulatedPalm(draft.palmVeinTemplate);
+  const palmSimulated =
+    isSimulatedPalm(draft.palmVeinTemplate) ||
+    isSimulatedPalm(draft.palm?.irFeatures ?? "") ||
+    draft.palm?.algorithmVersion === "simulated";
   const faceSimulated = isSimulatedFace(draft.faceTemplate);
 
   if ((palmSimulated || faceSimulated) && !allowSimulated) {
@@ -83,6 +140,27 @@ serve(handler(async (req) => {
         "Connect the enrolment hardware and capture again.",
       400,
       "SIMULATED_BIOMETRIC_REJECTED",
+    );
+  }
+
+  // RegisterPalm reports why it refused in captureResult. A non-zero value
+  // reaching the server means the client ignored its own scanner, so refuse
+  // rather than store a template the algorithm already rejected.
+  if (draft.palm && draft.palm.captureResult !== 0) {
+    throw new ApiError(
+      "The scanner did not accept this palm capture. Please capture again.",
+      400,
+      "PALM_CAPTURE_REJECTED",
+    );
+  }
+
+  // kBiModal compares infrared and colour. Enrolling in that mode with only
+  // one of them produces a template that can never match anything.
+  if (draft.palm?.recogMode === "kBiModal" && !draft.palm.rgbFeatures) {
+    throw new ApiError(
+      "Bimodal enrolment needs both an infrared and a colour capture.",
+      400,
+      "PALM_CAPTURE_INCOMPLETE",
     );
   }
 
@@ -175,6 +253,43 @@ serve(handler(async (req) => {
     }
     console.error("[enrol-customer] insert failed", insertError);
     throw new ApiError("Could not save this enrolment. Please try again.", 400, "ENROLMENT_FAILED");
+  }
+
+  // A simulated capture has no real vector, and palm_templates requires one
+  // by constraint, so it gets no row at all. customers.palm_simulated already
+  // records that the enrolment was not genuine.
+  if (draft.palm && !palmSimulated) {
+    const palm = draft.palm;
+
+    if (!isBase64(palm.irFeatures ?? "") && !isBase64(palm.rgbFeatures ?? "")) {
+      throw new ApiError(
+        "Palm features were not in the expected format.",
+        400,
+        "PALM_FEATURE_MALFORMED",
+      );
+    }
+
+    const { error: templateError } = await admin.from("palm_templates").insert({
+      customer_id: inserted.id,
+      palm_type: palm.palmType,
+      ir_features: toByteaHex(palm.irFeatures),
+      rgb_features: toByteaHex(palm.rgbFeatures),
+      skeleton: toByteaHex(palm.skeleton),
+      hash_ir: palm.hashIr ?? null,
+      hash_rgb: palm.hashRgb ?? null,
+      recog_mode: palm.recogMode,
+      algorithm_version: palm.algorithmVersion,
+      feature_dim: palm.featureDim ?? null,
+      quality_score: palm.qualityScore,
+      capture_result: palm.captureResult,
+      simulated: false,
+    });
+
+    if (templateError) {
+      // Loud, because an enrolment with no template is an account that can
+      // never pay, and an agent needs to know before the customer leaves.
+      console.error("[enrol-customer] palm template not stored", templateError);
+    }
   }
 
   // Attach the verification audit rows to the customer they belong to.

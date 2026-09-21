@@ -17,7 +17,11 @@ import {
   type CustomerRegistrationResult,
   type IdentityVerificationResult,
 } from "@milipay/shared/types";
-import { capturePalmTemplate, PalmCaptureError } from "@milipay/shared/features/biometrics/palmScanner";
+import {
+  registerPalm,
+  PalmCaptureError,
+  type PalmEnrolment,
+} from "@milipay/shared/features/biometrics/palmScanner";
 import { captureFaceTemplate, FaceCaptureError } from "@milipay/shared/features/biometrics/faceScanner";
 
 const STEPS = [
@@ -328,9 +332,15 @@ export default function RegisterCustomerPage() {
             </div>
 
             <div className="py-6">
-              <PalmVeinScanner 
-                template={draft.palmVeinTemplate} 
-                onCapture={(hash) => update("palmVeinTemplate", hash)} 
+              <PalmVeinScanner
+                template={draft.palmVeinTemplate}
+                onCapture={(enrolment) => {
+                  // Both are kept: the legacy string keeps
+                  // customers.palm_vein_template populated through the
+                  // cutover, the full record is what palm_templates stores.
+                  update("palmVeinTemplate", enrolment.template);
+                  update("palmEnrolment", enrolment);
+                }}
                 error={errorFor("palmVein")}
               />
             </div>
@@ -513,13 +523,13 @@ export default function RegisterCustomerPage() {
   );
 }
 
-function PalmVeinScanner({ 
-  template, 
+function PalmVeinScanner({
+  template,
   onCapture,
   error
-}: { 
-  template?: string; 
-  onCapture: (hash: string) => void; 
+}: {
+  template?: string;
+  onCapture: (enrolment: PalmEnrolment) => void;
   error?: string;
 }) {
   const [isScanning, setIsScanning] = useState(false);
@@ -530,9 +540,12 @@ function PalmVeinScanner({
     setIsScanning(true);
     setCaptureError(null);
     try {
-      const capture = await capturePalmTemplate();
-      setWasSimulated(capture.simulated);
-      onCapture(capture.template);
+      // registerPalm, not extractPalmFeatures: enrolment goes through the
+      // SDK's strict RegisterPalm gates, which is what makes the template good
+      // enough to match against for the life of the account.
+      const enrolment = await registerPalm();
+      setWasSimulated(enrolment.simulated);
+      onCapture(enrolment);
     } catch (err) {
       setCaptureError(
         err instanceof PalmCaptureError ? err.message : "Palm capture failed. Please try again."
@@ -552,33 +565,33 @@ function PalmVeinScanner({
           100% { top: 90%; opacity: 0; }
         }
       `}</style>
-      
+
       <div className="relative w-64 h-64 flex items-center justify-center rounded-2xl border border-signal/20 overflow-hidden bg-[#0A0D14] shadow-[inset_0_0_50px_rgba(33,219,154,0.08)]">
-        
+
         {/* Futuristic Grid Background */}
         <div className="absolute inset-0 pointer-events-none opacity-[0.04]"
              style={{
                backgroundImage: `linear-gradient(#0bc298 1px, transparent 1px), linear-gradient(90deg, #0bc298 1px, transparent 1px)`,
                backgroundSize: '16px 16px',
                backgroundPosition: 'center'
-             }} 
+             }}
         />
 
         {/* Custom 90% Carbon Copy SVG (No Brackets, No Baked Line) */}
-        <svg 
+        <svg
           className={`w-56 h-56 transition-all duration-700 z-10 ${
             template ? 'text-status-ok drop-shadow-[0_0_12px_rgba(33,219,154,0.8)] scale-95' : isScanning ? 'text-signal-bright drop-shadow-[0_0_15px_rgba(33,219,154,0.9)] scale-100' : 'text-signal/40 drop-shadow-[0_0_5px_rgba(33,219,154,0.2)] scale-100'
-          }`} 
-          viewBox="0 0 100 100" 
-          fill="none" 
-          stroke="currentColor" 
-          strokeWidth="1.2" 
-          strokeLinecap="round" 
+          }`}
+          viewBox="0 0 100 100"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
           strokeLinejoin="round"
         >
           {/* Group that clips internal details to stay inside the hand */}
           <g clipPath="url(#hand-clip)">
-            
+
             {/* Binary Code in Fingers */}
             <g fontSize="3.5" fontFamily="monospace" fill="currentColor" stroke="none" textAnchor="middle" className={isScanning ? "animate-pulse" : ""}>
               {/* Index */}
@@ -586,7 +599,7 @@ function PalmVeinScanner({
               <text x="36.5" y="40">01</text>
               <text x="36.5" y="44">11</text>
               <text x="36.5" y="48">00</text>
-              
+
               {/* Middle */}
               <text x="45.5" y="21">11</text>
               <text x="45.5" y="25">00</text>
@@ -630,7 +643,7 @@ function PalmVeinScanner({
             <path d="M 67 67 A 15 15 0 0 0 55 83" strokeWidth="1.2" />
             <path d="M 67 72 A 10 10 0 0 0 58 84" strokeWidth="1.2" />
             <path d="M 67 77 A 5 5 0 0 0 61 85" strokeWidth="1.2" />
-            
+
             {/* Wrist lines */}
             <path d="M 45 88 L 45 95" strokeWidth="1.5" />
             <path d="M 50 89 L 50 95" strokeWidth="1.5" />
@@ -638,29 +651,29 @@ function PalmVeinScanner({
           </g>
 
           {/* Master Hand Outline */}
-          <path 
-            id="hand-outline-path" 
-            d="M 40 95 
-               C 40 80, 35 70, 16 57 
-               A 4 4 0 0 1 20 50 
-               L 33 60 
-               L 33 32 
-               A 3.5 3.5 0 0 1 40 32 
-               L 40 52 
+          <path
+            id="hand-outline-path"
+            d="M 40 95
+               C 40 80, 35 70, 16 57
+               A 4 4 0 0 1 20 50
+               L 33 60
+               L 33 32
+               A 3.5 3.5 0 0 1 40 32
+               L 40 52
                L 42 52
-               L 42 17 
-               A 3.5 3.5 0 0 1 49 17 
-               L 49 52 
+               L 42 17
+               A 3.5 3.5 0 0 1 49 17
+               L 49 52
                L 51 52
-               L 51 22 
-               A 3.5 3.5 0 0 1 58 22 
-               L 58 52 
+               L 51 22
+               A 3.5 3.5 0 0 1 58 22
+               L 58 52
                L 60 52
-               L 60 37 
-               A 3.5 3.5 0 0 1 67 37 
-               L 67 65 
-               C 67 80, 62 85, 62 95 
-               Z" 
+               L 60 37
+               A 3.5 3.5 0 0 1 67 37
+               L 67 65
+               C 67 80, 62 85, 62 95
+               Z"
             strokeWidth="2"
           />
 
@@ -674,12 +687,12 @@ function PalmVeinScanner({
         {/* The sweeping laser beam (only visible when scanning) */}
         {isScanning && (
           <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden">
-            <div className="w-[85%] mx-auto h-[4px] rounded-full bg-[#1e5eb3] shadow-[0_0_12px_3px_rgba(30,94,179,0.7)]" 
-                 style={{ 
+            <div className="w-[85%] mx-auto h-[4px] rounded-full bg-[#1e5eb3] shadow-[0_0_12px_3px_rgba(30,94,179,0.7)]"
+                 style={{
                    animation: 'scan-vertical 1.5s linear infinite alternate',
                    position: 'absolute',
                    left: '7.5%'
-                 }} 
+                 }}
             />
           </div>
         )}
@@ -695,7 +708,7 @@ function PalmVeinScanner({
       </div>
 
       <div className="text-center space-y-4">
-        <Button 
+        <Button
           variant={template ? "secondary" : "primary"}
           onClick={startScan}
           disabled={isScanning}
@@ -703,7 +716,7 @@ function PalmVeinScanner({
         >
           {isScanning ? "Scanning Infrared..." : template ? "Recapture Palm" : "Start Hardware Scan"}
         </Button>
-        
+
         <div className="min-h-[1rem] space-y-2">
           {(captureError || error) && !isScanning && (
             <p className="text-xs text-status-fail font-semibold uppercase tracking-wide">

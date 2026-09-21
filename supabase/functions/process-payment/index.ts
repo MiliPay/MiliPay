@@ -10,7 +10,7 @@ import {
 } from "../_shared/auth.ts";
 import { enforceTransactionLimits } from "../_shared/limits.ts";
 import { splitPayment } from "../_shared/tier-math.ts";
-import { matchPalm } from "../_shared/biometrics.ts";
+import { matchPalm, recordMatchEvent, type RecognizeMode } from "../_shared/biometrics.ts";
 
 /**
  * Merchant POS checkout.
@@ -24,7 +24,22 @@ interface PaymentBody {
   terminalId?: string;
   merchantId?: string;
   amount?: number;
+  /** @deprecated single IR template; terminals should send irFeatures/rgbFeatures. */
   palmFeature?: string;
+  irFeatures?: string;
+  rgbFeatures?: string;
+  recogMode?: RecognizeMode;
+  /**
+   * Set when the customer identified themselves first (phone, card, QR). Its
+   * presence is what turns a gallery search into a single comparison.
+   */
+  customerHint?: string;
+  /**
+   * The last few digits of the customer's phone number. Narrows the gallery
+   * without naming anyone, which is the difference between a 1:N search that
+   * is safe at scale and one that is not.
+   */
+  partitionKey?: string;
   pin?: string;
   reference?: string;
   accountId?: string;
@@ -113,8 +128,54 @@ serve(handler(async (req) => {
   }
 
   // 4. Identify the customer by their palm. Fails closed when the sovereign
-  //    matcher is unreachable or unconfigured.
-  const match = await matchPalm(body.palmFeature ?? "");
+  //    matcher is unreachable or unconfigured. A customerHint narrows this to
+  //    a single comparison; without one the matcher searches its gallery.
+  const matchRequest = {
+    irFeatures: body.irFeatures ?? body.palmFeature ?? null,
+    rgbFeatures: body.rgbFeatures ?? null,
+    // Older terminals send one IR template and nothing else, so bimodal
+    // cannot be the default here the way it is at enrolment.
+    recogMode: body.recogMode ?? (body.rgbFeatures ? "kBiModal" : "kRegIrVSIr"),
+    customerHint: body.customerHint ?? null,
+    partitionKey: body.partitionKey ?? null,
+    merchantId: body.merchantId,
+    terminalId: body.terminalId ?? null,
+  } as const;
+
+  let match;
+  try {
+    match = await matchPalm(matchRequest);
+  } catch (err) {
+    // Record the refusal before rethrowing. A rejected scan is the datum that
+    // shows a gallery drifting past its threshold, so losing it is worse than
+    // losing a successful one.
+    await recordMatchEvent(admin, {
+      merchant_id: body.merchantId,
+      terminal_id: body.terminalId ?? null,
+      mode: body.customerHint ? "1:1" : "1:N",
+      decision:
+        err instanceof ApiError && err.code === "BIOMETRIC_SERVICE_UNAVAILABLE"
+          ? "error"
+          : "rejected",
+      error_code: err instanceof ApiError ? err.code : "UNKNOWN",
+    });
+    throw err;
+  }
+
+  await recordMatchEvent(admin, {
+    matched_customer_id: match.customerId,
+    merchant_id: body.merchantId,
+    terminal_id: body.terminalId ?? null,
+    mode: match.mode,
+    gallery_size: match.gallerySize,
+    candidates_compared: match.candidatesCompared,
+    top_score: match.score,
+    runner_up_score: match.runnerUpScore,
+    threshold: match.threshold,
+    decision: "matched",
+    latency_ms: match.latencyMs,
+    algorithm_version: match.algorithmVersion,
+  });
 
   const profile = await loadCustomerProfile(admin, match.authUserId);
   if (!profile) {

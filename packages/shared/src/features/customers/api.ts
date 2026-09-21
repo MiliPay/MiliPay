@@ -229,6 +229,23 @@ export async function registerCustomer(
       address: draft.address.trim(),
       state: draft.state,
       palmVeinTemplate: draft.palmVeinTemplate,
+      // Absent on agent shells still running the v1 bridge. The Edge Function
+      // treats it as optional and falls back to the legacy column.
+      palm: draft.palmEnrolment
+        ? {
+            irFeatures: draft.palmEnrolment.irFeatures,
+            rgbFeatures: draft.palmEnrolment.rgbFeatures,
+            skeleton: draft.palmEnrolment.skeleton,
+            hashIr: draft.palmEnrolment.hashIr,
+            hashRgb: draft.palmEnrolment.hashRgb,
+            palmType: draft.palmEnrolment.palmType,
+            recogMode: draft.palmEnrolment.recogMode,
+            algorithmVersion: draft.palmEnrolment.algorithmVersion,
+            featureDim: draft.palmEnrolment.featureDim,
+            qualityScore: draft.palmEnrolment.qualityScore,
+            captureResult: draft.palmEnrolment.captureResult,
+          }
+        : undefined,
       faceTemplate: draft.faceTemplate,
     },
   });

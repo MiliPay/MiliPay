@@ -1,3 +1,7 @@
+import type { PalmEnrolment } from "../features/biometrics/palmScanner";
+
+export type { PalmEnrolment };
+
 export type Role = "agent" | "admin" | "super_admin" | "support" | "merchant";
 
 export interface StaffUser {
@@ -186,6 +190,11 @@ export interface CustomerDraft {
   address: string;
   state: string;
   palmVeinTemplate: string;
+  /**
+   * Everything RegisterPalm returned. palmVeinTemplate above is the legacy
+   * single string, kept until customers.palm_vein_template is retired.
+   */
+  palmEnrolment?: PalmEnrolment;
   faceTemplate: string;
   /** Result of the pre-submit NIN check, for display only. The server re-checks. */
   ninVerification?: IdentityVerificationResult;
@@ -202,6 +211,7 @@ export const EMPTY_CUSTOMER_DRAFT: CustomerDraft = {
   address: "",
   state: "",
   palmVeinTemplate: "",
+  palmEnrolment: undefined,
   faceTemplate: "",
   ninVerification: undefined,
 };

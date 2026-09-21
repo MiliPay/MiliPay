@@ -111,17 +111,22 @@ virtual int GetRecognitionThreshold(float& ir_threshold, float& rgb_threshold,
                                     RecognizeMode recog_mode) = 0;
 ```
 
-`PALM_MATCH_THRESHOLD=0.82` in `.env.example` is a number I made up months ago.
-Replace it with the SDK value read at matcher start-up, per recognition mode,
-and keep the env var only as an override that can *tighten* it.
+`PALM_MATCH_THRESHOLD=0.82` in `.env.example` was a number I made up months
+ago. It is now the matcher's job to report `GetRecognitionThreshold()` and the
+env var can only ever *tighten* what it reports — see `resolveThreshold()` in
+`supabase/functions/_shared/match-math.ts`.
 
 ---
 
-## 3. Where our current code disagrees with the SDK
+## 3. Where our code disagreed with the SDK
 
-### 3.1 We store one string; the SDK produces nine fields
+> **Status:** 3.1, 3.2 and 3.5 are fixed — see §11. 3.3 and 3.4 are open
+> questions for the vendor, not things we can fix. This section is kept because
+> it is the reasoning behind the schema, not a to-do list.
 
-Live schema (verified against the database, not the migrations):
+### 3.1 We stored one string; the SDK produces nine fields — FIXED
+
+The schema before (verified against the live database, not the migrations):
 
 ```
 customers.palm_vein_template  text
@@ -146,7 +151,7 @@ Most important: `RegisterPalmInput.recog_mode` **defaults to `kBiModal`**, which
 needs both IR and RGB features at compare time. With one text column we can
 never do bimodal. We are currently locked into the weakest mode by our schema.
 
-### 3.2 We do not record the mode or the algorithm version
+### 3.2 We did not record the mode or the algorithm version — FIXED
 
 `matchPalm()` hardcodes `mode: "kRegIrVSIr"`. If enrolment ever runs in a
 different mode, or the model blob is upgraded, matching silently degrades with
@@ -174,7 +179,7 @@ Linux/Windows return `std::vector<float>`; Android returns `byte[]`. If agents
 enrol on a Windows laptop and merchants verify on an Android terminal, the
 serialisation must be identical. Unconfirmed — question 2 in §7.
 
-### 3.5 Our capture hints are a partial copy of the SDK's
+### 3.5 Our capture hints were a partial copy of the SDK's — FIXED
 
 `CAPTURE_HINTS` covers 7 of the 20+ values in `PalmDetectResult` / the Android
 `Hint` enum. The full set, with the vendor's own English copy, is in §8.
@@ -238,27 +243,131 @@ build.
 
 ---
 
-## 5. The merchant 1:N problem
+## 5. 1:N — what is possible and what is not
 
-"Customer walks up, puts palm down, we know who they are" is **1:N
-identification**. The SDK gives us 1:1 verification. Bridging that gap is on us,
-and there are only two honest options:
+First, a correction that changes the requirement. **"Enrol in Lagos, pay in
+Sokoto" does not need 1:N.** Templates live in our database, not on the
+scanner. A terminal in Sokoto captures a fresh palm, sends the features to the
+matcher, and the matcher compares against the template enrolled in Lagos. The
+device is stateless and interchangeable. 1:N versus 1:1 is only about *whether
+the customer identifies themselves first*, not about where they enrolled.
 
-**(a) Narrow to 1:1 first.** Customer enters phone number, taps a card, or
-scans a QR, then the palm verifies that specific claimed identity. One
-`CompareFeaturesScore` call. Works with what we have, bounded latency, and is
-how most palm-payment deployments actually run.
+With that said, the question "can we search 100 million in seconds" has two
+separate answers, and only one of them is about speed.
 
-**(b) True 1:N.** The matcher loops `CompareFeaturesScore` across the gallery.
-Each call is a native algorithm invocation on a device-bound pipeline — the cost
-per comparison is unknown until we can measure it, and it is unlikely to scale
-to a national customer base without bucketing (by `palm_type`, by merchant
-region, by a coarse vector prefilter) or a vendor-supplied index.
+### 5.1 The search: yes, comfortably
 
-**Recommendation: ship (a), keep the `PALM_MATCH_URL` interface unchanged so
-(b) can be swapped in behind it.** The interface already hides the difference —
-`matchPalm()` returns a `customerId` either way. Adding an optional
-`customerHint` to the request body is the whole change needed on our side.
+The SDK's `CompareFeaturesScore` is 1:1 and device-bound, so brute-forcing 100M
+of them is out — at even 10µs per call that is over 16 minutes per transaction.
+That is not how this is built.
+
+Instead the matcher keeps the gallery as an approximate-nearest-neighbour index
+in RAM (HNSW or IVF-PQ), retrieves the top *K* candidates by vector distance,
+and then calls the SDK's `CompareFeaturesScore` on **those K only** to get the
+authoritative score. K is small — 50 to 200.
+
+At 100M vectors of, say, 512 float32 dimensions:
+
+| | raw | PQ-compressed |
+| --- | --- | --- |
+| memory | ~205 GB | ~10–25 GB |
+| ANN query | ~1–5 ms (HNSW) | ~5–50 ms (IVF-PQ) |
+| SDK rescoring of K=100 | ~1–10 ms | same |
+
+So sub-second end-to-end at 100M is achievable, and "seconds" is a comfortable
+bar. **This part is an engineering problem with known solutions.**
+
+One dependency: it assumes vector distance correlates with the SDK's score
+well enough that the true match lands in the top K. That is how every modern
+biometric embedding behaves, but it is an assumption about a model we cannot
+see, and it has to be measured on real templates before it is relied on. It is
+question 9 in §7.
+
+### 5.2 The accuracy: no, not at 100M, and not because of us
+
+This is the part that does not yield to engineering effort.
+
+A 1:N search does not ask "does this palm match that person". It asks "does
+this palm match *anybody*". If a single comparison has a false-accept rate of
+*FAR*, then searching a gallery of *N* gives roughly **N × FAR** expected false
+matches per search:
+
+| gallery | FAR 1e-6 | FAR 1e-8 | FAR 1e-10 |
+| --- | --- | --- | --- |
+| 10,000 | 1 in 100 | 1 in 10,000 | 1 in 1,000,000 |
+| 1,000,000 | 1 per search | 1 in 100 | 1 in 10,000 |
+| 100,000,000 | 100 per search | 1 per search | 1 in 100 |
+
+Palm-vein vendors typically claim a 1:1 FAR somewhere between 1e-6 and 1e-8.
+At 100M that is between *one* and *one hundred* strangers matching **every
+single scan**. To get a 1-in-a-million chance of billing the wrong person at
+100M you would need a FAR around 1e-14, which no single biometric modality
+delivers at any usable false-reject rate.
+
+This is not a MiliPay limitation and not an HFSecurity limitation — it is why
+Aadhaar does 1:N deduplication over 1.3 billion **offline, in batch, using ten
+fingerprints plus two irises plus a face**, and still flags cases for human
+adjudication. It is also why Amazon One and Tencent's palm payment both bind
+the palm to an account at enrolment rather than identifying from the palm alone
+against everyone.
+
+Worth noting the table cuts the other way too: **the problem starts well before
+100M**. At a million customers and FAR 1e-8, one scan in a hundred matches a
+stranger. Pure 1:N is not something that works now and breaks later; it needs
+the mitigation from the start.
+
+### 5.3 What actually gets you there: partition the gallery
+
+Gallery size is the dominant term, and it is the one we control. Ask the
+customer for the **last 4 digits of their phone number** before they present
+their palm:
+
+- gallery drops from 100M to ~10,000 — a factor of 10,000
+- at FAR 1e-8 that is one false accept in ten thousand searches
+- combined with the ambiguity margin in §5.4, workable for payments
+
+Four digits on a keypad is perhaps two seconds. It buys four orders of
+magnitude of safety — more than any threshold tuning available to us, and more
+than switching to bimodal. Six digits would buy six, at three seconds.
+
+The customer experience is still "palm to pay". They are not typing a phone
+number, an account number or a PIN, and they can use any terminal anywhere in
+the country, which was the actual requirement.
+
+**Recommendation:** palm + 4 digits as the default, with full 1:1 (phone, card
+or QR) available as a fallback when a scan is refused. Unpartitioned 1:N stays
+in the interface and can be switched on per merchant once there is measured FAR
+data from real hardware to justify it.
+
+### 5.4 What is already built for this
+
+The interface makes all three shapes the same call, so the product decision can
+change without touching any caller:
+
+| request | search | `palm_match_events.mode` |
+| --- | --- | --- |
+| `customerHint` set | 1:1 against that customer | `1:1` |
+| `partitionKey` set | 1:N over the matching bucket | `1:N`, with `gallery_size` |
+| neither | 1:N over everything | `1:N` |
+
+Three safety properties are enforced in `_shared/match-math.ts`, which has zero
+imports so the test suite runs the exact arithmetic that authorises payments:
+
+1. **The threshold is the SDK's.** The matcher reports
+   `GetRecognitionThreshold()`; `PALM_MATCH_THRESHOLD` may only raise it, never
+   lower it. A bad deploy cannot make matching more permissive than the vendor
+   allows.
+2. **An unclear winner is refused.** If the best candidate is not ahead of the
+   runner-up by `PALM_MATCH_MIN_MARGIN` (default 0.05), the result is
+   `ambiguous` and the payment declines. Two people at 0.86 and 0.855 is a coin
+   toss, and at a till a coin toss debits the wrong account. The guard applies
+   to 1:N only — a 1:1 check has no field to be ambiguous within.
+3. **Every attempt is recorded.** `public.palm_match_events` stores the top
+   score, the runner-up, the threshold, the gallery size and the latency, with
+   no biometric data. The margin between first and second place, tracked across
+   the estate, is the early warning that a gallery has outgrown its threshold —
+   and it shows up long before the first customer is charged for someone else's
+   shopping. A 1:N system operated without this measurement is operated blind.
 
 ---
 
@@ -281,9 +390,11 @@ None of this needs a scanner:
    guidance.
 5. **Wire the LED feedback** from §9; it is the only feedback a customer gets at
    a merchant counter.
-6. **Decide (a) vs (b)** in §5 — this is a product decision, not a technical one.
+6. **Add the 4-digit entry step** to the merchant checkout UI and pass it as
+   `partitionKey`. This is the single highest-value safety measure available
+   and it needs no hardware to build.
 
-Items 1–5 are safe to build now. They change no behaviour while
+Items 1–5 are done — see §11. They change no behaviour while
 `isScannerAvailable()` is false, which it is everywhere today.
 
 ---
@@ -314,6 +425,14 @@ Ordered by how much they change the design.
    (§3.3).
 8. **Recommended `SetPsensorDistanceThreshold` values** for a counter-mounted
    unit at typical Nigerian indoor lighting.
+9. **Does plain vector distance (cosine or L2) on the feature vectors rank the
+   same way `CompareFeaturesScore` does?** Our 1:N design retrieves candidates
+   with an ANN index and rescores the top K with the SDK. That only works if
+   the true match reliably lands in the top K. If the SDK applies a learned
+   metric rather than a plain distance, we need to know before building the
+   index.
+10. **What is the measured FAR/FRR**, at which threshold, on what test
+    population? §5.2 is arithmetic on a number only you can supply.
 
 ---
 
@@ -395,3 +514,79 @@ vendor binaries):
 - `HFSECURITY Palm Vein Series---J.pdf` (repo root) — hardware datasheet
 
 Where a guide and a header disagree, **the header wins**.
+---
+
+## 11. What has been built
+
+All of this landed before hardware arrived and changes no behaviour while
+`isScannerAvailable()` is false, which it is everywhere today.
+
+### Database — `20260921105235_palm_template_storage.sql` (applied)
+
+`public.palm_templates`, one row per enrolled hand, holding `ir_features`,
+`rgb_features` and `skeleton` as packed little-endian float32 in `BYTEA`, plus
+`hash_ir`/`hash_rgb`, `recog_mode`, `algorithm_version`, `feature_dim`,
+`quality_score`, `capture_result`, `palm_type` and `simulated`.
+
+- RLS enabled **and forced**; `authenticated` has no table-wide SELECT, only a
+  column grant covering the metadata. The feature columns are readable by
+  `service_role` alone — verified by query, not assumed.
+- Check constraints refuse the states that would produce an unmatchable
+  template: `kBiModal` without an RGB vector, an active row whose
+  `capture_result` was non-zero, a row with no features at all.
+- A partial unique index allows one live template per hand; replaced templates
+  are **retired, not deleted**, because "which template authorised this
+  payment" has to stay answerable after a customer re-enrols.
+- `palm_enrolment_state(customer_id)` returns metadata only, and restates the
+  policies internally because `SECURITY DEFINER` bypasses them.
+
+`public.palm_match_events` records the arithmetic of every match attempt — top
+score, runner-up, threshold, gallery size, latency, decision — and no biometric
+data. See §5.4 for why this is not optional.
+
+### Edge functions
+
+- `_shared/match-math.ts` — **new, zero imports**, so the Node test suite runs
+  the exact arithmetic that authorises payments. Holds `resolveThreshold`,
+  `resolveMargin`, `decideMatch`, `featuresSatisfyMode`.
+- `_shared/biometrics.ts` — 1:1 / partitioned / full 1:N behind one call;
+  SDK-supplied threshold; ambiguity guard; separate timeouts for 1:1 (3s) and
+  1:N (8s).
+- `enrol-customer` — accepts the structured `palm` payload, refuses a capture
+  the SDK itself rejected (`captureResult != 0`) and a `kBiModal` enrolment
+  missing its RGB vector, writes the template row. Still writes the legacy
+  column; the payload is optional so field shells on the v1 bridge keep working.
+- `process-payment` — passes `customerHint`/`partitionKey` through and records
+  a match event on **both** the success and the failure path.
+
+### Client
+
+`packages/shared/src/features/biometrics/palmScanner.ts`:
+
+- `registerPalm()` and `extractPalmFeatures()` split along the SDK's own
+  register/verify boundary (§2.4). `capturePalmTemplate()` remains as a
+  deprecated shim.
+- Bridge contract v2, with a documented fallback to the v1 `capturePalm` so an
+  un-updated Android shell degrades rather than breaks.
+- `CAPTURE_RESULTS` — the complete 24-entry table, with `register` and
+  `security` flags so liveness and reliability failures can be surfaced as the
+  anti-spoof signals they are instead of generic retry noise.
+- `PALM_LED_MODES` — the vendor's own nine values.
+
+### Tests
+
+`tests/palm-matching.test.ts`, 26 tests. The ones that matter:
+the environment cannot loosen the SDK's threshold; a 1:N result whose runner-up
+is within the margin is refused; that guard does **not** fire on a 1:1 check; a
+NaN score is rejected rather than treated as passing.
+
+Full suite: 63 tests. All four portals typecheck. The schema snapshot was
+re-baselined and the drift auditor flags no new risks.
+
+### Still to do
+
+- The 4-digit entry step in the merchant checkout UI (§6 item 6) — the single
+  highest-value safety measure, and it needs no hardware.
+- The matcher service itself, which is blocked on vendor questions 1, 2 and 9.
+- Migrating existing `customers.palm_vein_template` rows, which cannot happen
+  until there are real templates to migrate.

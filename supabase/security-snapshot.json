@@ -238,6 +238,50 @@
     },
     {
       "columns": [
+        "algorithm_version",
+        "candidates_compared",
+        "decision",
+        "error_code",
+        "gallery_size",
+        "id",
+        "latency_ms",
+        "matched_customer_id",
+        "merchant_id",
+        "mode",
+        "occurred_at",
+        "runner_up_score",
+        "terminal_id",
+        "threshold",
+        "top_score"
+      ],
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "palm_match_events"
+    },
+    {
+      "columns": [
+        "algorithm_version",
+        "capture_result",
+        "customer_id",
+        "enrolled_at",
+        "enrolled_by",
+        "feature_dim",
+        "has_ir_features",
+        "has_rgb_features",
+        "id",
+        "palm_type",
+        "quality_score",
+        "recog_mode",
+        "retired_at",
+        "retired_reason",
+        "simulated"
+      ],
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "palm_templates"
+    },
+    {
+      "columns": [
         "assigned_by",
         "created_at",
         "device_model",
@@ -657,6 +701,14 @@
     },
     {
       "anon_execute": false,
+      "args": "p_customer_id uuid",
+      "authenticated_execute": true,
+      "name": "palm_enrolment_state",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
       "args": "",
       "authenticated_execute": false,
       "name": "rls_auto_enable",
@@ -926,6 +978,36 @@
       ],
       "table": "merchants",
       "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE (staff_profiles.id = auth.uid())))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Admins can review match events",
+      "roles": [
+        "authenticated"
+      ],
+      "table": "palm_match_events",
+      "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles sp\n  WHERE ((sp.id = auth.uid()) AND (sp.role = ANY (ARRAY['admin'::text, 'super_admin'::text])) AND (COALESCE(sp.status, ''::text) = 'active'::text))))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Customers can see their own enrolment",
+      "roles": [
+        "authenticated"
+      ],
+      "table": "palm_templates",
+      "using": "(customer_id IN ( SELECT c.id\n   FROM customers c\n  WHERE (c.auth_user_id = auth.uid())))"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Staff can view palm template metadata",
+      "roles": [
+        "authenticated"
+      ],
+      "table": "palm_templates",
+      "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles sp\n  WHERE ((sp.id = auth.uid()) AND (sp.role = ANY (ARRAY['agent'::text, 'support'::text, 'admin'::text, 'super_admin'::text])) AND (COALESCE(sp.status, ''::text) = 'active'::text))))"
     },
     {
       "check": "",
@@ -1221,6 +1303,11 @@
     },
     {
       "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "palm_match_events"
+    },
+    {
+      "grantee": "authenticated",
       "privilege": "DELETE",
       "table": "pos_terminals"
     },
@@ -1355,6 +1442,16 @@
       "name": "merchants",
       "rls_enabled": true,
       "rls_forced": false
+    },
+    {
+      "name": "palm_match_events",
+      "rls_enabled": true,
+      "rls_forced": true
+    },
+    {
+      "name": "palm_templates",
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "name": "pos_terminals",
