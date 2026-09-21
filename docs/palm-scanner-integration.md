@@ -13,10 +13,31 @@ design.
 
 ---
 
-## 1. What the device actually is
+## 1. What the devices actually are
 
-The VP930 / VP930Pro is a **USB palm-vein camera module with an on-board
-algorithm pipeline** — not a standalone terminal. It always hangs off a host.
+Three models are planned, all from the same "Advanced RGB + IR Palm Vein
+Imaging Module" family, all quoting the same accuracy:
+
+| Model | Role | Form | OS | Accuracy (vendor) |
+| --- | --- | --- | --- | --- |
+| **HF-VP930PRO** | MVP / prototype | USB scanner module, no screen | host is Android, Windows or Linux | FAR 0.0001%, FRR 0.01%, capacity 20,000 palms |
+| **HF-HP605PV** | merchant till | 6" palm-vein POS terminal, EMV/PCI certified | **Android**, 2 GB RAM / 8 GB ROM | FAR 0.0001%, FRR 0.01% |
+| **HF-FP08PV** | agent registration | 8" handheld biometric tablet, IP65, 10,000 mAh | **Android 13**, 4–16 GB RAM | FAR 0.0001%, FRR 0.01% |
+
+All three recognise at 7–15 cm and quote 450 ms recognition time. HP605PV and
+FP08PV are both multimodal (card / palm vein / QR / face) and both are Android,
+which matters: **they run the same Android PalmSDK**, so a template enrolled on
+the FP08PV and one captured on the HP605PV come from the same code path in the
+same format. The riskiest version of question 2 in §7 — enrol on one platform,
+verify on another — does not apply to the production pair.
+
+It does still apply to the **MVP**: the VP930Pro is a bare USB module, and if
+it is driven from Windows or Linux during prototyping it produces
+`std::vector<float>` while the Android devices produce `byte[]`. Enrolments
+captured during the MVP may therefore not be matchable on production hardware.
+Treat MVP-era templates as disposable unless the vendor confirms otherwise.
+
+VP930Pro host support:
 
 | Host | Support | Notes |
 | --- | --- | --- |
@@ -28,8 +49,39 @@ The SDK ships `libpalm_sdk.so` + `libdim_palm.so` and a ~31 MB model blob
 (`config/palm_models_1.3.5.bin`). API surface is C++11. The Android SDK is a
 thin Java layer over the same algorithm.
 
-Two imaging paths are used together: **IR** (the vein pattern) and **RGB**
-(colour, used for liveness and as a second modality).
+### 1.1 Palm vein or palm print? Both.
+
+The module has **two cameras**, and the SDK returns a separate feature vector
+from each:
+
+| | camera | what it sees | SDK field |
+| --- | --- | --- | --- |
+| **Palm vein** | infrared | the vein pattern *beneath* the skin | `ir_features` |
+| **Palm print** | RGB (colour) | the surface — lines, creases, texture | `rgb_features` |
+
+The vendor is explicit that these are two different biometrics: the HF-PA28 in
+the same catalogue is described as *"supporting palm print and palm vein
+imaging"*.
+
+The vein channel is the strong one. It is subsurface, so it cannot be lifted
+from a surface the way a fingerprint can or photographed the way a palm print
+can, and it is only present in a living hand — liveness is intrinsic rather
+than bolted on. The print channel is a genuine second modality but it is
+visible, so on its own it is the weaker of the two.
+
+`RecognizeMode` decides which is compared, and `kBiModal` — the SDK's own
+default for registration — uses both. **We store both**, which is why
+`palm_templates` has `ir_features` and `rgb_features` and a constraint that
+refuses a `kBiModal` row missing its RGB vector.
+
+One caveat: `RegisterPalmInput.palm_rgb_img` is commented *"Input RGB (speckle)
+image"*, which would suggest a structured-light depth pattern rather than a
+plain colour image. The frame format contradicts it — `CaptureFrame.rgbData` is
+documented as `8UC3`, three-channel 8-bit, i.e. ordinary colour — and this SDK
+carries other stale comments from a face-recognition lineage (there is still a
+`0x23001 Facial algorithm initialization failure` error code and an
+`assets/` "Facial Algorithm Model File Directory" in the Android package). The
+frame format is more likely right than the comment, but confirm it.
 
 ---
 
@@ -298,11 +350,32 @@ matches per search:
 | 1,000,000 | 1 per search | 1 in 100 | 1 in 10,000 |
 | 100,000,000 | 100 per search | 1 per search | 1 in 100 |
 
-Palm-vein vendors typically claim a 1:1 FAR somewhere between 1e-6 and 1e-8.
-At 100M that is between *one* and *one hundred* strangers matching **every
-single scan**. To get a 1-in-a-million chance of billing the wrong person at
-100M you would need a FAR around 1e-14, which no single biometric modality
-delivers at any usable false-reject rate.
+**HFSecurity publishes its own number, and it is the pessimistic end of that
+range.** All three models quote **FAR 0.0001%** on the datasheet, which is
+**1e-6** — one false accept per million comparisons. (FRR 0.01% = 1e-4, one
+wrong rejection per ten thousand, which is fine.)
+
+So the first column of that table is not a guess about our hardware. It is our
+hardware:
+
+| gallery searched | spurious candidates per scan, at the vendor's FAR 1e-6 |
+| --- | --- |
+| 100 | 1 in 10,000 scans |
+| 1,000 | 1 in 1,000 scans |
+| 10,000 | 1 in 100 scans |
+| 1,000,000 | **1 every scan** |
+| 100,000,000 | **100 every scan** |
+
+To get a 1-in-a-million chance of billing the wrong person at 100M you would
+need a FAR around 1e-14. Nothing in this class of device is within eight orders
+of magnitude of that.
+
+There is a second, blunter signal in the datasheet: the VP930Pro's stated
+**capacity is 20,000 palms**. Other modules in the range say 10,000. That is
+nominally about on-device storage in standalone mode, but it is also the
+clearest statement of what the vendor built this for — and 20,000 is not
+100,000,000. Worth asking them directly what gallery size they will stand
+behind.
 
 This is not a MiliPay limitation and not an HFSecurity limitation — it is why
 Aadhaar does 1:N deduplication over 1.3 billion **offline, in batch, using ten
@@ -319,16 +392,27 @@ the mitigation from the start.
 ### 5.3 What actually gets you there: partition the gallery
 
 Gallery size is the dominant term, and it is the one we control. Ask the
-customer for the **last 4 digits of their phone number** before they present
-their palm:
+customer for the **last few digits of their phone number** before they present
+their palm. Each digit divides the gallery by ten.
 
-- gallery drops from 100M to ~10,000 — a factor of 10,000
-- at FAR 1e-8 that is one false accept in ten thousand searches
-- combined with the ambiguity margin in §5.4, workable for payments
+Working rule: **keep the searched gallery at or below about 1,000.** At the
+vendor's FAR that holds spurious candidates to roughly 1 in 1,000 scans, which
+the ambiguity guard in §5.4 can then absorb.
 
-Four digits on a keypad is perhaps two seconds. It buys four orders of
-magnitude of safety — more than any threshold tuning available to us, and more
-than switching to bimodal. Six digits would buy six, at three seconds.
+| customers | digits needed | resulting gallery |
+| --- | --- | --- |
+| 100,000 | 3 | 100 |
+| 1,000,000 | 4 | 100 |
+| 10,000,000 | 5 | 100 |
+| 100,000,000 | 6 | 100 |
+
+Note what this says: **4 digits is right for the first million customers, not
+forever.** The number of digits has to grow with the customer base, roughly
+`log10(customers) - 4`. Build the keypad to take a configurable length rather
+than hard-coding four, so it is a setting rather than a migration.
+
+A few digits on a keypad is two or three seconds, and it buys more safety than
+any threshold tuning available to us — more, even, than switching to bimodal.
 
 The customer experience is still "palm to pay". They are not typing a phone
 number, an account number or a PIN, and they can use any terminal anywhere in
@@ -431,8 +515,18 @@ Ordered by how much they change the design.
    the true match reliably lands in the top K. If the SDK applies a learned
    metric rather than a plain distance, we need to know before building the
    index.
-10. **What is the measured FAR/FRR**, at which threshold, on what test
-    population? §5.2 is arithmetic on a number only you can supply.
+10. **The datasheet says FAR 0.0001% — at what threshold, on what test
+    population, and is that the 1:1 figure or a 1:N figure?** §5.2 is
+    arithmetic on this number, so its provenance matters.
+11. **The datasheet says capacity 20,000 palms.** Is that on-device storage in
+    standalone mode, or the largest gallery the algorithm is claimed to
+    separate reliably? What gallery size will you stand behind?
+12. **Are FP08PV and HP605PV running the same algorithm and model blob as the
+    VP930Pro?** A template enrolled on the FP08PV has to match on the HP605PV,
+    and MVP enrolments captured via the VP930Pro on Windows have to survive the
+    move to Android — or we plan to discard them.
+13. **Is `palm_rgb_img` a plain colour image or a structured-light speckle
+    pattern?** The header comment and the frame format disagree (§1.1).
 
 ---
 
