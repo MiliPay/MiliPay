@@ -8,7 +8,7 @@
 
 const TERMII_SEND_URL = "https://api.ng.termii.com/api/sms/send";
 
-export type Channel = "whatsapp" | "sms";
+export type Channel = "whatsapp" | "sms" | "console";
 
 export interface DispatchResult {
   delivered: boolean;
@@ -22,8 +22,24 @@ function configuredChannels(): Channel[] {
   const parsed = raw
     .split(",")
     .map((c) => c.trim().toLowerCase())
-    .filter((c): c is Channel => c === "whatsapp" || c === "sms");
+    .filter((c): c is Channel => c === "whatsapp" || c === "sms" || c === "console");
   return parsed.length > 0 ? parsed : ["whatsapp", "sms"];
+}
+
+/**
+ * Testing-only channel: writes the credential to the Edge Function log.
+ *
+ * Never in the default channel list — it has to be asked for by name. Reading
+ * it requires Supabase project access, which is a far higher bar than the old
+ * behaviour of rendering the password in the staff portal, but it is still a
+ * credential sitting in a log. Do not enable it anywhere real customers exist.
+ */
+function sendToConsole(phone: string, message: string): { ok: boolean; detail: string } {
+  console.warn(
+    "[notify] CONSOLE DELIVERY — credential written to logs, not sent to the customer.\n" +
+      `  to: ${phone}\n  message: ${message}`,
+  );
+  return { ok: true, detail: "console" };
 }
 
 /** Termii wants a bare MSISDN: 2348012345678, no plus. */
@@ -94,7 +110,9 @@ export async function dispatchCredential(
   const attempts: DispatchResult["attempts"] = [];
 
   for (const channel of configuredChannels()) {
-    const result = await sendViaTermii(channel, phone, message);
+    const result = channel === "console"
+      ? sendToConsole(phone, message)
+      : await sendViaTermii(channel, phone, message);
     attempts.push({ channel, ...result });
     if (result.ok) {
       return { delivered: true, channel, attempts };
