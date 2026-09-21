@@ -9,7 +9,7 @@ import {
 
 /**
  * This module decides whether MiliPay is allowed to spend its own money at
- * VTPass and BigiSub. Zero imports, so Node can run it.
+ * BigiSub. Zero imports, so Node can run it.
  */
 
 describe("resolveFulfilmentMode", () => {
@@ -58,33 +58,32 @@ describe("isSandboxUrl", () => {
 
 describe("checkEnvironmentCoherence", () => {
   it("refuses live fulfilment pointed at a sandbox gateway", () => {
-    // This is the dangerous combination: Mono debits the customer's real bank
-    // account while the operator call goes to a test gateway that credits
-    // nobody. Money taken, nothing delivered.
+    // The dangerous combination: Mono debits the customer's real bank account
+    // while the fulfilment call goes to a test gateway that credits nobody.
+    // Money taken, nothing delivered.
     const result = checkEnvironmentCoherence({
       mode: "live",
-      vtpassBaseUrl: "https://sandbox.vtpass.com/api",
+      bigisubBaseUrl: "https://staging.bigisub.ng",
     });
     expect(result.ok).toBe(false);
-    expect(result.reason).toContain("VTPASS_BASE_URL");
+    expect(result.reason).toContain("BIGISUB_BASE_URL");
   });
 
   it("names every sandboxed provider, not just the first", () => {
     const result = checkEnvironmentCoherence({
       mode: "live",
-      vtpassBaseUrl: "https://sandbox.vtpass.com/api",
       bigisubBaseUrl: "https://staging.bigisub.ng",
+      monoBaseUrl: "https://sandbox.withmono.com",
     });
     expect(result.ok).toBe(false);
-    expect(result.reason).toContain("VTPASS_BASE_URL");
     expect(result.reason).toContain("BIGISUB_BASE_URL");
+    expect(result.reason).toContain("MONO_BASE_URL");
   });
 
   it("allows live fulfilment against production gateways", () => {
     expect(
       checkEnvironmentCoherence({
         mode: "live",
-        vtpassBaseUrl: "https://vtpass.com/api",
         bigisubBaseUrl: "https://api.bigisub.ng",
         monoBaseUrl: "https://api.withmono.com",
       }).ok,
@@ -94,17 +93,17 @@ describe("checkEnvironmentCoherence", () => {
   it("does not object to a sandbox URL when fulfilment is off", () => {
     // Harmless: disabled and simulated make no provider calls at all.
     expect(
-      checkEnvironmentCoherence({ mode: "disabled", vtpassBaseUrl: "https://sandbox.vtpass.com/api" }).ok,
+      checkEnvironmentCoherence({ mode: "disabled", bigisubBaseUrl: "https://staging.bigisub.ng" }).ok,
     ).toBe(true);
     expect(
-      checkEnvironmentCoherence({ mode: "simulated", vtpassBaseUrl: "https://sandbox.vtpass.com/api" }).ok,
+      checkEnvironmentCoherence({ mode: "simulated", bigisubBaseUrl: "https://staging.bigisub.ng" }).ok,
     ).toBe(true);
   });
 
   it("never leaks a credential in the reason string", () => {
     const result = checkEnvironmentCoherence({
       mode: "live",
-      vtpassBaseUrl: "https://sandbox.vtpass.com/api?apikey=SUPERSECRET",
+      bigisubBaseUrl: "https://staging.bigisub.ng?token=SUPERSECRET",
     });
     expect(result.reason).not.toContain("SUPERSECRET");
   });
@@ -119,11 +118,11 @@ describe("readFulfilmentEnvironment", () => {
     expect(result.coherence.ok).toBe(true);
   });
 
-  it("catches the current repo state: live mode against the sandbox URL", () => {
+  it("catches live mode pointed at a non-production gateway", () => {
     const result = readFulfilmentEnvironment(
       env({
         VTU_FULFILMENT_MODE: "live",
-        VTPASS_BASE_URL: "https://sandbox.vtpass.com/api",
+        BIGISUB_BASE_URL: "https://staging.bigisub.ng",
       }),
     );
     expect(result.mode).toBe("live");

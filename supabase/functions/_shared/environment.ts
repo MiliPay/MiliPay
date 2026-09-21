@@ -44,7 +44,6 @@ export function isSandboxUrl(url: string | undefined | null): boolean {
 
 export interface CoherenceInput {
   mode: FulfilmentMode;
-  vtpassBaseUrl?: string | null;
   bigisubBaseUrl?: string | null;
   monoBaseUrl?: string | null;
 }
@@ -67,7 +66,6 @@ export function checkEnvironmentCoherence(input: CoherenceInput): CoherenceResul
   if (input.mode !== "live") return { ok: true };
 
   const sandboxed: string[] = [];
-  if (isSandboxUrl(input.vtpassBaseUrl)) sandboxed.push("VTPASS_BASE_URL");
   if (isSandboxUrl(input.bigisubBaseUrl)) sandboxed.push("BIGISUB_BASE_URL");
   if (isSandboxUrl(input.monoBaseUrl)) sandboxed.push("MONO_BASE_URL");
 
@@ -103,7 +101,6 @@ export function readFulfilmentEnvironment(env: {
     mode,
     coherence: checkEnvironmentCoherence({
       mode,
-      vtpassBaseUrl: env.get("VTPASS_BASE_URL"),
       bigisubBaseUrl: env.get("BIGISUB_BASE_URL"),
       monoBaseUrl: env.get("MONO_BASE_URL"),
     }),

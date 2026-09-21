@@ -108,71 +108,61 @@ export function assertTransition(
 // ─────────────────────────────────────────────────────────────
 
 /**
- * VTPass response codes.
+ * BigiSub's own vocabulary, from their OpenAPI spec: every purchase and
+ * requery reports one of "successful" | "failed" | "processing".
  *
- *   000  delivered
- *   001  transaction processing - pending
- *   099  transaction is processing
- *
- * The old code treated 099 as a final success: the customer was charged, the
- * row was written 'success', and if VTPass later failed the transaction nobody
- * ever found out. Anything that is not an explicit 000 is now pending or
- * failed, never success.
+ * "processing" is NOT success. Treating an in-flight transaction as delivered
+ * is how a customer is charged for airtime the operator later failed to send,
+ * and how nobody ever finds out.
  */
-export function statusForVtpassCode(code: string | undefined | null): TransactionStatus {
-  const value = String(code ?? "").trim();
-  if (value === "000") return "delivered";
-  if (value === "099" || value === "001") return "fulfilment_pending";
-  return "fulfilment_failed";
-}
-
-/**
- * VTPass requery reports the settled outcome in
- * content.transactions.status. 'reversed' means VTPass refunded our wallet,
- * so the customer must be refunded too.
- */
-export function statusForVtpassTransactionStatus(
-  status: string | undefined | null,
-): TransactionStatus {
+export function statusForProviderStatus(status: string | undefined | null): TransactionStatus {
   switch (String(status ?? "").trim().toLowerCase()) {
-    case "delivered":
     case "successful":
     case "success":
+    case "delivered":
       return "delivered";
+    case "processing":
     case "pending":
     case "initiated":
-    case "processing":
       return "fulfilment_pending";
-    default:
+    case "failed":
+    case "reversed":
+    case "cancelled":
       return "fulfilment_failed";
-  }
-}
-
-export function statusForBigisubResponse(input: {
-  ok: boolean;
-  status?: string | null;
-}): TransactionStatus {
-  if (!input.ok) return "fulfilment_failed";
-  switch (String(input.status ?? "").trim().toLowerCase()) {
-    case "successful":
-    case "success":
-    case "delivered":
-      return "delivered";
-    case "pending":
-    case "processing":
+    default:
+      // An empty or unrecognised status means we do not know. Not knowing is
+      // pending, never failure — declaring failure triggers a refund, and
+      // refunding something that was actually delivered costs us the value.
       return "fulfilment_pending";
-    default:
-      return "fulfilment_failed";
   }
 }
 
 /**
- * A network timeout is NOT a failure. VTPass may well have delivered; we just
- * did not hear. Reversing here is how a customer gets refunded *and* credited,
- * which costs us the airtime.
+ * The outcome when a purchase call did not return cleanly — a timeout, a 5xx,
+ * an unreadable body.
+ *
+ * This is pending, not failure, and the distinction is expensive. BigiSub may
+ * well have fulfilled; we simply did not hear. Calling it a failure would
+ * refund the customer AND leave them credited, at MiliPay's cost.
  */
-export function statusForFulfilmentTimeout(): TransactionStatus {
+export function statusForIndeterminateFulfilment(): TransactionStatus {
   return "fulfilment_pending";
+}
+
+/**
+ * Whether a purchase call may be repeated. It may not — ever.
+ *
+ * BigiSub accepts no idempotency key and no client-supplied reference on any
+ * purchase endpoint, and offers no way to list transactions. So a second call
+ * is a second independent purchase: the customer is charged once and credited
+ * twice. The only safe resolution for an uncertain purchase is requery, and
+ * requery needs a transaction id we only get from a response that arrived.
+ *
+ * A function rather than a constant so the call sites read as a decision
+ * someone made, not an oversight.
+ */
+export function canRetryPurchase(): false {
+  return false;
 }
 
 // ─────────────────────────────────────────────────────────────

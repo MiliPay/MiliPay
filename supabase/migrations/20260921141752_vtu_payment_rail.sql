@@ -1,4 +1,4 @@
--- Migration: 20260922000000_vtu_payment_rail.sql
+-- Migration: 20260921141752_vtu_payment_rail.sql
 -- Description:
 --   Phase 1 of the quick-services rework. Three things:
 --

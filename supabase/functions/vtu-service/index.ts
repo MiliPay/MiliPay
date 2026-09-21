@@ -17,48 +17,30 @@ import { initiateDebit, isMonoConfigured, monoPaymentMode, toApiError } from "..
 import { roundNaira } from "../_shared/money.ts";
 import {
   CUSTOMER_STATUS_COPY,
-  statusForBigisubResponse,
-  statusForFulfilmentTimeout,
-  statusForVtpassCode,
-  statusForVtpassTransactionStatus,
+  statusForIndeterminateFulfilment,
+  statusForProviderStatus,
   type TransactionStatus,
 } from "../_shared/vtu-state.ts";
 import { enqueueRefund, transitionTransaction } from "../_shared/transactions.ts";
-import {
-  bigisubNetworkId,
-  fetchSmePlans,
-  fetchVtpassVariations,
-  fetchVtpassWalletBalance,
-  FulfilmentError,
-  isBigisubConfigured,
-  normalizeNigerianPhone,
-  payWithVtpass,
-  purchaseSmeData,
-  requeryVtpass,
-  resolveVtpassServiceId,
-  supportsSmeData,
-  type Fulfilment,
-  type Variation,
-} from "../_shared/providers.ts";
+import * as bigisub from "../_shared/bigisub.ts";
+import type { CableProvider, PlanType, Variation } from "../_shared/bigisub.ts";
 
 /**
- * Quick services: airtime, data (retail + SME), electricity and cable.
+ * Quick services: airtime, data, electricity and cable.
  *
- * The shape of a purchase, and why it is in this order:
+ * BigiSub is the single fulfilment gateway — VTPass is gone. Mono moves the
+ * customer's money. Those are two separate pots, and the order between them is
+ * the whole design:
  *
  *   1. price it here — the client never says what it pays
- *   2. check OUR VTPass wallet, before the customer's bank is touched
+ *   2. check OUR BigiSub wallet, before the customer's bank is touched
  *   3. write the transaction as `initiated` — before any money moves
- *   4. ask Mono to debit the customer's chosen bank account
+ *   4. Mono debits the customer's chosen bank account
  *   5. ... webhook confirms ... -> `paid`
- *   6. only now spend our own balance at VTPass or BigiSub
+ *   6. only now spend our own BigiSub balance
  *
- * Steps 4 and 5 are why the purchase is no longer one blocking request. The
- * customer's part finishes at the fingerprint; the app then follows the
- * transaction live.
- *
- * Routing is fixed: BigiSub carries SME data for MTN and Airtel only.
- * Everything else is VTPass.
+ * Steps 4 and 5 are why a purchase is no longer one blocking request. The
+ * customer's part ends at the fingerprint; the app follows the reference live.
  */
 
 // ─────────────────────────────────────────────────────────────
@@ -96,8 +78,8 @@ async function loadSettings(admin: SupabaseClient): Promise<VtuSettings> {
   };
 }
 
-function surchargeFor(serviceType: string, serviceId: string, settings: VtuSettings): number {
-  if (serviceType === "data" || serviceId.includes("data")) return settings.data_surcharge_ngn;
+function surchargeFor(serviceType: string, settings: VtuSettings): number {
+  if (serviceType === "data") return settings.data_surcharge_ngn;
   if (serviceType === "cable") return settings.cable_surcharge_ngn;
   if (serviceType === "power") return settings.power_convenience_fee_ngn;
   return 0;
@@ -114,16 +96,27 @@ const settingsSchema = z.object({
   airtime_surcharge_percent: z.number().min(0).max(100).optional(),
 });
 
+const PLAN_TYPES = ["SME", "GIFTING", "DataTransfer", "SME2", "CGIFTING", "DataCOUPON", "SNS"] as const;
+
 const purchaseSchema = z.object({
   serviceType: z.enum(["airtime", "data", "power", "cable"]),
   provider: z.string().min(2).max(32),
   destination: z.string().min(3).max(32),
   customerPhone: z.string().max(20).optional(),
   variationCode: z.string().max(64).optional(),
+  /** Legacy shorthand from the app: sme -> SME, direct -> GIFTING. */
   dataCategory: z.enum(["sme", "direct"]).optional(),
+  planType: z.enum(PLAN_TYPES).optional(),
   meterType: z.enum(["prepaid", "postpaid"]).default("prepaid"),
+  /**
+   * Required for power and cable: BigiSub's pay/purchase endpoints demand the
+   * verified customer name, so the client must call verify_meter or
+   * verify_cable first.
+   */
+  customerName: z.string().max(200).optional(),
+  customerAddress: z.string().max(400).optional(),
   accountId: z.string().uuid(),
-  // Airtime and postpaid power are open-value; bundles are priced from the catalogue.
+  // Airtime and power are open-value; bundles are priced from the catalogue.
   amount: z.number().positive().max(1_000_000).optional(),
   pin: z.string().regex(/^[0-9]{4}$/).optional(),
 });
@@ -159,31 +152,25 @@ async function rateLimit(admin: SupabaseClient, key: string, limit: number, wind
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// Routing
-// ─────────────────────────────────────────────────────────────
+function planTypeFor(input: { planType?: PlanType; dataCategory?: "sme" | "direct" }): PlanType {
+  if (input.planType) return input.planType;
+  return input.dataCategory === "direct" ? "GIFTING" : "SME";
+}
 
-type Route = "vtpass" | "bigisub";
-
-/**
- * BigiSub sells SME data for MTN and Airtel. Nothing else.
- *
- * Asking for SME data on Glo used to be routed to BigiSub anyway — and the
- * mobile app defaulted every network to the SME tab — so it went to a gateway
- * that does not sell it.
- */
-function routeFor(input: PurchaseInput): Route {
-  if (input.serviceType === "data" && input.dataCategory === "sme") {
-    if (!supportsSmeData(input.provider)) {
-      throw new ApiError(
-        `SME data is only available on MTN and Airtel. Choose the direct bundle for ${input.provider.toUpperCase()}.`,
-        400,
-        "SME_NOT_AVAILABLE",
-      );
-    }
-    return "bigisub";
+function requireNetwork(provider: string): number {
+  const id = bigisub.networkId(provider);
+  if (id === null) {
+    throw new ApiError(`${provider.toUpperCase()} is not a supported network.`, 400, "UNSUPPORTED_NETWORK");
   }
-  return "vtpass";
+  return id;
+}
+
+function requireCable(provider: string): CableProvider {
+  const value = String(provider).toLowerCase().trim();
+  if (!(bigisub.CABLE_PROVIDERS as readonly string[]).includes(value)) {
+    throw new ApiError(`${provider.toUpperCase()} is not a supported TV provider.`, 400, "UNSUPPORTED_PROVIDER");
+  }
+  return value as CableProvider;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -191,47 +178,66 @@ function routeFor(input: PurchaseInput): Route {
 // ─────────────────────────────────────────────────────────────
 
 interface Priced {
-  /** what the customer is charged, in Naira */
+  /** what the customer is charged */
   amount: number;
-  /** what we send the operator, in Naira */
+  /** what BigiSub takes from our wallet */
   baseAmount: number;
-  serviceId: string;
+  /** BigiSub's own charge, where it levies one */
+  serviceCharge: number;
   planLabel: string;
 }
 
 async function priceTransaction(input: PurchaseInput, settings: VtuSettings): Promise<Priced> {
-  const serviceId = resolveVtpassServiceId(input.serviceType, input.provider);
-  const surcharge = surchargeFor(input.serviceType, serviceId, settings);
+  const surcharge = surchargeFor(input.serviceType, settings);
 
-  // Open-value services: the customer names the amount.
-  if (input.serviceType === "airtime" || input.serviceType === "power") {
-    if (!input.amount) {
-      throw new ApiError("Amount is required for this service", 400, "AMOUNT_REQUIRED");
-    }
+  if (input.serviceType === "airtime") {
+    if (!input.amount) throw new ApiError("Amount is required", 400, "AMOUNT_REQUIRED");
     const base = roundNaira(input.amount);
-    const fee = input.serviceType === "airtime"
-      ? roundNaira(base * (settings.airtime_surcharge_percent / 100))
-      : settings.power_convenience_fee_ngn;
+    const fee = roundNaira(base * (settings.airtime_surcharge_percent / 100));
+    return { amount: roundNaira(base + fee), baseAmount: base, serviceCharge: 0, planLabel: "Airtime" };
+  }
+
+  if (input.serviceType === "power") {
+    if (!input.amount) throw new ApiError("Amount is required", 400, "AMOUNT_REQUIRED");
+    const base = roundNaira(input.amount);
+
+    // The disco's own service charge comes from BigiSub, not from us, and the
+    // customer has to see it before they authorise. Guessing it would mean
+    // charging one figure and being billed another.
+    const providers = await bigisub.listElectricityProviders();
+    const disco = providers.find((p) => p.code === input.provider);
+    if (!disco) {
+      throw new ApiError("That electricity provider is not available.", 400, "UNSUPPORTED_PROVIDER");
+    }
+    if (base < disco.minAmount) {
+      throw new ApiError(
+        `${disco.name} requires at least ₦${disco.minAmount.toLocaleString()}.`,
+        400,
+        "BELOW_MINIMUM",
+      );
+    }
+
+    const serviceCharge = disco.serviceChargeType === "percentage"
+      ? roundNaira(base * (disco.serviceCharge / 100))
+      : disco.serviceCharge;
 
     return {
-      amount: roundNaira(base + fee),
+      amount: roundNaira(base + serviceCharge + settings.power_convenience_fee_ngn),
       baseAmount: base,
-      serviceId,
-      planLabel: input.serviceType === "airtime" ? "Airtime" : `Electricity (${input.meterType})`,
+      serviceCharge,
+      planLabel: `${disco.name} (${input.meterType})`,
     };
   }
 
-  // Fixed-price bundles: resolve the operator's own price for the requested
-  // variation, live. The cache is for browsing; it never prices a purchase.
-  if (!input.variationCode) {
-    throw new ApiError("A bundle must be selected", 400, "VARIATION_REQUIRED");
-  }
+  // Fixed-price bundles: resolve the live catalogue. The cache is for
+  // browsing; it never prices a purchase.
+  if (!input.variationCode) throw new ApiError("A bundle must be selected", 400, "VARIATION_REQUIRED");
 
   let catalogue: Variation[];
-  if (routeFor(input) === "bigisub") {
-    catalogue = await fetchSmePlans(bigisubNetworkId(input.provider)!, surcharge);
+  if (input.serviceType === "data") {
+    catalogue = await bigisub.listDataPlans(requireNetwork(input.provider), planTypeFor(input), surcharge);
   } else {
-    catalogue = await fetchVtpassVariations(serviceId, surcharge);
+    catalogue = await bigisub.listCablePlans(requireCable(input.provider), surcharge);
   }
 
   const chosen = catalogue.find((v) => v.variation_code === input.variationCode);
@@ -246,7 +252,7 @@ async function priceTransaction(input: PurchaseInput, settings: VtuSettings): Pr
   return {
     amount: chosen.price,
     baseAmount: chosen.baseAmount,
-    serviceId,
+    serviceCharge: 0,
     planLabel: chosen.name,
   };
 }
@@ -255,9 +261,9 @@ function merchantTitle(input: PurchaseInput, planLabel: string): string {
   const provider = input.provider.toUpperCase();
   switch (input.serviceType) {
     case "data":
-      return `${provider} ${input.dataCategory === "sme" ? "SME " : ""}Data`;
+      return `${provider} Data (${planTypeFor(input)})`;
     case "power":
-      return `${provider} Electricity (${input.meterType.toUpperCase()})`;
+      return `${planLabel}`;
     case "cable":
       return `${provider} ${planLabel}`;
     default:
@@ -266,20 +272,14 @@ function merchantTitle(input: PurchaseInput, planLabel: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Catalogue, with a cache that is for browsing only
+// Catalogue cache — browsing only
 // ─────────────────────────────────────────────────────────────
 
-async function cacheCatalogue(
-  admin: SupabaseClient,
-  id: string,
-  provider: string,
-  serviceId: string,
-  payload: unknown,
-): Promise<void> {
+async function cacheCatalogue(admin: SupabaseClient, id: string, serviceId: string, payload: unknown) {
   try {
     await admin.from("provider_catalogue_cache").upsert({
       id,
-      provider,
+      provider: "bigisub",
       service_id: serviceId,
       payload,
       fetched_at: new Date().toISOString(),
@@ -289,20 +289,18 @@ async function cacheCatalogue(
   }
 }
 
-async function cachedCatalogue(admin: SupabaseClient, id: string): Promise<
-  { variations: Variation[]; fetchedAt: string } | null
-> {
+async function cachedCatalogue(admin: SupabaseClient, id: string) {
   const { data } = await admin
     .from("provider_catalogue_cache")
     .select("payload, fetched_at")
     .eq("id", id)
     .maybeSingle();
   if (!data?.payload) return null;
-  return { variations: data.payload as Variation[], fetchedAt: data.fetched_at };
+  return { variations: data.payload as Variation[], fetchedAt: data.fetched_at as string };
 }
 
 // ─────────────────────────────────────────────────────────────
-// Fulfilment (internal — called by the Mono webhook once paid)
+// Fulfilment (internal — triggered by the Mono webhook once paid)
 // ─────────────────────────────────────────────────────────────
 
 interface TransactionRow {
@@ -315,45 +313,35 @@ interface TransactionRow {
   provider: string | null;
   beneficiary: string | null;
   variation_code: string | null;
-  fulfilment_provider: string | null;
-  customer_phone?: string | null;
+  merchant_name: string | null;
+  operator_transaction_id: string | null;
   initiated_at: string | null;
-  mono_payment_id: string | null;
 }
 
-/**
- * Turns a provider outcome into a state, then records it. Never throws into
- * the caller: the webhook must not retry a payment we have accepted.
- */
-async function settleFulfilment(
+async function settle(
   admin: SupabaseClient,
   tx: TransactionRow,
-  outcome: { status: TransactionStatus; fulfilment?: Fulfilment; reason?: string },
+  status: TransactionStatus,
+  patch: Record<string, unknown>,
+  reason?: string,
 ): Promise<TransactionStatus> {
-  const patch: Record<string, unknown> = {};
-  if (outcome.fulfilment) {
-    patch.operator_reference = outcome.fulfilment.operatorReference;
-    if (outcome.fulfilment.token) patch.token = outcome.fulfilment.token;
-    if (outcome.fulfilment.units) patch.units = outcome.fulfilment.units;
-  }
-
   await transitionTransaction(admin, {
     reference: tx.reference,
     from: "fulfilling",
-    to: outcome.status,
-    reason: outcome.reason,
+    to: status,
+    reason,
     actor: "vtu-service",
     patch,
   });
 
   // We took the money and could not deliver. The only honest exit is giving
   // it back, and it goes on a queue with retries rather than a log line.
-  if (outcome.status === "fulfilment_failed") {
+  if (status === "fulfilment_failed") {
     const queued = await enqueueRefund(admin, {
       transactionId: tx.id,
       reference: tx.reference,
       amount: Number(tx.amount),
-      reason: outcome.reason ?? "fulfilment failed",
+      reason: reason ?? "fulfilment failed",
     });
     if (queued) {
       await transitionTransaction(admin, {
@@ -365,28 +353,23 @@ async function settleFulfilment(
       return "refund_pending";
     }
   }
-
-  return outcome.status;
+  return status;
 }
 
 async function fulfilTransaction(admin: SupabaseClient, reference: string): Promise<TransactionStatus> {
-  const { data: tx } = await admin
+  const { data } = await admin
     .from("transactions")
     .select(
-      "id, reference, status, amount, base_amount, service_type, provider, beneficiary, variation_code, fulfilment_provider, initiated_at, mono_payment_id",
+      "id, reference, status, amount, base_amount, service_type, provider, beneficiary, variation_code, merchant_name, operator_transaction_id, initiated_at",
     )
     .eq("reference", reference)
     .maybeSingle();
 
-  if (!tx) throw new ApiError("Unknown reference", 404, "UNKNOWN_REFERENCE");
+  if (!data) throw new ApiError("Unknown reference", 404, "UNKNOWN_REFERENCE");
+  const tx = data as TransactionRow;
 
-  const row = tx as TransactionRow;
-
-  if (row.status !== "paid") {
-    // Fulfilment is only ever reachable from paid. Anything else is either
-    // already in flight or already finished.
-    return row.status;
-  }
+  // Fulfilment is only ever reachable from paid.
+  if (tx.status !== "paid") return tx.status;
 
   const moved = await transitionTransaction(admin, {
     reference,
@@ -394,100 +377,125 @@ async function fulfilTransaction(admin: SupabaseClient, reference: string): Prom
     to: "fulfilling",
     actor: "vtu-service",
   });
-  if (!moved.ok) return row.status; // another worker got there first
+  if (!moved.ok) return tx.status; // another worker got there first
 
-  const isTelecom = row.service_type === "airtime" || row.service_type === "data";
-  const destination = isTelecom
-    ? normalizeNigerianPhone(row.beneficiary ?? "")
-    : (row.beneficiary ?? "");
+  const phone = bigisub.normalizeNigerianPhone(tx.beneficiary ?? "");
+  const base = Number(tx.base_amount ?? tx.amount);
 
   try {
-    if (row.fulfilment_provider === "bigisub") {
-      const fulfilment = await purchaseSmeData({
-        networkId: bigisubNetworkId(row.provider ?? "")!,
-        planId: Number(row.variation_code),
-        phone: destination,
-      });
-      return await settleFulfilment(admin, row, {
-        status: statusForBigisubResponse({ ok: true, status: fulfilment.providerStatus }),
-        fulfilment,
-      });
+    let result: bigisub.Fulfilment;
+
+    switch (tx.service_type) {
+      case "airtime":
+        result = await bigisub.purchaseAirtime({
+          network: requireNetwork(tx.provider ?? ""),
+          phone,
+          amount: base,
+        });
+        break;
+      case "data":
+        result = await bigisub.purchaseData({
+          network: requireNetwork(tx.provider ?? ""),
+          planId: Number(tx.variation_code),
+          phone: phone,
+        });
+        break;
+      case "cable":
+        result = await bigisub.purchaseCable({
+          cableType: requireCable(tx.provider ?? ""),
+          cardNo: tx.beneficiary ?? "",
+          phone,
+          amount: base,
+          customerName: tx.merchant_name ?? "MiliPay customer",
+        });
+        break;
+      case "power":
+        result = await bigisub.payElectricity({
+          company: tx.provider ?? "",
+          meterNo: tx.beneficiary ?? "",
+          meterType: (tx.variation_code as "prepaid" | "postpaid") ?? "prepaid",
+          phone,
+          amount: base,
+          customerName: tx.merchant_name ?? "MiliPay customer",
+        });
+        break;
+      default:
+        return await settle(admin, tx, "fulfilment_failed", {}, "unsupported service type");
     }
 
-    const fulfilment = await payWithVtpass({
-      serviceType: row.service_type ?? "airtime",
-      serviceId: resolveVtpassServiceId(row.service_type ?? "airtime", row.provider ?? ""),
-      reference,
-      billersCode: destination,
-      phone: destination,
-      baseAmount: Number(row.base_amount ?? row.amount),
-      variationCode: row.variation_code ?? undefined,
-      meterType: row.variation_code ?? "prepaid",
-      issuedAt: row.initiated_at ?? undefined,
-    });
-
-    return await settleFulfilment(admin, row, {
-      status: statusForVtpassCode(fulfilment.providerCode),
-      fulfilment,
+    return await settle(admin, tx, statusForProviderStatus(result.providerStatus), {
+      operator_reference: result.operatorReference,
+      operator_transaction_id: result.tranxId,
+      token: result.token ?? null,
+      units: result.units ?? null,
+      service_charge: result.serviceCharge ?? null,
     });
   } catch (err) {
-    // A timeout is NOT a failure. VTPass may well have delivered and we simply
-    // did not hear; reversing here refunds the customer AND credits them.
-    const retryable = err instanceof FulfilmentError && err.retryable;
-    return await settleFulfilment(admin, row, {
-      status: retryable ? statusForFulfilmentTimeout() : "fulfilment_failed",
-      reason: err instanceof Error ? err.message : "fulfilment error",
-    });
+    const indeterminate = err instanceof bigisub.FulfilmentError && err.indeterminate;
+
+    // THE IMPORTANT BRANCH. An indeterminate call is NOT a failure: BigiSub may
+    // have fulfilled and we simply did not hear. There is no idempotency key
+    // on their purchase endpoints, so this can never be retried — it is left
+    // pending, with no transaction id, for a human to resolve against their
+    // dashboard. Declaring failure here would refund a customer who was in
+    // fact credited.
+    if (indeterminate) {
+      console.error(
+        `[vtu] INDETERMINATE FULFILMENT on ${reference} — do not retry, resolve manually: ` +
+          (err instanceof Error ? err.message : String(err)),
+      );
+    }
+
+    return await settle(
+      admin,
+      tx,
+      indeterminate ? statusForIndeterminateFulfilment() : "fulfilment_failed",
+      {},
+      err instanceof Error ? err.message : "fulfilment error",
+    );
   }
 }
 
-/** Resolves a transaction the operator never gave a final answer for. */
+/** Resolves a pending transaction using BigiSub's own transaction id. */
 async function requeryTransaction(admin: SupabaseClient, reference: string): Promise<TransactionStatus> {
-  const { data: tx } = await admin
+  const { data } = await admin
     .from("transactions")
-    .select("id, reference, status, amount, initiated_at, fulfilment_provider")
+    .select("id, reference, status, amount, operator_transaction_id")
     .eq("reference", reference)
     .maybeSingle();
 
-  if (!tx) throw new ApiError("Unknown reference", 404, "UNKNOWN_REFERENCE");
-  const row = tx as TransactionRow;
-  if (row.status !== "fulfilment_pending") return row.status;
+  if (!data) throw new ApiError("Unknown reference", 404, "UNKNOWN_REFERENCE");
+  const tx = data as TransactionRow;
+  if (tx.status !== "fulfilment_pending") return tx.status;
 
-  // BigiSub has no documented requery; those are left for the operator view
-  // rather than guessed at.
-  if (row.fulfilment_provider === "bigisub") return row.status;
+  // No transaction id means the purchase call never returned one, which means
+  // we do not know whether it happened. That cannot be resolved from here.
+  if (!tx.operator_transaction_id) return tx.status;
 
-  let result: Awaited<ReturnType<typeof requeryVtpass>>;
+  let result: bigisub.RequeryResult;
   try {
-    result = await requeryVtpass(reference, row.initiated_at ?? undefined);
+    result = await bigisub.requeryTransaction(tx.operator_transaction_id);
   } catch {
-    return row.status; // still unknown; try again next sweep
+    return tx.status; // still unknown; the sweep tries again
   }
 
-  const status = result.providerStatus
-    ? statusForVtpassTransactionStatus(result.providerStatus)
-    : statusForVtpassCode(result.providerCode);
-
+  const status = statusForProviderStatus(result.status);
   if (status === "fulfilment_pending") return status;
-
-  const patch: Record<string, unknown> = {};
-  if (result.token) patch.token = result.token;
-  if (result.units) patch.units = result.units;
 
   await transitionTransaction(admin, {
     reference,
     from: "fulfilment_pending",
     to: status,
     actor: "requery",
-    patch,
-    metadata: { providerCode: result.providerCode, providerStatus: result.providerStatus },
+    patch: { token: result.token ?? null, units: result.units ?? null },
+    metadata: { providerStatus: result.status },
   });
 
   if (status === "fulfilment_failed") {
     const queued = await enqueueRefund(admin, {
-      transactionId: row.id,
+      transactionId: tx.id,
       reference,
-      amount: Number(row.amount),
+      amount: Number(tx.amount),
       reason: "operator reported failure on requery",
     });
     if (queued) {
@@ -500,15 +508,9 @@ async function requeryTransaction(admin: SupabaseClient, reference: string): Pro
       return "refund_pending";
     }
   }
-
   return status;
 }
 
-/**
- * Internal actions carry the service-role key. requireCaller accepts it, but
- * it resolves to no customer profile, so they are gated explicitly rather
- * than relying on that side effect.
- */
 function assertInternal(req: Request): void {
   const serviceKey =
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SERVICE_ROLE_KEY") ?? "";
@@ -527,31 +529,26 @@ serve(handler(async (req) => {
   const body = await req.json().catch(() => ({}));
   const action = typeof body?.action === "string" ? body.action : "purchase";
 
-  // ---- Internal: fulfilment and requery --------------------------------
+  // ---- Internal ---------------------------------------------------------
   if (action === "fulfil" || action === "requery") {
     assertInternal(req);
     const reference = String(body?.reference ?? "");
     if (!reference) throw new ApiError("reference is required", 400, "VALIDATION_FAILED");
-
     const status = action === "fulfil"
       ? await fulfilTransaction(admin, reference)
       : await requeryTransaction(admin, reference);
-
     return json({ success: true, reference, status });
   }
 
   const caller: Caller = await requireCaller(req);
 
-  // ---- Read the live margin configuration ------------------------------
   if (action === "get_settings") {
     return json({ success: true, settings: await loadSettings(admin) });
   }
 
-  // ---- Update margins (administrators only) ----------------------------
   if (action === "update_settings") {
     await requireStaffRole(admin, caller.id, ["admin", "super_admin"]);
     const patch = parse(settingsSchema, body);
-
     const { data, error } = await admin
       .from("vtu_settings")
       .upsert({
@@ -567,88 +564,101 @@ serve(handler(async (req) => {
       console.error("[vtu] settings upsert failed", error);
       throw new ApiError("Could not save margin settings", 500, "SETTINGS_WRITE_FAILED");
     }
-
     return json({ success: true, settings: await loadSettings(admin), saved: Boolean(data) });
   }
 
-  // ---- Retail catalogue ------------------------------------------------
-  if (action === "get_variations") {
-    const { serviceType = "data", provider = "mtn" } = body;
+  // ---- Catalogues -------------------------------------------------------
+  if (action === "get_variations" || action === "get_sme_plans") {
     const settings = await loadSettings(admin);
-    const serviceId = body.serviceId || resolveVtpassServiceId(serviceType, provider);
-    const surcharge = surchargeFor(serviceType, serviceId, settings);
-    const cacheId = `vtpass:${serviceId}`;
+    const serviceType = String(body.serviceType ?? (action === "get_sme_plans" ? "data" : "data"));
+    const provider = String(body.provider ?? "mtn");
+    const surcharge = surchargeFor(serviceType, settings);
+
+    const planType = planTypeFor({
+      planType: body.planType,
+      dataCategory: action === "get_sme_plans" ? "sme" : body.dataCategory,
+    });
+
+    const cacheId = serviceType === "cable"
+      ? `bigisub:cable:${provider}`
+      : `bigisub:data:${provider}:${planType}`;
 
     try {
-      const variations = await fetchVtpassVariations(serviceId, surcharge);
-      await cacheCatalogue(admin, cacheId, "vtpass", serviceId, variations);
-      return json({ success: true, serviceId, surcharge, variations, stale: false });
+      const variations = serviceType === "cable"
+        ? await bigisub.listCablePlans(requireCable(provider), surcharge)
+        : await bigisub.listDataPlans(requireNetwork(provider), planType, surcharge);
+
+      if (variations.length === 0) throw new Error("empty catalogue");
+      await cacheCatalogue(admin, cacheId, `${serviceType}:${provider}`, variations);
+      return json({ success: true, provider, planType, surcharge, variations, plans: variations, stale: false });
     } catch (err) {
-      // A slow provider used to be a hard 503, so a customer could not even
-      // browse. The cache is for browsing ONLY: the price actually charged is
-      // re-resolved live at purchase, and a bundle whose price has moved is
-      // refused there rather than honoured from here.
-      console.warn(`[vtu] variations unavailable for ${serviceId}`, err);
+      if (err instanceof ApiError) throw err;
+      // A slow gateway used to be a hard 503, so a customer could not even
+      // browse. The cache is for BROWSING ONLY: the price charged is
+      // re-resolved live at purchase.
+      console.warn(`[vtu] catalogue unavailable for ${cacheId}`, err);
       const cached = await cachedCatalogue(admin, cacheId);
       if (cached) {
         return json({
           success: true,
-          serviceId,
+          provider,
+          planType,
           surcharge,
           variations: cached.variations,
-          stale: true,
-          fetchedAt: cached.fetchedAt,
-        });
-      }
-      throw new ApiError(
-        "Live bundle prices are temporarily unavailable. Please try again shortly.",
-        503,
-        "CATALOGUE_UNAVAILABLE",
-      );
-    }
-  }
-
-  // ---- Wholesale SME catalogue (MTN and Airtel only) -------------------
-  if (action === "get_sme_plans") {
-    const provider = String(body.provider ?? "mtn");
-    const networkId = bigisubNetworkId(provider);
-
-    if (networkId === null) {
-      throw new ApiError(
-        `SME data is only available on MTN and Airtel. Choose the direct bundle for ${provider.toUpperCase()}.`,
-        400,
-        "SME_NOT_AVAILABLE",
-      );
-    }
-    if (!isBigisubConfigured()) {
-      throw new ApiError("SME data is not available right now.", 503, "SME_UNAVAILABLE");
-    }
-
-    const settings = await loadSettings(admin);
-    const cacheId = `bigisub:${networkId}`;
-
-    try {
-      const plans = await fetchSmePlans(networkId, settings.data_surcharge_ngn);
-      if (plans.length === 0) throw new Error("empty SME catalogue");
-      await cacheCatalogue(admin, cacheId, "bigisub", String(networkId), plans);
-      return json({ success: true, network: networkId, surcharge: settings.data_surcharge_ngn, plans, stale: false });
-    } catch (err) {
-      console.warn(`[vtu] SME plans unavailable for network ${networkId}`, err);
-      const cached = await cachedCatalogue(admin, cacheId);
-      if (cached) {
-        return json({
-          success: true,
-          network: networkId,
-          surcharge: settings.data_surcharge_ngn,
           plans: cached.variations,
           stale: true,
           fetchedAt: cached.fetchedAt,
         });
       }
       throw new ApiError(
-        "SME data plans are temporarily unavailable. Please try again shortly.",
+        "Live prices are temporarily unavailable. Please try again shortly.",
         503,
         "CATALOGUE_UNAVAILABLE",
+      );
+    }
+  }
+
+  if (action === "get_electricity_providers") {
+    try {
+      return json({ success: true, providers: await bigisub.listElectricityProviders() });
+    } catch {
+      throw new ApiError("Electricity providers are unavailable right now.", 503, "CATALOGUE_UNAVAILABLE");
+    }
+  }
+
+  // ---- Verification (required before power and cable purchases) ---------
+  if (action === "verify_meter") {
+    await rateLimit(admin, `vtu:verify:${caller.id}`, 20, 60);
+    try {
+      const verified = await bigisub.verifyMeter({
+        company: String(body.provider ?? ""),
+        meterNo: String(body.destination ?? ""),
+        meterType: body.meterType === "postpaid" ? "postpaid" : "prepaid",
+      });
+      return json({ success: true, ...verified });
+    } catch (err) {
+      throw new ApiError(
+        err instanceof Error ? err.message : "That meter could not be verified.",
+        400,
+        "VERIFICATION_FAILED",
+      );
+    }
+  }
+
+  if (action === "verify_cable") {
+    await rateLimit(admin, `vtu:verify:${caller.id}`, 20, 60);
+    try {
+      const verified = await bigisub.verifyCable({
+        cableName: requireCable(String(body.provider ?? "")),
+        cardNo: String(body.destination ?? ""),
+      });
+      return json({ success: true, ...verified });
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+      throw new ApiError(
+        err instanceof Error ? err.message : "That smartcard could not be verified.",
+        400,
+        "VERIFICATION_FAILED",
       );
     }
   }
@@ -682,27 +692,31 @@ serve(handler(async (req) => {
 
   if (!coherence.ok) {
     console.error("[vtu] refusing to fulfil:", coherence.reason);
-    throw new ApiError(
-      "Quick services are misconfigured and have been disabled.",
-      503,
-      "FULFILMENT_MISCONFIGURED",
-    );
+    throw new ApiError("Quick services are misconfigured and have been disabled.", 503, "FULFILMENT_MISCONFIGURED");
   }
   if (mode !== "live") {
     throw new ApiError(disabledMessage(mode), 503, "FULFILMENT_DISABLED");
   }
+  if (!bigisub.isConfigured()) {
+    throw new ApiError("Quick services are unavailable right now.", 503, "FULFILMENT_UNAVAILABLE");
+  }
   if (!isMonoConfigured()) {
     // No payment rail means no way to take the money, and vending without
     // taking it is what this whole rework exists to stop.
-    throw new ApiError(
-      "Payments are temporarily unavailable. Nothing was charged.",
-      503,
-      "PAYMENT_UNAVAILABLE",
-    );
+    throw new ApiError("Payments are temporarily unavailable. Nothing was charged.", 503, "PAYMENT_UNAVAILABLE");
   }
 
   const input = parse(purchaseSchema, body);
-  const route = routeFor(input);
+
+  if ((input.serviceType === "power" || input.serviceType === "cable") && !input.customerName) {
+    // BigiSub's pay/purchase endpoints require the verified name, so skipping
+    // verification would fail at the gateway — after the customer had paid.
+    throw new ApiError(
+      "This account needs to be verified before payment.",
+      400,
+      "VERIFICATION_REQUIRED",
+    );
+  }
 
   await rateLimit(admin, `vtu:purchase:${caller.id}`, 10, 60);
 
@@ -714,26 +728,22 @@ serve(handler(async (req) => {
   const settings = await loadSettings(admin);
   const priced = await priceTransaction(input, settings);
 
-  // ---- Our own wallet, checked BEFORE the customer's bank --------------
+  // ---- OUR wallet, checked BEFORE the customer's bank ------------------
   // Leg 1 moves the customer's money to us; leg 2 spends our pre-funded
-  // VTPass balance. They are separate pots. An empty VTPass wallet means we
-  // take the money and cannot deliver, so the sale is refused first.
-  if (route === "vtpass") {
-    const walletNgn = await fetchVtpassWalletBalance();
-    if (walletNgn !== null && walletNgn < priced.baseAmount) {
-      console.error(
-        `[vtu] VTPASS WALLET TOO LOW: ${walletNgn} < ${priced.baseAmount} — refusing sale`,
-      );
-      throw new ApiError(
-        "This service is briefly unavailable. Nothing was charged — please try again shortly.",
-        503,
-        "FULFILMENT_CAPACITY",
-      );
-    }
+  // BigiSub balance. Separate pots. An empty wallet means taking the money
+  // and being unable to deliver.
+  const wallet = await bigisub.walletBalance();
+  if (wallet !== null && wallet.balance < priced.baseAmount + priced.serviceCharge) {
+    console.error(
+      `[vtu] BIGISUB WALLET TOO LOW: ${wallet.balance} < ${priced.baseAmount + priced.serviceCharge} — refusing sale`,
+    );
+    throw new ApiError(
+      "This service is briefly unavailable. Nothing was charged — please try again shortly.",
+      503,
+      "FULFILMENT_CAPACITY",
+    );
   }
 
-  // Tier caps, daily cap, and the PIN challenge above the customer's
-  // threshold. Unchanged — this was already correct.
   await enforceTransactionLimits(admin, {
     authUserId: caller.id,
     customerId: profile.id,
@@ -751,27 +761,29 @@ serve(handler(async (req) => {
   const reference = `MP-BIL-${Date.now().toString(36).toUpperCase()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 
   const isTelecom = input.serviceType === "airtime" || input.serviceType === "data";
-  const destination = isTelecom ? normalizeNigerianPhone(input.destination) : input.destination;
+  const destination = isTelecom ? bigisub.normalizeNigerianPhone(input.destination) : input.destination;
   const title = merchantTitle(input, priced.planLabel);
   const now = new Date().toISOString();
 
-  // ---- The row exists BEFORE any money moves --------------------------
   const { data: created, error: insertError } = await admin
     .from("transactions")
     .insert({
       reference,
       user_id: caller.id,
       customer_id: profile.id,
-      merchant_name: title,
+      // For power and cable this carries the verified account holder, which
+      // BigiSub's own endpoints require back at fulfilment time.
+      merchant_name: input.customerName ?? title,
       amount: priced.amount,
       base_amount: priced.baseAmount,
-      fee_amount: roundNaira(priced.amount - priced.baseAmount),
+      fee_amount: roundNaira(priced.amount - priced.baseAmount - priced.serviceCharge),
+      service_charge: priced.serviceCharge,
       status: "initiated",
       service_type: input.serviceType,
       provider: input.provider,
       beneficiary: destination,
       variation_code: input.serviceType === "power" ? input.meterType : input.variationCode ?? null,
-      fulfilment_provider: route,
+      fulfilment_provider: "bigisub",
       payment_provider: "mono",
       account_used: input.accountId,
       initiated_at: now,
@@ -791,13 +803,13 @@ serve(handler(async (req) => {
     from_status: null,
     to_status: "initiated",
     actor: "vtu-service",
-    metadata: { serviceType: input.serviceType, provider: input.provider, route },
+    metadata: { serviceType: input.serviceType, provider: input.provider, title },
   });
 
   // ---- Leg 1: ask the bank ---------------------------------------------
   const { data: account } = await admin
     .from("linked_accounts")
-    .select("id, account_name, mono_account_id")
+    .select("id, account_name")
     .eq("id", input.accountId)
     .eq("user_id", caller.id)
     .eq("is_active", true)
@@ -805,11 +817,8 @@ serve(handler(async (req) => {
 
   if (!account) {
     await transitionTransaction(admin, {
-      reference,
-      from: "initiated",
-      to: "payment_failed",
-      reason: "account not linked",
-      actor: "vtu-service",
+      reference, from: "initiated", to: "payment_failed",
+      reason: "account not linked", actor: "vtu-service",
     });
     throw new ApiError("That bank account is not linked to your profile.", 403, "ACCOUNT_NOT_FOUND");
   }
@@ -825,11 +834,8 @@ serve(handler(async (req) => {
 
     if (!mandate) {
       await transitionTransaction(admin, {
-        reference,
-        from: "initiated",
-        to: "payment_failed",
-        reason: "no active mandate",
-        actor: "vtu-service",
+        reference, from: "initiated", to: "payment_failed",
+        reason: "no active mandate", actor: "vtu-service",
       });
       throw new ApiError(
         "This account needs to be re-authorised before it can be used to pay.",
@@ -839,11 +845,8 @@ serve(handler(async (req) => {
     }
     if (mandate.max_per_debit !== null && priced.amount > Number(mandate.max_per_debit)) {
       await transitionTransaction(admin, {
-        reference,
-        from: "initiated",
-        to: "payment_failed",
-        reason: "above mandate ceiling",
-        actor: "vtu-service",
+        reference, from: "initiated", to: "payment_failed",
+        reason: "above mandate ceiling", actor: "vtu-service",
       });
       throw new ApiError(
         `This is above the limit your bank approved for this account (₦${Number(mandate.max_per_debit).toLocaleString()}).`,
@@ -876,6 +879,7 @@ serve(handler(async (req) => {
       message: CUSTOMER_STATUS_COPY.initiated,
       amount: priced.amount,
       baseAmount: priced.baseAmount,
+      serviceCharge: priced.serviceCharge,
       serviceType: input.serviceType,
       provider: input.provider,
       beneficiary: input.destination,
@@ -887,11 +891,8 @@ serve(handler(async (req) => {
     });
   } catch (err) {
     await transitionTransaction(admin, {
-      reference,
-      from: "initiated",
-      to: "payment_failed",
-      reason: err instanceof Error ? err.message : "debit failed",
-      actor: "vtu-service",
+      reference, from: "initiated", to: "payment_failed",
+      reason: err instanceof Error ? err.message : "debit failed", actor: "vtu-service",
     });
     throw toApiError(err, "Your bank declined this payment. Nothing was charged.");
   }

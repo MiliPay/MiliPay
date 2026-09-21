@@ -13,11 +13,10 @@ import {
   paymentMatchesPricedAmount,
   refundBackoffSeconds,
   refundExhausted,
-  statusForBigisubResponse,
-  statusForFulfilmentTimeout,
+  canRetryPurchase,
+  statusForIndeterminateFulfilment,
   statusForMonoEvent,
-  statusForVtpassCode,
-  statusForVtpassTransactionStatus,
+  statusForProviderStatus,
   type TransactionStatus,
 } from "../supabase/functions/_shared/vtu-state";
 
@@ -86,52 +85,47 @@ describe("transitions", () => {
   });
 });
 
-describe("VTPass response codes", () => {
-  it("treats 099 as PENDING, not success", () => {
-    // The old code treated 099 as final success: charged the customer, wrote
-    // the row 'success', and never found out if VTPass later failed it.
-    expect(statusForVtpassCode("099")).toBe("fulfilment_pending");
-    expect(statusForVtpassCode("001")).toBe("fulfilment_pending");
+describe("BigiSub provider statuses", () => {
+  it("reads the three states BigiSub actually reports", () => {
+    // Their OpenAPI spec enumerates exactly: successful | failed | processing.
+    expect(statusForProviderStatus("successful")).toBe("delivered");
+    expect(statusForProviderStatus("failed")).toBe("fulfilment_failed");
+    expect(statusForProviderStatus("processing")).toBe("fulfilment_pending");
   });
 
-  it("treats only an explicit 000 as delivered", () => {
-    expect(statusForVtpassCode("000")).toBe("delivered");
-    expect(statusForVtpassCode("016")).toBe("fulfilment_failed");
-    expect(statusForVtpassCode("")).toBe("fulfilment_failed");
-    expect(statusForVtpassCode(undefined)).toBe("fulfilment_failed");
-    expect(statusForVtpassCode(null)).toBe("fulfilment_failed");
+  it("does not treat 'processing' as success", () => {
+    // Treating an in-flight transaction as delivered is how a customer is
+    // charged for airtime the operator later failed to send.
+    expect(statusForProviderStatus("processing")).not.toBe("delivered");
+    expect(statusForProviderStatus("pending")).not.toBe("delivered");
   });
 
-  it("never returns success for anything it does not recognise", () => {
-    for (const junk of ["ok", "true", "SUCCESS", "0", "00", " "]) {
-      expect(statusForVtpassCode(junk), junk).not.toBe("delivered");
+  it("treats an unknown or empty status as PENDING, not failed", () => {
+    // Not knowing is not failure. Declaring failure triggers a refund, and
+    // refunding something that was in fact delivered costs us the value.
+    for (const junk of ["", "  ", "weird", "ok", undefined, null]) {
+      expect(statusForProviderStatus(junk as string), String(junk)).toBe("fulfilment_pending");
     }
   });
 
-  it("reads a requery outcome, and treats 'reversed' as a failure to refund", () => {
-    expect(statusForVtpassTransactionStatus("delivered")).toBe("delivered");
-    expect(statusForVtpassTransactionStatus("pending")).toBe("fulfilment_pending");
-    // VTPass refunded our wallet, so the customer must be refunded too.
-    expect(statusForVtpassTransactionStatus("reversed")).toBe("fulfilment_failed");
-    expect(statusForVtpassTransactionStatus("failed")).toBe("fulfilment_failed");
+  it("is case and whitespace insensitive", () => {
+    expect(statusForProviderStatus("  SUCCESSFUL ")).toBe("delivered");
+    expect(statusForProviderStatus("Failed")).toBe("fulfilment_failed");
   });
 
-  it("does not treat a timeout as a failure", () => {
-    // The operator may well have delivered — we just did not hear. Reversing
-    // here refunds the customer AND credits them, at our cost.
-    expect(statusForFulfilmentTimeout()).toBe("fulfilment_pending");
+  it("does not treat an indeterminate call as a failure", () => {
+    // A timeout or 5xx means BigiSub may well have fulfilled and we did not
+    // hear. Calling it failure refunds the customer AND leaves them credited.
+    expect(statusForIndeterminateFulfilment()).toBe("fulfilment_pending");
   });
 });
 
-describe("BigiSub responses", () => {
-  it("fails closed on a non-ok response regardless of body", () => {
-    expect(statusForBigisubResponse({ ok: false, status: "successful" })).toBe("fulfilment_failed");
-  });
-
-  it("reads the settled outcome when the call succeeded", () => {
-    expect(statusForBigisubResponse({ ok: true, status: "successful" })).toBe("delivered");
-    expect(statusForBigisubResponse({ ok: true, status: "pending" })).toBe("fulfilment_pending");
-    expect(statusForBigisubResponse({ ok: true, status: undefined })).toBe("fulfilment_failed");
+describe("purchase retries", () => {
+  it("never permits one", () => {
+    // BigiSub accepts no idempotency key and no client reference on any
+    // purchase endpoint, and has no transaction-list endpoint. A second call
+    // is a second purchase: charged once, credited twice, at our cost.
+    expect(canRetryPurchase()).toBe(false);
   });
 });
 
