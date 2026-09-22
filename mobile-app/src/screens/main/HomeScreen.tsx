@@ -12,8 +12,9 @@ import Animated, {
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { 
-  Eye, EyeOff, Smartphone, Wifi, Zap, ArrowDownLeft, ArrowUpRight, MoreHorizontal, Lightbulb, Tv, Copy, CheckCheck, Plus,
-  Globe, Bus, GraduationCap, Droplet, Plane, HeartPulse, Ticket, Landmark, X, Check, Share2, FileText, CreditCard
+  Eye, EyeOff, Smartphone, Wifi, Zap, ArrowDownLeft, ArrowUpRight, LayoutGrid, Lightbulb, Tv, Copy, CheckCheck, Plus,
+  Globe, Bus, GraduationCap, Droplet, Plane, HeartPulse, Ticket, Landmark, X, Check, Share2, FileText, CreditCard,
+  type LucideIcon
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
@@ -22,7 +23,7 @@ import { MonoProvider, useMonoConnect } from '@mono.co/connect-react-native';
 
 import { ConfirmIdentitySheet } from '../../components/ui/ConfirmIdentitySheet';
 import { useBankStore, useAuthStore, useTransactionStore, LinkedAccount } from '../../store/useStore';
-import { AVAILABLE_SERVICES, SERVICE_GROUPS, SERVICE_TILES, type ServiceTile, type ServiceType } from '../../lib/services';
+import { HOME_ROW_SERVICES, SERVICE_GROUPS, SERVICE_TILES, type ServiceTile, type ServiceType } from '../../lib/services';
 import { colors } from '../../theme/tokens';
 import { shareReceiptAsPdf, shareReceiptAsImage } from '../../lib/receiptSharing';
 import { isMoneyReturned, rowStatus } from '../../lib/transactionStatus';
@@ -297,10 +298,85 @@ const BankNode = ({ item, index, scrollX, isBalanceHidden, toggleBalance, isActi
 };
 
 /**
- * One service tile. Every available service wears the same brand green:
- * twelve different accent colours made the grid read as decoration rather
- * than a set of things you can do. Unavailable services are visibly muted
- * and carry a `Soon` pill, and they do not navigate.
+ * The three things a square in the service grid can be.
+ *
+ * Every available service wears the same brand green: twelve different accent
+ * colours made the grid read as decoration rather than a set of things you can
+ * do. `more` is the way into the rest — neutral ground so it does not pass for
+ * a fifth service, an outline to give it the same weight as its filled
+ * neighbours, and the brand-coloured icon so it still reads as somewhere to go
+ * rather than something switched off.
+ *
+ * The outline is solid rather than dashed on purpose: Android draws a dashed
+ * border as solid once the corner is rounded, so a dashed edge would mean two
+ * different designs on the two platforms.
+ */
+const GRID_TILE_TONES = {
+  service: {
+    surface: 'bg-signal/15',
+    icon: colors.signal.base,
+    label: 'text-slate-600 dark:text-white/70',
+  },
+  soon: {
+    surface: 'bg-black/[0.04] dark:bg-white/[0.06]',
+    icon: colors.ink.faint,
+    label: 'text-slate-400 dark:text-white/35',
+  },
+  more: {
+    surface: 'bg-black/[0.03] dark:bg-white/[0.04] border border-slate-200 dark:border-white/10',
+    icon: colors.signal.base,
+    label: 'text-slate-600 dark:text-white/70',
+  },
+} as const;
+
+type GridTileTone = keyof typeof GRID_TILE_TONES;
+
+/**
+ * One square in a service grid.
+ *
+ * The home row and the All Services sheet both render through this, so the
+ * same service can never look like two different things in the two places.
+ */
+const GridTile = ({
+  icon: Icon,
+  label,
+  tone,
+  width,
+  caption,
+  onPress,
+}: {
+  icon: LucideIcon;
+  label: string;
+  tone: GridTileTone;
+  width: string;
+  caption?: string;
+  onPress?: () => void;
+}) => {
+  const tune = GRID_TILE_TONES[tone];
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      className={`items-center ${width} mb-5 ${onPress ? 'active:opacity-70' : ''}`}
+    >
+      <View className={`w-14 h-14 rounded-2xl items-center justify-center mb-2 ${tune.surface}`}>
+        <Icon color={tune.icon} size={23} />
+      </View>
+      <Text numberOfLines={1} className={`font-inter text-[11px] text-center ${tune.label}`}>
+        {label}
+      </Text>
+      {caption ? (
+        <Text className="font-inter-medium text-[9px] text-slate-400 dark:text-white/30 mt-0.5">
+          {caption}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+};
+
+/**
+ * A service. Unavailable ones are visibly muted, carry a `Soon` caption, and
+ * do not navigate — passing no `onPress` is what makes the tile inert.
  */
 const ServiceTileButton = ({
   tile,
@@ -311,37 +387,16 @@ const ServiceTileButton = ({
   width: string;
   onPress?: () => void;
 }) => {
-  const Icon = tile.icon;
   const available = tile.service !== null;
   return (
-    <Pressable
+    <GridTile
+      icon={tile.icon}
+      label={tile.label}
+      tone={available ? 'service' : 'soon'}
+      caption={available ? undefined : 'Soon'}
+      width={width}
       onPress={available ? onPress : undefined}
-      disabled={!available}
-      className={`items-center ${width} mb-5 ${available ? 'active:opacity-70' : ''}`}
-    >
-      <View
-        className={`w-14 h-14 rounded-2xl items-center justify-center mb-2 ${
-          available
-            ? 'bg-signal/15'
-            : 'bg-black/[0.04] dark:bg-white/[0.06]'
-        }`}
-      >
-        <Icon color={available ? colors.signal.base : colors.ink.faint} size={23} />
-      </View>
-      <Text
-        numberOfLines={1}
-        className={`font-inter text-[11px] text-center ${
-          available ? 'text-slate-600 dark:text-white/70' : 'text-slate-400 dark:text-white/35'
-        }`}
-      >
-        {tile.label}
-      </Text>
-      {!available && (
-        <Text className="font-inter-medium text-[9px] text-slate-400 dark:text-white/30 mt-0.5">
-          Soon
-        </Text>
-      )}
-    </Pressable>
+    />
   );
 };
 
@@ -635,36 +690,36 @@ function HomeScreenContent({ navigation }: any) {
         </View>
 
         {/* Quick Services */}
-        <View className="px-6 mb-8">
+        <View className="px-6 mb-3">
           <Text className="text-slate-500 dark:text-white/60 font-inter-bold uppercase tracking-widest text-xs mb-4">
             Quick Services
           </Text>
+          {/*
+            Five across: the four services we can deliver, plus the way into
+            the rest. "View all services" used to be a full-width pill under
+            the row, which made the thing that opens the services look like a
+            different kind of object than the services themselves.
+          */}
           <View className="flex-row justify-between">
-            {AVAILABLE_SERVICES.map((tile) => (
+            {HOME_ROW_SERVICES.map((tile) => (
               <ServiceTileButton
                 key={tile.key}
                 tile={tile}
-                width="w-[22%]"
+                width="w-[19%]"
                 onPress={() => handleOpenService(tile.service)}
               />
             ))}
-          </View>
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setIsMoreServicesVisible(true);
-            }}
-            className="flex-row items-center justify-center py-3 rounded-2xl border border-slate-200 dark:border-white/10 active:opacity-60"
-          >
-            <Text className="text-slate-600 dark:text-white/70 font-inter-medium text-[13px]">
-              View all services
-            </Text>
-            <MoreHorizontal
-              color={isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)'}
-              size={16}
-              style={{ marginLeft: 6 }}
+            <GridTile
+              icon={LayoutGrid}
+              label="More"
+              tone="more"
+              width="w-[19%]"
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setIsMoreServicesVisible(true);
+              }}
             />
-          </Pressable>
+          </View>
         </View>
 
         {/* Recent Transactions */}
