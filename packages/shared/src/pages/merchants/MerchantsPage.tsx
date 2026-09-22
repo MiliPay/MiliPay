@@ -56,6 +56,7 @@ export default function MerchantsPage() {
   const activeMerchants = merchants.filter((m) => m.status === "active").length;
   const totalTerminals = merchants.reduce((sum, m) => sum + (m.terminalCount || 0), 0);
   const activeTerminals = merchants.reduce((sum, m) => sum + (m.activeTerminalCount || 0), 0);
+  const suspendedMerchants = merchants.filter((m) => m.status === "suspended").length;
 
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto animate-rise-in space-y-8">
@@ -109,17 +110,17 @@ export default function MerchantsPage() {
           </div>
           <div className="text-2xl font-bold font-data text-white">{totalTerminals}</div>
           <p className="text-xs text-ink-muted mt-1 font-mono">
-            {activeTerminals} online / verified
+            {activeTerminals} active
           </p>
         </div>
 
         <div className="bg-ledger-raised border border-white/[0.06] rounded-xl p-5">
           <div className="flex items-center justify-between text-ink-muted mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Mono Settlement Rail</span>
-            <ShieldCheck className="w-4 h-4 text-status-ok" />
+            <span className="text-xs font-semibold uppercase tracking-wider">Suspended</span>
+            <ShieldCheck className="w-4 h-4 text-status-warn" />
           </div>
-          <div className="text-2xl font-bold font-data text-white">DirectPay</div>
-          <p className="text-xs text-status-ok mt-1 font-mono">100% Automated T+0 Split</p>
+          <div className="text-2xl font-bold font-data text-white">{suspendedMerchants}</div>
+          <p className="text-xs text-ink-muted mt-1">Cannot take payments</p>
         </div>
 
         <div className="bg-ledger-raised border border-white/[0.06] rounded-xl p-5">
@@ -128,7 +129,7 @@ export default function MerchantsPage() {
             <Store className="w-4 h-4 text-signal" />
           </div>
           <div className="text-2xl font-bold font-data text-white">1.50%</div>
-          <p className="text-xs text-ink-muted mt-1 font-mono">MiliPay Platform Take-Rate</p>
+          <p className="text-xs text-ink-muted mt-1">Applied unless a merchant is set otherwise</p>
         </div>
       </div>
 
