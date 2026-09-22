@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
+import { Alert } from 'react-native';
 import { useColorScheme } from 'nativewind';
 import { View, Text, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, Camera, User, Mail, Phone, Lock, Check, MapPin, ShieldCheck, Sliders, ChevronRight } from 'lucide-react-native';
+import { ChevronLeft, User, Mail, Phone, Lock, Check, MapPin, ShieldCheck, Sliders, ChevronRight } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
 import { useAuthStore } from '../../store/useStore';
@@ -28,19 +29,21 @@ export default function ProfileSettingsScreen({ navigation }: any) {
   
   const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setIsSaving(true);
-    
-    setTimeout(() => {
-      setIsSaving(false);
-      navigation.goBack();
-    }, 1000);
-  };
+  const updateProfile = useAuthStore((state) => state.updateProfile);
 
-  const handlePickImage = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    console.log("Open image picker");
+  const handleSave = async () => {
+    setIsSaving(true);
+    const result = await updateProfile({ firstName, lastName, email, address });
+    setIsSaving(false);
+
+    if (!result.success) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Could not save', result.error ?? 'Please try again.');
+      return;
+    }
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    navigation.goBack();
   };
 
   return (
@@ -76,16 +79,7 @@ export default function ProfileSettingsScreen({ navigation }: any) {
                   {user?.initials || 'ME'}
                 </Text>
               </View>
-              
-              <Pressable 
-                onPress={handlePickImage}
-                className="absolute bottom-0 right-0 w-9 h-9 bg-signal rounded-full border-[3px] border-black items-center justify-center z-20"
-                style={{ shadowColor: '#00C896', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 3 }}
-              >
-                <Camera color="#111827" size={14} strokeWidth={2.5} />
-              </Pressable>
             </View>
-            <Text className="text-slate-500 dark:text-white/60 font-inter-medium text-xs mt-4">Change Picture</Text>
           </View>
 
           {/* Form Fields */}

@@ -18,6 +18,7 @@ import { Eye, EyeOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
 import { useAuthStore } from '../../store/useStore';
+import { SUPPORT_EMAIL } from '../../lib/brand';
 
 const logoLight = require('../../../assets/logo.png');
 const logoDark = require('../../../assets/logo-white.png');
@@ -60,7 +61,7 @@ export default function LoginScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Alert.alert(
       'Forgot Password',
-      'Your login password was sent to your registered email and phone number when you enrolled with an authorized Agent. Please check your messages or contact support@milipay.app.',
+      `Your password was sent to your phone and email when an agent enrolled you. Check your messages, or contact ${SUPPORT_EMAIL}.`,
       [{ text: 'OK' }]
     );
   };

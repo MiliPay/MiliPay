@@ -63,6 +63,9 @@ interface AuthState {
     single: number | null,
     daily: number | null
   ) => Promise<{ success: boolean; error?: string; limits?: TransactionLimits }>;
+  updateProfile: (
+    changes: { firstName?: string; lastName?: string; email?: string; address?: string }
+  ) => Promise<{ success: boolean; error?: string }>;
 }
 
 /**
@@ -117,11 +120,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           user: {
             id: session.user.id,
             customerId: customerData?.id,
-            firstName: names[0] || 'User',
-            lastName: names[1] || '',
-            initials: (names[0]?.[0] || 'U') + (names[1]?.[0] || ''),
-            email: session.user.email || '',
-            phone: session.user.phone || '',
+            firstName: customerData?.first_name || names[0] || 'User',
+            lastName: customerData?.last_name || names[1] || '',
+            initials:
+              ((customerData?.first_name || names[0])?.[0] || 'U') +
+              ((customerData?.last_name || names[1])?.[0] || ''),
+            email: customerData?.email || session.user.email || '',
+            phone: customerData?.phone || session.user.phone || '',
             nin: customerData?.nin_last_4 || undefined,
             address: customerData?.address || customerData?.state || undefined,
             kycTier: customerData?.kyc_tier || 2,
@@ -166,11 +171,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           user: {
             id: session.user.id,
             customerId: customerData?.id,
-            firstName: names[0] || 'User',
-            lastName: names[1] || '',
-            initials: (names[0]?.[0] || 'U') + (names[1]?.[0] || ''),
-            email: session.user.email || '',
-            phone: session.user.phone || '',
+            firstName: customerData?.first_name || names[0] || 'User',
+            lastName: customerData?.last_name || names[1] || '',
+            initials:
+              ((customerData?.first_name || names[0])?.[0] || 'U') +
+              ((customerData?.last_name || names[1])?.[0] || ''),
+            email: customerData?.email || session.user.email || '',
+            phone: customerData?.phone || session.user.phone || '',
             nin: customerData?.nin_last_4 || undefined,
             address: customerData?.address || customerData?.state || undefined,
             kycTier: customerData?.kyc_tier || 2,
@@ -219,6 +226,70 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     await supabase.auth.signOut();
     set({ isAuthenticated: false, user: null, onboarding: null });
+  },
+
+  /**
+   * Save the parts of a profile a customer owns.
+   *
+   * Only these columns: the database grants `authenticated` UPDATE on
+   * first_name, last_name, email, phone, address and state and nothing else,
+   * so kyc_tier, status and the limits cannot be written from here even by a
+   * repacked app. Phone is deliberately left out — it is the login identifier
+   * and changing it belongs with an agent.
+   */
+  updateProfile: async (changes) => {
+    const current = get().user;
+    if (!current?.customerId) {
+      return { success: false, error: 'Your profile is still loading. Try again in a moment.' };
+    }
+
+    const payload: Record<string, string> = {};
+    if (changes.firstName !== undefined) payload.first_name = changes.firstName.trim();
+    if (changes.lastName !== undefined) payload.last_name = changes.lastName.trim();
+    if (changes.email !== undefined) payload.email = changes.email.trim().toLowerCase();
+    if (changes.address !== undefined) payload.address = changes.address.trim();
+
+    if (Object.keys(payload).length === 0) return { success: true };
+
+    if (payload.email && !/^[^@s]+@[^@s]+.[^@s]+$/.test(payload.email)) {
+      return { success: false, error: 'That email address does not look right.' };
+    }
+    if (payload.first_name !== undefined && payload.first_name.length < 2) {
+      return { success: false, error: 'Enter your first name.' };
+    }
+
+    // .select() matters: a row policy that does not match is not an error, it
+    // is zero rows, and PostgREST reports that as success. Without reading the
+    // row back, a save that changed nothing would look like a save.
+    const { data, error } = await supabase
+      .from('customers')
+      .update(payload)
+      .eq('id', current.customerId)
+      .select('first_name, last_name, email, address')
+      .maybeSingle();
+
+    if (error) {
+      console.warn('[profile] update failed', error.message);
+      return { success: false, error: 'Could not save your changes. Please try again.' };
+    }
+    if (!data) {
+      return { success: false, error: 'Could not save your changes. Please try again.' };
+    }
+
+    set({
+      user: {
+        ...current,
+        firstName: data.first_name ?? current.firstName,
+        lastName: data.last_name ?? current.lastName,
+        initials:
+          (data.first_name?.[0] ?? current.firstName?.[0] ?? 'U') +
+          (data.last_name?.[0] ?? ''),
+        email: data.email ?? current.email,
+        address: data.address ?? current.address,
+      },
+    });
+
+    return { success: true };
   },
 
   refreshOnboarding: async () => {

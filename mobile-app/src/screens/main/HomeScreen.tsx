@@ -92,8 +92,8 @@ const LinkBankCard = ({ index, scrollX, isDark }: any) => {
     }
     if (!hasCompleteIdentity) {
       Alert.alert(
-        "Complete your profile first",
-        "Your bank needs your full name and email address to match the account to you. Add them in Settings, then link your account."
+        "We need your details first",
+        "Your bank has to match this account to your full name and email address, and we do not have both on file. Contact support or the agent who enrolled you, then try again."
       );
       return;
     }

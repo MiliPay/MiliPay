@@ -2,6 +2,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { captureRef } from 'react-native-view-shot';
 import { Share, Alert } from 'react-native';
+import { SUPPORT_EMAIL } from './brand';
 
 export interface ReceiptInfo {
   reference: string;
@@ -263,7 +264,7 @@ export function generateReceiptHtml(receipt: ReceiptInfo): string {
     <div class="footer">
       <strong>MiliPay Technologies Limited</strong><br>
       Keep this receipt. Quote the reference above if you contact support.<br>
-      support@milipay.ng
+      ${SUPPORT_EMAIL}
     </div>
   </div>
 </body>
