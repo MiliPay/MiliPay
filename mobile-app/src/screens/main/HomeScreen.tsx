@@ -22,6 +22,8 @@ import { MonoProvider, useMonoConnect } from '@mono.co/connect-react-native';
 
 import { ConfirmIdentitySheet } from '../../components/ui/ConfirmIdentitySheet';
 import { useBankStore, useAuthStore, useTransactionStore, LinkedAccount } from '../../store/useStore';
+import { AVAILABLE_SERVICES, SERVICE_GROUPS, SERVICE_TILES, type ServiceTile, type ServiceType } from '../../lib/services';
+import { colors } from '../../theme/tokens';
 import { shareReceiptAsPdf, shareReceiptAsImage } from '../../lib/receiptSharing';
 
 const { width } = Dimensions.get('window');
@@ -61,7 +63,17 @@ const CARD_THEMES = [
 const LinkBankCard = ({ index, scrollX, isDark }: any) => {
   const { init } = useMonoConnect();
   const { linkedAccounts } = useBankStore();
+  const user = useAuthStore((state) => state.user);
   const [isConfirming, setIsConfirming] = useState(false);
+
+  /**
+   * Mono ties the connection — and any Direct Debit mandate signed against it —
+   * to the name and email we hand over. Refusing to link is recoverable;
+   * linking a real bank account under a placeholder identity is not.
+   */
+  const hasCompleteIdentity = Boolean(
+    user?.email?.trim() && user?.firstName?.trim() && user.firstName !== 'User',
+  );
 
   /**
    * Linking a bank account is a sensitive action, so it is gated on the device
@@ -72,8 +84,15 @@ const LinkBankCard = ({ index, scrollX, isDark }: any) => {
   const handleLinkPress = () => {
     if (linkedAccounts.length >= 3) {
       Alert.alert(
-        "Limit Reached",
-        "You have reached the maximum limit of 3 linked bank accounts. Please remove an existing account to link a new one."
+        "Limit reached",
+        "You can link up to 3 bank accounts. Remove one to link another."
+      );
+      return;
+    }
+    if (!hasCompleteIdentity) {
+      Alert.alert(
+        "Complete your profile first",
+        "Your bank needs your full name and email address to match the account to you. Add them in Settings, then link your account."
       );
       return;
     }
@@ -111,7 +130,7 @@ const LinkBankCard = ({ index, scrollX, isDark }: any) => {
           <Plus color="#10b981" size={32} />
         </View>
         <Text className="text-slate-900 dark:text-white font-inter-bold text-xl mb-1">Link Bank Account</Text>
-        <Text className="text-slate-500 dark:text-white/60 font-inter text-sm text-center px-8">Connect another account to use with BioPay.</Text>
+        <Text className="text-slate-500 dark:text-white/60 font-inter text-sm text-center px-8">Connect another account to pay with.</Text>
       </Pressable>
 
       <ConfirmIdentitySheet
@@ -276,6 +295,55 @@ const BankNode = ({ item, index, scrollX, isBalanceHidden, toggleBalance, isActi
   );
 };
 
+/**
+ * One service tile. Every available service wears the same brand green:
+ * twelve different accent colours made the grid read as decoration rather
+ * than a set of things you can do. Unavailable services are visibly muted
+ * and carry a `Soon` pill, and they do not navigate.
+ */
+const ServiceTileButton = ({
+  tile,
+  width,
+  onPress,
+}: {
+  tile: ServiceTile;
+  width: string;
+  onPress?: () => void;
+}) => {
+  const Icon = tile.icon;
+  const available = tile.service !== null;
+  return (
+    <Pressable
+      onPress={available ? onPress : undefined}
+      disabled={!available}
+      className={`items-center ${width} mb-5 ${available ? 'active:opacity-70' : ''}`}
+    >
+      <View
+        className={`w-14 h-14 rounded-2xl items-center justify-center mb-2 ${
+          available
+            ? 'bg-signal/15'
+            : 'bg-black/[0.04] dark:bg-white/[0.06]'
+        }`}
+      >
+        <Icon color={available ? colors.signal.base : colors.ink.faint} size={23} />
+      </View>
+      <Text
+        numberOfLines={1}
+        className={`font-inter text-[11px] text-center ${
+          available ? 'text-slate-600 dark:text-white/70' : 'text-slate-400 dark:text-white/35'
+        }`}
+      >
+        {tile.label}
+      </Text>
+      {!available && (
+        <Text className="font-inter-medium text-[9px] text-slate-400 dark:text-white/30 mt-0.5">
+          Soon
+        </Text>
+      )}
+    </Pressable>
+  );
+};
+
 function HomeScreenContent({ navigation }: any) {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme !== 'light';
@@ -430,7 +498,11 @@ function HomeScreenContent({ navigation }: any) {
     return unsubscribe;
   }, [user?.id, user?.customerId]);
 
-  const handleOpenService = (serviceType: string) => {
+  // `null` is a service we cannot deliver yet. The tile is already disabled, so
+  // this is the second lock rather than the first: nothing can navigate to a
+  // purchase screen for a service the server would reject.
+  const handleOpenService = (serviceType: ServiceType | null) => {
+    if (!serviceType) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsMoreServicesVisible(false);
     navigation.navigate('QuickService', { serviceType });
@@ -560,60 +632,32 @@ function HomeScreenContent({ navigation }: any) {
           <Text className="text-slate-500 dark:text-white/60 font-inter-bold uppercase tracking-widest text-xs mb-4">
             Quick Services
           </Text>
-          <View className="flex-row flex-wrap justify-between">
-            <Pressable onPress={() => handleOpenService('airtime')} className="items-center w-[22%] mb-6 active:opacity-70">
-              <View className="w-14 h-14 rounded-full bg-emerald-500/15 items-center justify-center mb-2">
-                <Smartphone color="#10b981" size={24} />
-              </View>
-              <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center" numberOfLines={1}>Airtime</Text>
-            </Pressable>
-            <Pressable onPress={() => handleOpenService('data')} className="items-center w-[22%] mb-6 active:opacity-70">
-              <View className="w-14 h-14 rounded-full bg-blue-500/15 items-center justify-center mb-2">
-                <Wifi color="#3b82f6" size={24} />
-              </View>
-              <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center" numberOfLines={1}>Data</Text>
-            </Pressable>
-            <Pressable onPress={() => handleOpenService('power')} className="items-center w-[22%] mb-6 active:opacity-70">
-              <View className="w-14 h-14 rounded-full bg-orange-500/15 items-center justify-center mb-2">
-                <Lightbulb color="#f97316" size={24} />
-              </View>
-              <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center" numberOfLines={1}>Power</Text>
-            </Pressable>
-            <Pressable onPress={() => handleOpenService('cable')} className="items-center w-[22%] mb-6 active:opacity-70">
-              <View className="w-14 h-14 rounded-full bg-purple-500/15 items-center justify-center mb-2">
-                <Tv color="#a855f7" size={24} />
-              </View>
-              <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center" numberOfLines={1}>Cable</Text>
-            </Pressable>
-            
-            <Pressable onPress={() => handleOpenService('internet')} className="items-center w-[22%] mb-6 active:opacity-70">
-              <View className="w-14 h-14 rounded-full bg-cyan-500/15 items-center justify-center mb-2">
-                <Globe color="#06b6d4" size={24} />
-              </View>
-              <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center" numberOfLines={1}>Internet</Text>
-            </Pressable>
-            <Pressable onPress={() => handleOpenService('transport')} className="items-center w-[22%] mb-6 active:opacity-70">
-              <View className="w-14 h-14 rounded-full bg-rose-500/15 items-center justify-center mb-2">
-                <Bus color="#f43f5e" size={24} />
-              </View>
-              <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center" numberOfLines={1}>Transport</Text>
-            </Pressable>
-            <Pressable onPress={() => handleOpenService('education')} className="items-center w-[22%] mb-6 active:opacity-70">
-              <View className="w-14 h-14 rounded-full bg-indigo-500/15 items-center justify-center mb-2">
-                <GraduationCap color="#6366f1" size={24} />
-              </View>
-              <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center" numberOfLines={1}>Education</Text>
-            </Pressable>
-            <Pressable onPress={() => {
+          <View className="flex-row justify-between">
+            {AVAILABLE_SERVICES.map((tile) => (
+              <ServiceTileButton
+                key={tile.key}
+                tile={tile}
+                width="w-[22%]"
+                onPress={() => handleOpenService(tile.service)}
+              />
+            ))}
+          </View>
+          <Pressable
+            onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setIsMoreServicesVisible(true);
-            }} className="items-center w-[22%] mb-6 active:opacity-70">
-              <View className="w-14 h-14 rounded-full bg-black/5 dark:bg-white/10 border border-slate-200 dark:border-white/10 items-center justify-center mb-2">
-                <MoreHorizontal color={isDark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.7)"} size={24} />
-              </View>
-              <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center" numberOfLines={1}>More</Text>
-            </Pressable>
-          </View>
+            }}
+            className="flex-row items-center justify-center py-3 rounded-2xl border border-slate-200 dark:border-white/10 active:opacity-60"
+          >
+            <Text className="text-slate-600 dark:text-white/70 font-inter-medium text-[13px]">
+              View all services
+            </Text>
+            <MoreHorizontal
+              color={isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)'}
+              size={16}
+              style={{ marginLeft: 6 }}
+            />
+          </Pressable>
         </View>
 
         {/* Recent Transactions */}
@@ -726,99 +770,28 @@ function HomeScreenContent({ navigation }: any) {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Daily Essentials */}
-              <Text className="text-slate-500 dark:text-white/60 font-inter-semibold uppercase tracking-widest text-[10px] mb-4 ml-2 mt-2">
-                Daily Essentials
-              </Text>
-              <View className="flex-row flex-wrap justify-between">
-                <Pressable onPress={() => handleOpenService('airtime')} className="items-center w-[25%] mb-6 active:opacity-70">
-                  <View className="w-14 h-14 rounded-2xl bg-emerald-500/15 items-center justify-center mb-2">
-                    <Smartphone color="#10b981" size={24} />
+              {SERVICE_GROUPS.map((group) => {
+                const tiles = SERVICE_TILES.filter((t) => t.group === group.id);
+                if (tiles.length === 0) return null;
+                return (
+                  <View key={group.id}>
+                    <Text className="text-slate-500 dark:text-white/60 font-inter-semibold uppercase tracking-widest text-[10px] mb-4 ml-2 mt-2">
+                      {group.title}
+                    </Text>
+                    <View className="flex-row flex-wrap">
+                      {tiles.map((tile) => (
+                        <ServiceTileButton
+                          key={tile.key}
+                          tile={tile}
+                          width="w-[25%]"
+                          onPress={() => handleOpenService(tile.service)}
+                        />
+                      ))}
+                    </View>
                   </View>
-                  <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Airtime</Text>
-                </Pressable>
-                <Pressable onPress={() => handleOpenService('data')} className="items-center w-[25%] mb-6 active:opacity-70">
-                  <View className="w-14 h-14 rounded-2xl bg-blue-500/15 items-center justify-center mb-2">
-                    <Wifi color="#3b82f6" size={24} />
-                  </View>
-                  <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Data</Text>
-                </Pressable>
-                <Pressable onPress={() => handleOpenService('internet')} className="items-center w-[25%] mb-6 active:opacity-70">
-                  <View className="w-14 h-14 rounded-2xl bg-cyan-500/15 items-center justify-center mb-2">
-                    <Globe color="#06b6d4" size={24} />
-                  </View>
-                  <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Internet</Text>
-                </Pressable>
-                <Pressable onPress={() => handleOpenService('transport')} className="items-center w-[25%] mb-6 active:opacity-70">
-                  <View className="w-14 h-14 rounded-2xl bg-rose-500/15 items-center justify-center mb-2">
-                    <Bus color="#f43f5e" size={24} />
-                  </View>
-                  <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Transport</Text>
-                </Pressable>
-              </View>
+                );
+              })}
 
-              {/* Utilities & Bills */}
-              <Text className="text-slate-500 dark:text-white/60 font-inter-semibold uppercase tracking-widest text-[10px] mb-4 ml-2 mt-4">
-                Utilities & Bills
-              </Text>
-              <View className="flex-row flex-wrap justify-between">
-                <Pressable onPress={() => handleOpenService('power')} className="items-center w-[25%] mb-6 active:opacity-70">
-                  <View className="w-14 h-14 rounded-2xl bg-orange-500/15 items-center justify-center mb-2">
-                    <Lightbulb color="#f97316" size={24} />
-                  </View>
-                  <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Power</Text>
-                </Pressable>
-                <Pressable onPress={() => handleOpenService('cable')} className="items-center w-[25%] mb-6 active:opacity-70">
-                  <View className="w-14 h-14 rounded-2xl bg-purple-500/15 items-center justify-center mb-2">
-                    <Tv color="#a855f7" size={24} />
-                  </View>
-                  <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Cable TV</Text>
-                </Pressable>
-                <Pressable onPress={() => handleOpenService('power')} className="items-center w-[25%] mb-6 active:opacity-70">
-                  <View className="w-14 h-14 rounded-2xl bg-teal-500/15 items-center justify-center mb-2">
-                    <Droplet color="#14b8a6" size={24} />
-                  </View>
-                  <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Water</Text>
-                </Pressable>
-                <Pressable onPress={() => handleOpenService('power')} className="items-center w-[25%] mb-6 active:opacity-70">
-                  <View className="w-14 h-14 rounded-2xl bg-slate-500/15 items-center justify-center mb-2">
-                    <Landmark color="#94a3b8" size={24} />
-                  </View>
-                  <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Taxes</Text>
-                </Pressable>
-              </View>
-
-              {/* Lifestyle */}
-              <Text className="text-slate-500 dark:text-white/60 font-inter-semibold uppercase tracking-widest text-[10px] mb-4 ml-2 mt-4">
-                Lifestyle & Others
-              </Text>
-              <View className="flex-row flex-wrap justify-start">
-                <Pressable onPress={() => handleOpenService('education')} className="items-center w-[25%] mb-6 active:opacity-70">
-                  <View className="w-14 h-14 rounded-2xl bg-indigo-500/15 items-center justify-center mb-2">
-                    <GraduationCap color="#6366f1" size={24} />
-                  </View>
-                  <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Education</Text>
-                </Pressable>
-                <Pressable onPress={() => handleOpenService('cable')} className="items-center w-[25%] mb-6 active:opacity-70">
-                  <View className="w-14 h-14 rounded-2xl bg-pink-500/15 items-center justify-center mb-2">
-                    <Ticket color="#ec4899" size={24} />
-                  </View>
-                  <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Movies</Text>
-                </Pressable>
-                <Pressable onPress={() => handleOpenService('transport')} className="items-center w-[25%] mb-6 active:opacity-70">
-                  <View className="w-14 h-14 rounded-2xl bg-sky-500/15 items-center justify-center mb-2">
-                    <Plane color="#0ea5e9" size={24} />
-                  </View>
-                  <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Flights</Text>
-                </Pressable>
-                <Pressable onPress={() => handleOpenService('education')} className="items-center w-[25%] mb-6 active:opacity-70">
-                  <View className="w-14 h-14 rounded-2xl bg-red-500/15 items-center justify-center mb-2">
-                    <HeartPulse color="#ef4444" size={24} />
-                  </View>
-                  <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">Health</Text>
-                </Pressable>
-              </View>
-              
               <View className="h-12" />
             </ScrollView>
           </View>
@@ -1036,13 +1009,19 @@ export default function HomeScreen({ navigation }: any) {
   const user = useAuthStore((state) => state.user);
   const { linkMonoAccount } = useBankStore();
 
+  // Mono records this as the identity behind the bank connection, and under the
+  // Direct Debit model it is the identity a mandate is signed against. It used
+  // to fall back to "Test User" / "test@biopay.app", so a customer whose
+  // session carried no email — the store defaults it to an empty string —
+  // linked a real bank account under a placeholder. `hasCompleteIdentity` below
+  // stops the widget opening at all in that case.
   const monoConfig = {
-    publicKey: process.env.EXPO_PUBLIC_MONO_PUBLIC_KEY || "", 
+    publicKey: process.env.EXPO_PUBLIC_MONO_PUBLIC_KEY || "",
     scope: "auth",
     data: {
       customer: {
-        name: user?.firstName || "Test User",
-        email: user?.email || "test@biopay.app"
+        name: [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim(),
+        email: user?.email ?? "",
       }
     },
     onClose: () => console.log('Widget closed'),
