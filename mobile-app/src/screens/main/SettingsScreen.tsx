@@ -5,8 +5,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { 
   ChevronRight, 
-  Bell, 
-  BellOff,
   Fingerprint, 
   Shield, 
   Lock, 
@@ -100,7 +98,6 @@ export default function SettingsScreen({ navigation }: any) {
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricCapability, setBiometricCapability] = useState<BiometricCapability | null>(null);
   const [isChangingPin, setIsChangingPin] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -291,18 +288,6 @@ export default function SettingsScreen({ navigation }: any) {
           <SectionHeader title="Preferences" />
           <GlassCard intensity={isDark ? 15 : 40} className="p-0">
             <SettingRow 
-              icon={notificationsEnabled ? Bell : BellOff} 
-              label="Push Notifications" 
-              subtitle="Transaction alerts and updates"
-              type="switch" 
-              value={notificationsEnabled} 
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setNotificationsEnabled(!notificationsEnabled);
-              }}
-            />
-            <SectionDivider />
-            <SettingRow 
               icon={Palette} 
               label="Theme" 
               value={activeTheme === 'dark' ? 'Dark' : activeTheme === 'light' ? 'Light' : 'System'}
@@ -321,16 +306,6 @@ export default function SettingsScreen({ navigation }: any) {
               label="Help & Support" 
               subtitle="FAQs and contact support"
               onPress={() => navigation.navigate('SupportScreen')}
-            />
-            <SectionDivider />
-            <SettingRow 
-              icon={FileText} 
-              label="Terms of Service" 
-            />
-            <SectionDivider />
-            <SettingRow 
-              icon={FileText} 
-              label="Privacy Policy" 
             />
           </GlassCard>
         </View>
