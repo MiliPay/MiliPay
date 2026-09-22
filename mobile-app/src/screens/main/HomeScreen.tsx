@@ -25,6 +25,7 @@ import { useBankStore, useAuthStore, useTransactionStore, LinkedAccount } from '
 import { AVAILABLE_SERVICES, SERVICE_GROUPS, SERVICE_TILES, type ServiceTile, type ServiceType } from '../../lib/services';
 import { colors } from '../../theme/tokens';
 import { shareReceiptAsPdf, shareReceiptAsImage } from '../../lib/receiptSharing';
+import { isMoneyReturned, rowStatus } from '../../lib/transactionStatus';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.90;
@@ -692,6 +693,8 @@ function HomeScreenContent({ navigation }: any) {
           <View className="px-5 pb-12">
             {filteredRecentTransactions.slice(0, 5).map((item) => {
               const isCredit = item.category === 'received' || item.type === 'credit' || item.direction === 'inflow';
+              const badge = rowStatus(item.status);
+              const returned = isMoneyReturned(item.status);
               return (
                 <Pressable 
                   key={item.id}
@@ -722,16 +725,47 @@ function HomeScreenContent({ navigation }: any) {
                       <Text className="text-slate-400 dark:text-zinc-500 font-inter text-xs mt-0.5">
                         {formatTxDate(item.created_at)}
                       </Text>
+                      {badge && (
+                        <View
+                          className={`self-start mt-1 px-1.5 py-0.5 rounded ${
+                            badge.tone === 'fail'
+                              ? 'bg-status-fail/10'
+                              : badge.tone === 'warn'
+                              ? 'bg-status-warn/10'
+                              : 'bg-black/[0.05] dark:bg-white/[0.07]'
+                          }`}
+                        >
+                          <Text
+                            className={`font-inter-medium text-[10px] ${
+                              badge.tone === 'fail'
+                                ? 'text-status-fail'
+                                : badge.tone === 'warn'
+                                ? 'text-status-warn'
+                                : 'text-slate-500 dark:text-zinc-400'
+                            }`}
+                          >
+                            {badge.label}
+                          </Text>
+                        </View>
+                      )}
                     </View>
                   </View>
 
                   <View className="items-end">
-                    <Text className={`font-mono-bold text-base ${
-                      isCredit 
-                        ? 'text-signal dark:text-signal-bright' 
-                        : 'text-slate-900 dark:text-white'
-                    }`}>
-                      {isCredit ? '+' : '-'}₦{Number(item.amount).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <Text
+                      className={`font-mono-bold text-base ${
+                        returned
+                          ? 'text-slate-400 dark:text-zinc-500 line-through'
+                          : isCredit
+                          ? 'text-signal dark:text-signal-bright'
+                          : 'text-slate-900 dark:text-white'
+                      }`}
+                    >
+                      {isCredit ? '+' : '-'}₦
+                      {Number(item.amount).toLocaleString('en-NG', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
                     </Text>
                   </View>
                 </Pressable>

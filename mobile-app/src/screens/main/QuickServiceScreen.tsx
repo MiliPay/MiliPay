@@ -474,13 +474,22 @@ export default function QuickServiceScreen({ route, navigation }: any) {
     return selectedAmount;
   };
 
-  // Get active source bank
-  const activeAccount = linkedAccounts && linkedAccounts.length > 0
-    ? linkedAccounts[selectedBankIndex] || linkedAccounts[0]
-    : { id: null, bankName: 'Guaranty Trust Bank', accountNumber: '0123456789', balance: '₦0.00' };
+  // The account the money comes from, or null when none is linked.
+  const activeAccount =
+    linkedAccounts && linkedAccounts.length > 0
+      ? linkedAccounts[selectedBankIndex] ?? linkedAccounts[0]
+      : null;
 
   // Validation
   const validateForm = (): boolean => {
+    if (!activeAccount) {
+      Alert.alert(
+        'Link a bank account first',
+        'MiliPay pays for this straight from your bank, so there needs to be an account linked before you can buy anything.',
+      );
+      return false;
+    }
+
     if (serviceType === 'airtime' || serviceType === 'data') {
       const cleanPhone = recipientNumber.replace(/[^0-9]/g, '');
       if (cleanPhone.length < 10) {
@@ -1481,16 +1490,16 @@ export default function QuickServiceScreen({ route, navigation }: any) {
               </View>
             ) : (
               <View className="flex-row items-center justify-between">
-                <View className="flex-row items-center">
-                  <View className="w-10 h-10 rounded-full bg-signal/15 items-center justify-center mr-3">
-                    <CreditCard color="#00C896" size={20} />
+                <View className="flex-row items-center flex-1">
+                  <View className="w-10 h-10 rounded-full bg-status-warn/15 items-center justify-center mr-3">
+                    <CreditCard color={colors.status.warn} size={20} />
                   </View>
-                  <View>
+                  <View className="flex-1">
                     <Text className="text-slate-900 dark:text-white font-inter-bold text-sm">
-                      {activeAccount.bankName}
+                      No bank account linked
                     </Text>
                     <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">
-                      •••• {activeAccount.accountNumber.slice(-4)} • Balance: {activeAccount.balance}
+                      Link one from the home screen to pay for anything.
                     </Text>
                   </View>
                 </View>
@@ -1577,7 +1586,9 @@ export default function QuickServiceScreen({ route, navigation }: any) {
               <View className="flex-row justify-between mb-2">
                 <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">Payment Method</Text>
                 <Text className="text-slate-900 dark:text-white font-inter-semibold text-xs">
-                  {activeAccount.bankName} (****{activeAccount.accountNumber.slice(-4)})
+                  {activeAccount
+                    ? `${activeAccount.bankName} (****${activeAccount.accountNumber.slice(-4)})`
+                    : 'No account linked'}
                 </Text>
               </View>
               <View className="flex-row justify-between">

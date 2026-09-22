@@ -9,6 +9,7 @@ import * as Clipboard from 'expo-clipboard';
 
 import { useAuthStore, useTransactionStore, useBankStore } from '../../store/useStore';
 import { shareReceiptAsPdf, shareReceiptAsImage } from '../../lib/receiptSharing';
+import { isMoneyReturned, rowStatus } from '../../lib/transactionStatus';
 
 export default function TransactionsScreen({ navigation }: any) {
   const { colorScheme } = useColorScheme();
@@ -274,6 +275,10 @@ export default function TransactionsScreen({ navigation }: any) {
           <View className="pb-12">
             {filteredTransactions.map((tx) => {
               const isCredit = tx.category === 'received' || tx.type === 'credit' || tx.direction === 'inflow';
+              const badge = rowStatus(tx.status);
+              // A declined or refunded payment is money the customer still has.
+              // Showing it as a plain debit tells them the opposite.
+              const returned = isMoneyReturned(tx.status);
               return (
                 <Pressable
                   key={tx.id}
@@ -311,16 +316,47 @@ export default function TransactionsScreen({ navigation }: any) {
                           </>
                         )}
                       </View>
+                      {badge && (
+                        <View
+                          className={`self-start mt-1 px-1.5 py-0.5 rounded ${
+                            badge.tone === 'fail'
+                              ? 'bg-status-fail/10'
+                              : badge.tone === 'warn'
+                              ? 'bg-status-warn/10'
+                              : 'bg-black/[0.05] dark:bg-white/[0.07]'
+                          }`}
+                        >
+                          <Text
+                            className={`font-inter-medium text-[10px] ${
+                              badge.tone === 'fail'
+                                ? 'text-status-fail'
+                                : badge.tone === 'warn'
+                                ? 'text-status-warn'
+                                : 'text-slate-500 dark:text-zinc-400'
+                            }`}
+                          >
+                            {badge.label}
+                          </Text>
+                        </View>
+                      )}
                     </View>
                   </View>
 
                   <View className="items-end">
-                    <Text className={`font-mono-bold text-base ${
-                      isCredit 
-                        ? 'text-signal dark:text-signal-bright' 
-                        : 'text-slate-900 dark:text-white'
-                    }`}>
-                      {isCredit ? '+' : '-'}₦{Number(tx.amount).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <Text
+                      className={`font-mono-bold text-base ${
+                        returned
+                          ? 'text-slate-400 dark:text-zinc-500 line-through'
+                          : isCredit
+                          ? 'text-signal dark:text-signal-bright'
+                          : 'text-slate-900 dark:text-white'
+                      }`}
+                    >
+                      {isCredit ? '+' : '-'}₦
+                      {Number(tx.amount).toLocaleString('en-NG', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
                     </Text>
                   </View>
                 </Pressable>

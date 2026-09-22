@@ -212,3 +212,47 @@ export function watchTransaction(options: WatchOptions): () => void {
     cleanup();
   };
 }
+
+/**
+ * A short badge for a transaction in a list, or null when none is needed.
+ *
+ * The history rows showed merchant, date, account and amount and nothing else,
+ * so a declined payment, a refunded one and a delivered one were
+ * indistinguishable — all three rendered as a plain "-₦1,000", which reads as
+ * money gone. Delivered stays unbadged because it is the expected case and a
+ * badge on every row is just noise.
+ */
+export function rowStatus(
+  status: TransactionStatus | string | null | undefined,
+): { label: string; tone: 'warn' | 'fail' | 'muted' } | null {
+  switch (status) {
+    case 'delivered':
+    case undefined:
+    case null:
+      return null;
+    case 'payment_failed':
+      return { label: 'Declined', tone: 'fail' };
+    case 'fulfilment_failed':
+      return { label: 'Failed', tone: 'fail' };
+    case 'refund_failed':
+      return { label: 'Refund delayed', tone: 'fail' };
+    case 'quarantined':
+      return { label: 'On hold', tone: 'fail' };
+    case 'refunded':
+      return { label: 'Refunded', tone: 'muted' };
+    case 'refund_pending':
+      return { label: 'Refunding', tone: 'warn' };
+    case 'initiated':
+    case 'paid':
+    case 'fulfilling':
+    case 'fulfilment_pending':
+      return { label: 'In progress', tone: 'warn' };
+    default:
+      return { label: String(status), tone: 'muted' };
+  }
+}
+
+/** True when the customer's money did not ultimately leave them. */
+export function isMoneyReturned(status: TransactionStatus | string | null | undefined): boolean {
+  return status === 'payment_failed' || status === 'refunded';
+}

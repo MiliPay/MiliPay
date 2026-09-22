@@ -6,7 +6,6 @@ import { useColorScheme } from 'nativewind';
 import { Home, Receipt, Settings } from 'lucide-react-native';
 
 import HomeScreen from '../screens/main/HomeScreen';
-import ServicesScreen from '../screens/main/ServicesScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
 import TransactionsScreen from '../screens/main/TransactionsScreen';
 import ProfileSettingsScreen from '../screens/main/ProfileSettingsScreen';
@@ -23,7 +22,6 @@ function HomeStackNavigator() {
     <HomeStack.Navigator screenOptions={{ headerShown: false }}>
       <HomeStack.Screen name="HomeScreen" component={HomeScreen} />
       <HomeStack.Screen name="QuickService" component={QuickServiceScreen} />
-      <HomeStack.Screen name="Services" component={ServicesScreen} />
       <HomeStack.Screen name="Transactions" component={TransactionsScreen} />
       <HomeStack.Screen name="ProfileSettings" component={ProfileSettingsScreen} />
       <HomeStack.Screen name="AccountLimits" component={AccountLimitsScreen} />
