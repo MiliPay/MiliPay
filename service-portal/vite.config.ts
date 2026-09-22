@@ -4,6 +4,7 @@ import path from "path";
 
 export default defineConfig({
   plugins: [react()],
+  server: { port: 5175, strictPort: true },
   resolve: {
     alias: {
       "@milipay/shared": path.resolve(__dirname, "../packages/shared/src"),
