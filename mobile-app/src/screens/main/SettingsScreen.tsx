@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Pressable, Switch, Alert, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Pressable, Switch, Alert, Modal, ActivityIndicator, Linking, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -18,6 +18,12 @@ import {
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useColorScheme } from 'nativewind';
+import { Bell, BellOff } from 'lucide-react-native';
+import {
+  notificationsEnabled,
+  registerForPushNotifications,
+  revokeThisDevice,
+} from '../../lib/notifications';
 import {
   loadThemePreference,
   saveThemePreference,
@@ -164,6 +170,68 @@ export default function SettingsScreen({ navigation }: any) {
   const [accountToUnlink, setAccountToUnlink] = useState<any>(null);
   const [isUnlinking, setIsUnlinking] = useState(false);
 
+  /**
+   * Whether the operating system is letting us notify this customer.
+   *
+   * Read from the OS rather than stored in the app, and re-read whenever the
+   * app comes back to the foreground — because the only place this can be
+   * changed is in system settings, and a switch here that disagreed with the
+   * system would be exactly the kind of control that lies.
+   */
+  const [pushEnabled, setPushEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const read = () => {
+      notificationsEnabled().then((on) => {
+        if (!cancelled) setPushEnabled(on);
+      });
+    };
+    read();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') read();
+    });
+    return () => {
+      cancelled = true;
+      sub.remove();
+    };
+  }, []);
+
+  const handleNotificationsPress = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    if (pushEnabled) {
+      Alert.alert(
+        'Payment alerts are on',
+        'You will hear when a payment is confirmed, delivered, or fails. Turn them off in your phone settings.',
+        [
+          { text: 'Close', style: 'cancel' },
+          { text: 'Open settings', onPress: () => void Linking.openSettings() },
+        ],
+      );
+      return;
+    }
+
+    // First refusal is recoverable in-app; after that only the OS can grant it.
+    const result = await registerForPushNotifications();
+    if (result.ok) {
+      setPushEnabled(true);
+      return;
+    }
+    if (result.reason === 'simulator') {
+      Alert.alert('Not available here', 'Notifications need a real device.');
+      return;
+    }
+    Alert.alert(
+      'Turn on payment alerts',
+      'Allow notifications for MiliPay in your phone settings and we will tell you when a payment is confirmed, delivered, or fails.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Open settings', onPress: () => void Linking.openSettings() },
+      ],
+    );
+  };
+
   const applyTheme = (theme: ThemePreference) => {
     Haptics.selectionAsync();
     setActiveTheme(theme);
@@ -180,10 +248,13 @@ export default function SettingsScreen({ navigation }: any) {
       'Are you sure you want to log out of MiliPay?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Log Out', 
-          style: 'destructive', 
-          onPress: () => logout() 
+        {
+          text: 'Log Out',
+          style: 'destructive',
+          onPress: async () => {
+            await revokeThisDevice();
+            void logout();
+          },
         },
       ]
     );
@@ -306,6 +377,20 @@ export default function SettingsScreen({ navigation }: any) {
         <View className="px-6">
           <SectionHeader title="Preferences" />
           <GlassCard intensity={isDark ? 15 : 40} className="p-0">
+            <SettingRow
+              icon={pushEnabled ? Bell : BellOff}
+              label="Payment alerts"
+              subtitle={
+                pushEnabled === null
+                  ? 'Checking…'
+                  : pushEnabled
+                  ? 'On — we will tell you when a payment lands'
+                  : 'Off — turn on to hear about your payments'
+              }
+              type="nav"
+              onPress={handleNotificationsPress}
+            />
+            <SectionDivider />
             <SettingRow 
               icon={Palette} 
               label="Theme" 

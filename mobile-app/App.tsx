@@ -13,6 +13,10 @@ import { configureReanimatedLogger, ReanimatedLogLevel } from 'react-native-rean
 import { useAuthStore } from './src/store/useStore';
 import { useColorScheme } from 'nativewind';
 import { loadThemePreference } from './src/lib/themePreference';
+import {
+  attachNotificationListeners,
+  registerForPushNotifications,
+} from './src/lib/notifications';
 
 configureReanimatedLogger({
   level: ReanimatedLogLevel.warn,
@@ -36,6 +40,7 @@ const appNavTheme = {
 export default function App() {
   const initializeAuth = useAuthStore((state) => state.initialize);
   const isLoading = useAuthStore((state) => state.isLoading);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const { setColorScheme } = useColorScheme();
   
   const [fontsLoaded, fontError] = useFonts({
@@ -63,6 +68,34 @@ export default function App() {
       cancelled = true;
     };
   }, [setColorScheme]);
+
+  /**
+   * Transaction alerts.
+   *
+   * Registration only happens once there is somebody to register: asking a
+   * signed-out customer for notification permission spends the one prompt iOS
+   * gives you on a person who has not yet seen what the app does. The listener
+   * is attached regardless, so a notification tapped from a cold start still
+   * lands on the right transaction.
+   */
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    void registerForPushNotifications();
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    return attachNotificationListeners({
+      onTransaction: (reference) => {
+        if (!navigationRef.isReady()) return;
+        // The ref is typed against a param list this app does not declare, so
+        // the call is widened rather than each argument being cast.
+        (navigationRef.navigate as (name: string, params?: object) => void)('HomeTab', {
+          screen: 'Transactions',
+          params: { reference },
+        });
+      },
+    });
+  }, []);
 
   useEffect(() => {
     // Only dismiss splash screen once BOTH fonts AND auth session restoration are complete
