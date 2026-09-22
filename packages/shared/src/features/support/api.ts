@@ -180,16 +180,11 @@ export async function fetchEscalatedTickets(): Promise<PaginatedResult<SupportTi
 }
 
 export async function claimTicket(ticketId: string, agentId: string) {
-  // If the ticket doesn't have a ticket_id yet, generate one upon being attended
-  const { data: existing } = await supabase.from("support_tickets").select("ticket_id").eq("id", ticketId).single();
-  const tktId = existing?.ticket_id || `TKT-${Math.floor(1000 + Math.random() * 9000)}`;
-
   const { data, error } = await supabase
     .from("support_tickets")
     .update({ 
       assigned_to: agentId, 
       status: "in_progress",
-      ticket_id: tktId,
       started_at: new Date().toISOString()
     })
     .eq("id", ticketId)
@@ -205,7 +200,6 @@ export async function claimTicket(ticketId: string, agentId: string) {
   // Notify chat participants
   try {
     await supabase.from("ticket_messages").insert({
-      ticket_id: ticketId,
       sender_id: agentId,
       sender_type: "system",
       content: `${agentName} has attended this chat and is now assisting you.`
@@ -218,16 +212,11 @@ export async function claimTicket(ticketId: string, agentId: string) {
 }
 
 export async function resolveTicket(dbId: string, staffId: string) {
-  // If the ticket doesn't have an ID yet, give it one for the archives
-  const { data: existing } = await supabase.from("support_tickets").select("ticket_id").eq("id", dbId).single();
-  const tktId = existing?.ticket_id || `TKT-${Math.floor(1000 + Math.random() * 9000)}`;
-
   const { data, error } = await supabase
     .from("support_tickets")
     .update({ 
       status: "resolved",
       resolved_at: new Date().toISOString(),
-      ticket_id: tktId,
       solved_by: staffId
     })
     .eq("id", dbId)
@@ -242,7 +231,7 @@ export async function resolveTicket(dbId: string, staffId: string) {
       ticket_id: dbId,
       sender_id: staffId,
       sender_type: "system",
-      content: `Ticket ${tktId} has been marked as solved.`
+      content: `Ticket ${data.ticket_id} has been marked as solved.`
     });
   } catch (msgErr) {
     console.warn("Could not insert solve system message:", msgErr);
@@ -252,10 +241,6 @@ export async function resolveTicket(dbId: string, staffId: string) {
 }
 
 export async function escalateTicket(dbId: string, subject: string, staffId?: string) {
-  // Formalize the ticket if it was informal
-  const { data: existing } = await supabase.from("support_tickets").select("ticket_id").eq("id", dbId).single();
-  const tktId = existing?.ticket_id || `TKT-${Math.floor(1000 + Math.random() * 9000)}`;
-
   const { data, error } = await supabase
     .from("support_tickets")
     .update({ 
@@ -263,7 +248,6 @@ export async function escalateTicket(dbId: string, subject: string, staffId?: st
       assigned_to: null, // Return to admin queue
       status: "open",     // Reset status so it appears as new to Admin
       is_escalated: true,
-      ticket_id: tktId,
       subject: subject
     })
     .eq("id", dbId)
@@ -278,7 +262,7 @@ export async function escalateTicket(dbId: string, subject: string, staffId?: st
       ticket_id: dbId,
       sender_id: staffId || null,
       sender_type: "system",
-      content: `Ticket ${tktId} has been escalated to Administration: "${subject}". An Administrator will review and resolve this case.`
+      content: `Ticket ${data.ticket_id} has been escalated to Administration: "${subject}". An Administrator will review and resolve this case.`
     });
   } catch (msgErr) {
     console.warn("Could not insert escalation system message:", msgErr);
@@ -347,7 +331,6 @@ export async function sendTicketMessage(ticketId: string, senderId: string, send
   const { data, error } = await supabase
     .from("ticket_messages")
     .insert({
-      ticket_id: ticketId,
       sender_id: senderId,
       sender_type: senderType,
       content,
@@ -380,7 +363,6 @@ export async function createTicket(
   createdById: string,
   options?: CreateTicketOptions
 ) {
-  const ticketId = `TKT-${Math.floor(1000 + Math.random() * 9000)}`;
   const status = options?.status || "open";
   const isEscalated = options?.isEscalated || false;
   const urgency = isEscalated ? "high" : "medium";
@@ -388,7 +370,6 @@ export async function createTicket(
   const { data, error } = await supabase
     .from("support_tickets")
     .insert({
-      ticket_id: ticketId,
       customer_id: customerId,
       issue_description: issueDescription,
       created_by: customerId, // Walk-in tickets belong to the customer profile
@@ -424,7 +405,6 @@ export async function bumpTicketPriority(ticketId: string, agentName: string) {
   await supabase
     .from("ticket_messages")
     .insert({
-      ticket_id: ticketId,
       sender_type: "system",
       content: `Priority escalated to CRITICAL by Field Agent ${agentName} due to 24hr SLA breach.`,
     });

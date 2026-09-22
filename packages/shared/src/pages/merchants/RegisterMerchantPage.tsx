@@ -60,7 +60,7 @@ export default function RegisterMerchantPage() {
     settlementAccountName: "",
     platformFeePercent: 1.50,
     settlementSchedule: "instant",
-    terminalId: `TID-HP605-${Math.floor(1000 + Math.random() * 9000)}`,
+    terminalId: `TID-HP605-${Math.floor(100000 + Math.random() * 900000)}`,
     deviceSerialNumber: `SN-HP605-${Date.now().toString().slice(-6)}`,
     deviceModel: "HFSecurity HP605PV",
   });
@@ -293,7 +293,7 @@ export default function RegisterMerchantPage() {
                   directorPhone: "",
                   email: "",
                   settlementAccountNumber: "",
-                  terminalId: `TID-HP605-${Math.floor(1000 + Math.random() * 9000)}`,
+                  terminalId: `TID-HP605-${Math.floor(100000 + Math.random() * 900000)}`,
                   deviceSerialNumber: `SN-HP605-${Date.now().toString().slice(-6)}`,
                 }));
               }}
@@ -632,7 +632,7 @@ export default function RegisterMerchantPage() {
                   label="Terminal ID (TID)"
                   required
                   mono
-                  placeholder="e.g. TID-HP605-0012"
+                  placeholder="e.g. TID-HP605-400127"
                   value={draft.terminalId}
                   onChange={(e) => updateField("terminalId", e.target.value)}
                   error={errors.terminalId}

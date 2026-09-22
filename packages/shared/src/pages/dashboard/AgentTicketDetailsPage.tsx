@@ -86,14 +86,12 @@ export function AgentTicketDetailsPage() {
     if (!ticket || !user || isSolving) return;
     setIsSolving(true);
     try {
-      const tktId = ticket.ticketId || `TKT-${Math.floor(1000 + Math.random() * 9000)}`;
       const { error } = await supabase
         .from("support_tickets")
         .update({
           status: "resolved",
           solved_by: user.id,
-          resolved_at: new Date().toISOString(),
-          ticket_id: tktId
+          resolved_at: new Date().toISOString()
         })
         .eq("id", ticket.id);
 
@@ -111,15 +109,13 @@ export function AgentTicketDetailsPage() {
     if (!ticket || !escalateReason.trim() || isEscalating) return;
     setIsEscalating(true);
     try {
-      const tktId = ticket.ticketId || `TKT-${Math.floor(1000 + Math.random() * 9000)}`;
       const { error } = await supabase
         .from("support_tickets")
         .update({
           is_escalated: true,
           urgency: "high",
           subject: escalateReason.trim(),
-          assigned_to: null,
-          ticket_id: tktId
+          assigned_to: null
         })
         .eq("id", ticket.id);
 
