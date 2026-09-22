@@ -21,6 +21,7 @@ import {
 } from "@milipay/shared/features/merchants/merchantService";
 import type { Merchant, POSTerminal, MerchantTransaction } from "@milipay/shared/types";
 import { TerminalDetailsModal } from "@milipay/shared/pages/merchants/TerminalDetailsModal";
+import { isFailed, isSettled } from "@milipay/shared/lib/transactionStatus";
 
 export default function MerchantDashboardPage() {
   const navigate = useNavigate();
@@ -73,8 +74,8 @@ export default function MerchantDashboardPage() {
     );
   }
 
-  const grossVolume = transactions.reduce((s, t) => s + (t.status === "success" ? t.amount : 0), 0);
-  const platformFees = transactions.reduce((s, t) => s + (t.status === "success" ? t.platformFee : 0), 0);
+  const grossVolume = transactions.reduce((s, t) => s + (isSettled(t.status) ? t.amount : 0), 0);
+  const platformFees = transactions.reduce((s, t) => s + (isSettled(t.status) ? t.platformFee : 0), 0);
   const netSettlement = grossVolume - platformFees;
   const activeTerminalsCount = terminals.filter((t) => t.isActive).length;
 
@@ -317,9 +318,11 @@ export default function MerchantDashboardPage() {
                     <td className="py-3 px-6">
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                          tx.status === "success"
+                          isSettled(tx.status)
                             ? "bg-status-ok/10 text-status-ok border border-status-ok/20"
-                            : "bg-status-fail/10 text-status-fail border border-status-fail/20"
+                            : isFailed(tx.status)
+                            ? "bg-status-fail/10 text-status-fail border border-status-fail/20"
+                            : "bg-status-warn/10 text-status-warn border border-status-warn/20"
                         }`}
                       >
                         {tx.status.toUpperCase()}

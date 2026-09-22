@@ -40,6 +40,7 @@ import {
 } from "@milipay/shared/features/merchants/merchantService";
 import type { Merchant, POSTerminal, MerchantTransaction } from "@milipay/shared/types";
 import { TerminalDetailsModal } from "./TerminalDetailsModal";
+import { isSettled } from "@milipay/shared/lib/transactionStatus";
 
 export default function MerchantDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -648,7 +649,7 @@ export default function MerchantDetailsPage() {
                 <TrendingUp className="w-3.5 h-3.5 text-signal" />
               </div>
               <div className="text-xl font-bold font-data text-white">
-                &#8358;{transactions.reduce((s, t) => s + (t.status === "success" ? t.amount : 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                &#8358;{transactions.reduce((s, t) => s + (isSettled(t.status) ? t.amount : 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
               <p className="text-[10px] text-ink-muted mt-0.5 font-mono">Total debited via palm scans</p>
             </div>
@@ -659,7 +660,7 @@ export default function MerchantDetailsPage() {
                 <Percent className="w-3.5 h-3.5 text-ink-faint" />
               </div>
               <div className="text-xl font-bold font-data text-ink-muted">
-                &#8358;{transactions.reduce((s, t) => s + (t.status === "success" ? t.platformFee : 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                &#8358;{transactions.reduce((s, t) => s + (isSettled(t.status) ? t.platformFee : 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
               <p className="text-[10px] text-ink-muted mt-0.5 font-mono">MiliPay platform commission</p>
             </div>
@@ -670,7 +671,7 @@ export default function MerchantDetailsPage() {
                 <ArrowDownRight className="w-3.5 h-3.5 text-status-ok" />
               </div>
               <div className="text-xl font-bold font-data text-status-ok">
-                &#8358;{transactions.reduce((s, t) => s + (t.status === "success" ? t.netPayout : 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                &#8358;{transactions.reduce((s, t) => s + (isSettled(t.status) ? t.netPayout : 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
               <p className="text-[10px] text-status-ok mt-0.5 font-mono">DirectPay NIBSS bank payouts</p>
             </div>
@@ -734,7 +735,7 @@ export default function MerchantDetailsPage() {
                         <td className="py-3.5 px-6">
                           <span
                             className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                              tx.status === "success"
+                              isSettled(tx.status)
                                 ? "bg-status-ok/10 text-status-ok border border-status-ok/20"
                                 : "bg-status-fail/10 text-status-fail border border-status-fail/20"
                             }`}

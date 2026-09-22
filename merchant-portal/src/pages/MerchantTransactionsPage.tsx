@@ -19,6 +19,7 @@ import {
   fetchMerchantTransactions,
 } from "@milipay/shared/features/merchants/merchantService";
 import type { Merchant, MerchantTransaction } from "@milipay/shared/types";
+import { isFailed, isSettled, presentTransactionStatus } from "@milipay/shared/lib/transactionStatus";
 
 export default function MerchantTransactionsPage() {
   const [merchant, setMerchant] = useState<Merchant | null>(null);
@@ -56,8 +57,8 @@ export default function MerchantTransactionsPage() {
     );
   });
 
-  const totalVolume = filtered.reduce((s, t) => s + (t.status === "success" ? t.amount : 0), 0);
-  const totalFees = filtered.reduce((s, t) => s + (t.status === "success" ? t.platformFee : 0), 0);
+  const totalVolume = filtered.reduce((s, t) => s + (isSettled(t.status) ? t.amount : 0), 0);
+  const totalFees = filtered.reduce((s, t) => s + (isSettled(t.status) ? t.platformFee : 0), 0);
   const netSettlement = totalVolume - totalFees;
 
   const handleExportCSV = () => {
@@ -229,19 +230,24 @@ export default function MerchantTransactionsPage() {
                     <td className="py-4 px-6">
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-                          tx.status === "success"
+                          isSettled(tx.status)
                             ? "bg-status-ok/10 text-status-ok border border-status-ok/20"
-                            : "bg-status-fail/10 text-status-fail border border-status-fail/20"
+                            : isFailed(tx.status)
+                            ? "bg-status-fail/10 text-status-fail border border-status-fail/20"
+                            : "bg-status-warn/10 text-status-warn border border-status-warn/20"
                         }`}
                       >
-                        {tx.status === "success" ? (
+                        {isSettled(tx.status) ? (
                           <>
-                            <CheckCircle2 className="w-3 h-3 mr-1" /> Approved
+                            <CheckCircle2 className="w-3 h-3 mr-1" /> Settled
+                          </>
+                        ) : isFailed(tx.status) ? (
+                          <>
+                            <XCircle className="w-3 h-3 mr-1" />
+                            {presentTransactionStatus(tx.status).label}
                           </>
                         ) : (
-                          <>
-                            <XCircle className="w-3 h-3 mr-1" /> {tx.status.toUpperCase()}
-                          </>
+                          <>{presentTransactionStatus(tx.status).label}</>
                         )}
                       </span>
                     </td>

@@ -17,6 +17,7 @@ import { Button } from "@milipay/shared/components/ui/Button";
 import { LoadingState } from "@milipay/shared/components/ui/LoadingState";
 import { fetchTerminalTransactions } from "@milipay/shared/features/merchants/merchantService";
 import type { POSTerminal, MerchantTransaction } from "@milipay/shared/types";
+import { isSettled } from "@milipay/shared/lib/transactionStatus";
 
 interface TerminalDetailsModalProps {
   terminal: POSTerminal | null;
@@ -69,8 +70,8 @@ export function TerminalDetailsModal({
 
   if (!terminal) return null;
 
-  const totalVolume = transactions.reduce((sum, t) => sum + (t.status === "success" ? t.amount : 0), 0);
-  const totalFees = transactions.reduce((sum, t) => sum + (t.status === "success" ? t.platformFee : 0), 0);
+  const totalVolume = transactions.reduce((sum, t) => sum + (isSettled(t.status) ? t.amount : 0), 0);
+  const totalFees = transactions.reduce((sum, t) => sum + (isSettled(t.status) ? t.platformFee : 0), 0);
   const netSettled = totalVolume - totalFees;
 
   const handleToggle = async () => {
@@ -334,7 +335,7 @@ export function TerminalDetailsModal({
                             <td className="py-3 px-4">
                               <span
                                 className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                  tx.status === "success"
+                                  isSettled(tx.status)
                                     ? "bg-status-ok/10 text-status-ok border border-status-ok/20"
                                     : "bg-status-fail/10 text-status-fail border border-status-fail/20"
                                 }`}

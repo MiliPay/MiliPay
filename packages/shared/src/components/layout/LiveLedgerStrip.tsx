@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Transaction } from "@milipay/shared/types";
 import { formatNaira } from "@milipay/shared/lib/utils/format";
+import { isFailed, isSettled } from "@milipay/shared/lib/transactionStatus";
 
 interface LiveLedgerStripProps {
   transactions: Transaction[];
@@ -40,9 +41,9 @@ export function LiveLedgerStrip({ transactions }: LiveLedgerStripProps) {
             <div className="flex items-center gap-3 min-w-0">
               <span
                 className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  txn.status === "success"
+                  isSettled(txn.status)
                     ? "bg-status-ok"
-                    : txn.status === "failed"
+                    : isFailed(txn.status)
                     ? "bg-status-fail"
                     : "bg-status-warn"
                 }`}

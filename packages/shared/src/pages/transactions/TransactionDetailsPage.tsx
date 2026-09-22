@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowUpRight, Copy, Receipt, User, Store, ShieldCheck, MapPin, Network, Clock, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Copy, Receipt, User, Store, Network, Clock, AlertTriangle } from "lucide-react";
 import { Card } from "@milipay/shared/components/ui/Card";
 import { StatusBadge } from "@milipay/shared/components/ui/StatusBadge";
 import { Button } from "@milipay/shared/components/ui/Button";
@@ -8,7 +8,52 @@ import { LoadingState } from "@milipay/shared/components/ui/LoadingState";
 import { fetchTransactionById } from "@milipay/shared/features/transactions/api";
 import { ROUTES } from "@milipay/shared/lib/constants";
 import { formatNaira, formatTimestamp } from "@milipay/shared/lib/utils/format";
+import { presentTransactionStatus } from "@milipay/shared/lib/transactionStatus";
 import type { Transaction } from "@milipay/shared/types";
+
+const TONE_DOT = {
+  ok: "bg-status-ok",
+  warn: "bg-status-warn",
+  fail: "bg-status-fail",
+  info: "bg-status-info",
+  muted: "bg-ink-faint",
+} as const;
+
+/** A recorded value, or nothing at all — never a placeholder standing in for one. */
+function Field({ label, value, mono }: { label: string; value?: string | null; mono?: boolean }) {
+  if (!value) return null;
+  return (
+    <div>
+      <p className="text-xs text-ink-faint">{label}</p>
+      <p className={`text-ink text-sm mt-0.5 break-all ${mono ? "font-data" : ""}`}>{value}</p>
+    </div>
+  );
+}
+
+/** One lifecycle step. Steps that have not happened are not drawn. */
+function Step({
+  label,
+  at,
+  tone,
+}: {
+  label: string;
+  at?: string | null;
+  tone: "signal" | "ok" | "fail";
+}) {
+  if (!at) return null;
+  const dot = tone === "ok" ? "bg-status-ok" : tone === "fail" ? "bg-status-fail" : "bg-signal";
+  return (
+    <div className="relative flex items-center justify-between gap-4">
+      <div className={`flex items-center justify-center w-4 h-4 rounded-full border-2 border-ledger-raised shrink-0 z-10 shadow ${dot}`} />
+      <div className="flex-1">
+        <h3 className="font-semibold text-sm text-ink flex justify-between gap-3">
+          <span>{label}</span>
+          <span className="font-data text-xs text-ink-faint">{formatTimestamp(at)}</span>
+        </h3>
+      </div>
+    </div>
+  );
+}
 
 export default function TransactionDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -36,31 +81,26 @@ export default function TransactionDetailsPage() {
     return () => { cancelled = true; };
   }, [id]);
 
-  const analytics = useMemo(() => {
+  /**
+   * What the rail actually recorded.
+   *
+   * This replaces a block that derived an IP address, a pair of Lagos
+   * coordinates, a payment method ("Card Ending in 4242"), a processor route
+   * ("NIBSS Interswitch"), a device and a whole fee breakdown from the sum of
+   * the character codes in the reference string — then presented all of it to
+   * an administrator investigating a payment. An IP address invented from a
+   * reference can belong to a real person.
+   *
+   * There is no IP, geolocation or risk score on this table. There is a real
+   * fee, a real provider, real references and real timestamps, and they were
+   * already being fetched and discarded.
+   */
+  const money = useMemo(() => {
     if (!transaction) return null;
-    const baseAmount = transaction.amountNgn;
-    const rawFee = Math.floor(baseAmount * 0.015);
-    const processingFee = Math.min(rawFee, 2000); // Capped at 2000 NGN
-    const vat = Math.floor(processingFee * 0.075);
-    const totalAmount = baseAmount + processingFee + vat;
-
-    const charCodeSum = transaction.reference.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
-    const ip = `197.210.${charCodeSum % 255}.${(charCodeSum * 2) % 255}`;
-    const lat = 6.5244 + ((charCodeSum % 100) * 0.001);
-    const lng = 3.3792 + ((charCodeSum % 100) * 0.001);
-
-    return {
-      baseAmount,
-      processingFee,
-      vat,
-      totalAmount,
-      ip,
-      lat: lat.toFixed(4),
-      lng: lng.toFixed(4),
-      method: charCodeSum % 2 === 0 ? "MiliPay Wallet" : "Card Ending in 4242",
-      processor: charCodeSum % 2 === 0 ? "Internal" : "NIBSS Interswitch",
-      device: charCodeSum % 3 === 0 ? "iOS App" : (charCodeSum % 3 === 1 ? "Android App" : "Web Terminal")
-    };
+    const base = transaction.baseAmountNgn ?? null;
+    const fee = transaction.feeNgn ?? null;
+    const serviceCharge = transaction.serviceChargeNgn ?? null;
+    return { base, fee, serviceCharge, total: transaction.amountNgn };
   }, [transaction]);
 
   if (isLoading) {
@@ -69,7 +109,7 @@ export default function TransactionDetailsPage() {
         <LoadingState
           minHeight="min-h-[50vh]"
           title="Loading Transaction Details..."
-          description="Fetching settlement status, fee breakdown, and processor verification records."
+          description="One moment."
         />
       </div>
     );
@@ -97,7 +137,7 @@ export default function TransactionDetailsPage() {
           </button>
           <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             <h1 className="text-xl sm:text-2xl md:text-3xl font-display font-bold text-ink flex items-center gap-3">
-              {analytics ? formatNaira(analytics.totalAmount) : formatNaira(transaction.amountNgn)}
+              {formatNaira(transaction.amountNgn)}
             </h1>
             <StatusBadge status={transaction.status} />
           </div>
@@ -122,22 +162,33 @@ export default function TransactionDetailsPage() {
               <Receipt className="w-4 h-4 text-signal" /> Fee Breakdown
             </h2>
             <div className="space-y-4 pt-2">
-              <div className="flex justify-between items-center border-b border-ledger-line pb-3">
-                <span className="text-sm text-ink-muted">Base Amount</span>
-                <span className="font-data text-ink font-medium">{formatNaira(analytics?.baseAmount || 0)}</span>
-              </div>
-              <div className="flex justify-between items-center border-b border-ledger-line pb-3">
-                <span className="text-sm text-ink-muted">Processing Fee (1.5%)</span>
-                <span className="font-data text-ink font-medium">{formatNaira(analytics?.processingFee || 0)}</span>
-              </div>
-              <div className="flex justify-between items-center border-b border-ledger-line pb-3">
-                <span className="text-sm text-ink-muted">VAT (7.5% on Fee)</span>
-                <span className="font-data text-ink font-medium">{formatNaira(analytics?.vat || 0)}</span>
-              </div>
+              {money?.base !== null && money?.base !== undefined && (
+                <div className="flex justify-between items-center border-b border-ledger-line pb-3">
+                  <span className="text-sm text-ink-muted">Base amount</span>
+                  <span className="font-data text-ink font-medium">{formatNaira(money.base)}</span>
+                </div>
+              )}
+              {money?.fee !== null && money?.fee !== undefined && (
+                <div className="flex justify-between items-center border-b border-ledger-line pb-3">
+                  <span className="text-sm text-ink-muted">Fee</span>
+                  <span className="font-data text-ink font-medium">{formatNaira(money.fee)}</span>
+                </div>
+              )}
+              {money?.serviceCharge ? (
+                <div className="flex justify-between items-center border-b border-ledger-line pb-3">
+                  <span className="text-sm text-ink-muted">Service charge</span>
+                  <span className="font-data text-ink font-medium">{formatNaira(money.serviceCharge)}</span>
+                </div>
+              ) : null}
               <div className="flex justify-between items-center bg-white/[0.02] p-3 rounded border border-ledger-line">
-                <span className="text-sm font-semibold text-ink">Total Settled</span>
-                <span className="font-data text-signal-bright font-bold text-lg">{formatNaira(analytics?.totalAmount || 0)}</span>
+                <span className="text-sm font-semibold text-ink">Total charged</span>
+                <span className="font-data text-signal-bright font-bold text-lg">{formatNaira(money?.total ?? 0)}</span>
               </div>
+              {money?.base === null && money?.fee === null && (
+                <p className="text-xs text-ink-faint">
+                  This transaction predates the fee breakdown being recorded.
+                </p>
+              )}
             </div>
           </Card>
 
@@ -150,41 +201,38 @@ export default function TransactionDetailsPage() {
                 <Network className="w-4 h-4 text-signal" /> Routing
               </h2>
               <div className="space-y-3 relative z-10">
-                <div>
-                  <p className="text-xs text-ink-faint">Payment Method</p>
-                  <p className="text-ink text-sm mt-0.5">{analytics?.method}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-ink-faint">Processor Route</p>
-                  <p className="text-ink text-sm mt-0.5">{analytics?.processor}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-ink-faint">Terminal / Device</p>
-                  <p className="text-ink text-sm mt-0.5">{analytics?.device}</p>
-                </div>
+                <Field label="Paid through" value={transaction.paymentProvider} />
+                <Field label="Payment reference" value={transaction.paymentReference} mono />
+                <Field label="Delivered by" value={transaction.fulfilmentProvider} />
+                <Field label="Operator reference" value={transaction.operatorReference} mono />
+                {transaction.terminalId && (
+                  <Field label="Terminal" value={transaction.terminalId} mono />
+                )}
               </div>
             </Card>
 
             <Card raised className="p-6 space-y-4 relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                <ShieldCheck className="w-24 h-24" />
+                <Receipt className="w-24 h-24" />
               </div>
               <h2 className="text-sm font-semibold text-ink-muted uppercase tracking-wide flex items-center gap-2 relative z-10">
-                <ShieldCheck className="w-4 h-4 text-signal" /> Security Context
+                <Receipt className="w-4 h-4 text-signal" /> What was bought
               </h2>
               <div className="space-y-3 relative z-10">
-                <div>
-                  <p className="text-xs text-ink-faint">IP Address</p>
-                  <p className="font-data text-ink text-sm mt-0.5">{analytics?.ip}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-ink-faint">Coordinates</p>
-                  <p className="font-data text-ink text-sm flex items-center gap-1 mt-0.5"><MapPin className="w-3 h-3 text-ink-muted" /> {analytics?.lat}, {analytics?.lng}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-ink-faint">Risk Assessment</p>
-                  <p className="text-status-ok text-sm font-medium mt-0.5 flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> Low Risk</p>
-                </div>
+                <Field label="Service" value={transaction.serviceType} />
+                <Field label="Provider" value={transaction.provider} />
+                <Field label="Beneficiary" value={transaction.beneficiary} mono />
+                {transaction.token && <Field label="Meter token" value={transaction.token} mono />}
+                {transaction.units && <Field label="Units" value={transaction.units} />}
+                {transaction.failureReason && (
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-status-fail/10 border border-status-fail/20">
+                    <AlertTriangle className="w-3.5 h-3.5 text-status-fail shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs text-ink-faint">Why it failed</p>
+                      <p className="text-status-fail text-sm mt-0.5">{transaction.failureReason}</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </Card>
           </div>
@@ -198,46 +246,20 @@ export default function TransactionDetailsPage() {
               <Clock className="w-4 h-4 text-signal" /> Lifecycle
             </h2>
             <div className="space-y-4 relative before:absolute before:inset-0 before:ml-2 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-signal/50 before:to-transparent">
-              <div className="relative flex items-center justify-between gap-4">
-                <div className="flex items-center justify-center w-4 h-4 rounded-full border-2 border-ledger-raised bg-signal shrink-0 z-10 shadow" />
-                <div className="flex-1">
-                  <h3 className="font-semibold text-sm text-ink flex justify-between">
-                    <span>Initiated</span>
-                    <span className="font-data text-xs text-ink-faint">{formatTimestamp(transaction.timestamp)}</span>
-                  </h3>
-                </div>
+              <Step label="Initiated" at={transaction.initiatedAt ?? transaction.timestamp} tone="signal" />
+              <Step label="Bank confirmed payment" at={transaction.paidAt} tone="signal" />
+              <Step label="Delivered" at={transaction.fulfilledAt} tone="ok" />
+              <Step label="Refunded" at={transaction.refundedAt} tone="fail" />
+              <div className="relative flex items-center gap-4">
+                <div
+                  className={`flex items-center justify-center w-4 h-4 rounded-full border-2 border-ledger-raised shrink-0 z-10 shadow ${
+                    TONE_DOT[presentTransactionStatus(transaction.status).tone]
+                  }`}
+                />
+                <p className="text-xs text-ink-muted">
+                  Now: {presentTransactionStatus(transaction.status).label}
+                </p>
               </div>
-              <div className="relative flex items-center justify-between gap-4">
-                <div className="flex items-center justify-center w-4 h-4 rounded-full border-2 border-ledger-raised bg-signal shrink-0 z-10 shadow" />
-                <div className="flex-1">
-                  <h3 className="font-semibold text-sm text-ink flex justify-between">
-                    <span>Fraud Check Passed</span>
-                    <span className="font-data text-xs text-ink-faint">+{Math.floor(Math.random() * 200 + 50)}ms</span>
-                  </h3>
-                </div>
-              </div>
-              {transaction.status === "success" && (
-                <div className="relative flex items-center justify-between gap-4">
-                  <div className="flex items-center justify-center w-4 h-4 rounded-full border-2 border-ledger-raised bg-status-ok shrink-0 z-10 shadow" />
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-sm text-ink flex justify-between">
-                      <span className="flex items-center gap-1 text-status-ok"><CheckCircle2 className="w-3 h-3" /> Settled</span>
-                      <span className="font-data text-xs text-ink-faint">+{Math.floor(Math.random() * 500 + 100)}ms</span>
-                    </h3>
-                  </div>
-                </div>
-              )}
-              {transaction.status === "failed" && (
-                <div className="relative flex items-center justify-between gap-4">
-                  <div className="flex items-center justify-center w-4 h-4 rounded-full border-2 border-ledger-raised bg-status-fail shrink-0 z-10 shadow" />
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-sm text-status-fail flex justify-between">
-                      <span>Failed</span>
-                      <span className="font-data text-xs text-ink-faint">+{Math.floor(Math.random() * 500 + 100)}ms</span>
-                    </h3>
-                  </div>
-                </div>
-              )}
             </div>
           </Card>
 

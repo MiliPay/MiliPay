@@ -158,7 +158,25 @@ export interface IdentityVerificationResult {
   failureReason: string | null;
 }
 
-export type TransactionStatus = "success" | "failed" | "pending";
+/**
+ * The states a transaction can actually be in, matching the CHECK constraint on
+ * public.transactions. This was previously "success" | "failed" | "pending" —
+ * three values the database does not allow — so the portals compared against
+ * literals that could never match. Use the helpers in lib/transactionStatus.ts
+ * rather than comparing directly.
+ */
+export type TransactionStatus =
+  | "initiated"
+  | "paid"
+  | "fulfilling"
+  | "fulfilment_pending"
+  | "delivered"
+  | "payment_failed"
+  | "fulfilment_failed"
+  | "refund_pending"
+  | "refunded"
+  | "refund_failed"
+  | "quarantined";
 
 export interface Transaction {
   id: string;
@@ -169,6 +187,32 @@ export interface Transaction {
   amountNgn: number; // NAIRA, numeric(12,2). Never kobo — see the currency invariant in GEMINI.md.
   status: TransactionStatus;
   timestamp: string;
+
+  /**
+   * Everything below is recorded by the payment rail and was already being
+   * fetched — the row mapper simply threw it away, which is why the detail
+   * page invented a fee breakdown, an IP address, a set of coordinates and a
+   * risk score instead. All optional because the list queries do not need
+   * them. Naira throughout.
+   */
+  baseAmountNgn?: number | null;
+  feeNgn?: number | null;
+  serviceChargeNgn?: number | null;
+  serviceType?: string | null;
+  provider?: string | null;
+  beneficiary?: string | null;
+  paymentProvider?: string | null;
+  paymentReference?: string | null;
+  fulfilmentProvider?: string | null;
+  operatorReference?: string | null;
+  failureReason?: string | null;
+  token?: string | null;
+  units?: string | null;
+  terminalId?: string | null;
+  initiatedAt?: string | null;
+  paidAt?: string | null;
+  fulfilledAt?: string | null;
+  refundedAt?: string | null;
 }
 
 export interface PaginatedResult<T> {
