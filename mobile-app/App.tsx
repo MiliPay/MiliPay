@@ -11,6 +11,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { LogBox } from 'react-native';
 import { configureReanimatedLogger, ReanimatedLogLevel } from 'react-native-reanimated';
 import { useAuthStore } from './src/store/useStore';
+import { useColorScheme } from 'nativewind';
+import { loadThemePreference } from './src/lib/themePreference';
 
 configureReanimatedLogger({
   level: ReanimatedLogLevel.warn,
@@ -34,6 +36,7 @@ const appNavTheme = {
 export default function App() {
   const initializeAuth = useAuthStore((state) => state.initialize);
   const isLoading = useAuthStore((state) => state.isLoading);
+  const { setColorScheme } = useColorScheme();
   
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
@@ -47,6 +50,19 @@ export default function App() {
   useEffect(() => {
     initializeAuth();
   }, [initializeAuth]);
+
+  // Apply the appearance the customer last chose. Without this the Settings
+  // screen could remember the choice and the app would still start on the
+  // system default every time.
+  useEffect(() => {
+    let cancelled = false;
+    loadThemePreference().then((stored) => {
+      if (!cancelled) setColorScheme(stored);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [setColorScheme]);
 
   useEffect(() => {
     // Only dismiss splash screen once BOTH fonts AND auth session restoration are complete

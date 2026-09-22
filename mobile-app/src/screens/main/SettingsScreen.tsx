@@ -18,6 +18,11 @@ import {
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useColorScheme } from 'nativewind';
+import {
+  loadThemePreference,
+  saveThemePreference,
+  type ThemePreference,
+} from '../../lib/themePreference';
 
 import { useAuthStore, useBankStore } from '../../store/useStore';
 import { GlassCard } from '../../components/ui/GlassCard';
@@ -141,14 +146,27 @@ export default function SettingsScreen({ navigation }: any) {
     setBiometricEnabled(true);
   };
   const [isThemeModalVisible, setIsThemeModalVisible] = useState(false);
-  const [activeTheme, setActiveTheme] = useState<'system' | 'light' | 'dark'>('system');
+  const [activeTheme, setActiveTheme] = useState<ThemePreference>('system');
+
+  // Reflect what was actually chosen last time, so the row does not say
+  // "System" while the app is showing something else.
+  useEffect(() => {
+    let cancelled = false;
+    loadThemePreference().then((stored) => {
+      if (!cancelled) setActiveTheme(stored);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [isBankModalVisible, setIsBankModalVisible] = useState(false);
   const [accountToUnlink, setAccountToUnlink] = useState<any>(null);
   const [isUnlinking, setIsUnlinking] = useState(false);
 
-  const applyTheme = (theme: 'system' | 'light' | 'dark') => {
+  const applyTheme = (theme: ThemePreference) => {
     Haptics.selectionAsync();
     setActiveTheme(theme);
+    void saveThemePreference(theme);
     setTimeout(() => {
       setColorScheme(theme);
     }, 50);
