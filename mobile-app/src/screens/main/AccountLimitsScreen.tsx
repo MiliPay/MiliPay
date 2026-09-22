@@ -39,7 +39,7 @@ const TIER_CAPS: Record<number, { maxSingle: number; maxDaily: number }> = {
 
 export default function AccountLimitsScreen({ navigation }: any) {
   const { colorScheme } = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const isDark = colorScheme !== 'light';
 
   const user = useAuthStore((state) => state.user);
   const onboarding = useAuthStore((state) => state.onboarding);

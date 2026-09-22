@@ -870,10 +870,10 @@ function HomeScreenContent({ navigation }: any) {
                 </View>
 
                 {/* Enlarged Title & Amount */}
-                <Text className="text-slate-900 dark:text-white font-inter-black text-2xl text-center mb-1 tracking-tight">
+                <Text className="text-slate-900 dark:text-white font-inter-bold text-2xl text-center mb-1 tracking-tight">
                   Payment Successful!
                 </Text>
-                <Text className="text-emerald-600 dark:text-emerald-400 font-inter-black text-3xl mb-4">
+                <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-3xl mb-4">
                   ₦{selectedTx?.amount ? Number(selectedTx.amount).toLocaleString() : '0'}
                 </Text>
 

@@ -24,7 +24,7 @@ const logoDark = require('../../../assets/logo-white.png');
 
 export default function LoginScreen() {
   const { colorScheme } = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const isDark = colorScheme !== 'light';
 
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');

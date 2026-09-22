@@ -35,7 +35,7 @@ import * as Haptics from 'expo-haptics';
 export default function SupportScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const isDark = colorScheme !== 'light';
   
   const { 
     conversations, 

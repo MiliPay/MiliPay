@@ -382,7 +382,7 @@ export default function TransactionsScreen({ navigation }: any) {
                   </Text>
                 </View>
 
-                <Text className="text-slate-900 dark:text-white font-inter-black text-3xl mb-4">
+                <Text className="text-slate-900 dark:text-white font-inter-bold text-3xl mb-4">
                   -₦{selectedTx ? Number(selectedTx.amount).toLocaleString() : '0'}
                 </Text>
 
