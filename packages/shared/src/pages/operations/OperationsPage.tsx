@@ -89,11 +89,11 @@ function Tile({
 }) {
   const toneClass =
     tone === "bad"
-      ? "text-rose-400"
+      ? "text-status-fail"
       : tone === "warn"
-        ? "text-amber-400"
+        ? "text-status-warn"
         : tone === "good"
-          ? "text-emerald-400"
+          ? "text-status-ok"
           : "text-ink";
 
   return (
@@ -109,10 +109,10 @@ function Tile({
 }
 
 const STATUS_TONE: Record<string, string> = {
-  quarantined: "bg-amber-500/15 text-amber-300",
-  refund_failed: "bg-rose-500/15 text-rose-300",
-  fulfilment_pending: "bg-sky-500/15 text-sky-300",
-  refund_pending: "bg-violet-500/15 text-violet-300",
+  quarantined: "bg-status-warn/15 text-status-warn",
+  refund_failed: "bg-status-fail/15 text-status-fail",
+  fulfilment_pending: "bg-status-info/15 text-status-info",
+  refund_pending: "bg-signal/15 text-signal",
   initiated: "bg-white/10 text-ink-muted",
   paid: "bg-white/10 text-ink-muted",
   fulfilling: "bg-white/10 text-ink-muted",
@@ -175,7 +175,7 @@ export function OperationsPage() {
   }
 
   if (error && !snapshot) {
-    return <div className="p-8 text-rose-400">Could not load operations: {error}</div>;
+    return <div className="p-8 text-status-fail">Could not load operations: {error}</div>;
   }
   if (!snapshot) return null;
 
@@ -218,8 +218,8 @@ export function OperationsPage() {
       </div>
 
       {needsAttention > 0 ? (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-5 flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+        <div className="rounded-2xl border border-status-warn/30 bg-status-warn/[0.06] p-5 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-status-warn mt-0.5 shrink-0" />
           <div>
             <div className="text-ink font-medium">
               {needsAttention} transaction{needsAttention === 1 ? "" : "s"} need a decision
@@ -295,7 +295,7 @@ export function OperationsPage() {
                     <td className="px-4 py-3 text-ink-muted">
                       {t.service_type ?? "—"} {t.provider ? `· ${t.provider}` : ""}
                       {!t.operator_transaction_id ? (
-                        <span className="ml-2 text-rose-400 text-xs">no operator id</span>
+                        <span className="ml-2 text-status-fail text-xs">no operator id</span>
                       ) : null}
                     </td>
                     <td className="px-4 py-3 text-right text-ink">{formatNaira(Number(t.amount))}</td>
@@ -313,7 +313,7 @@ export function OperationsPage() {
                       <button
                         disabled={busy === t.reference}
                         onClick={() => void resolve(t.reference, "mark_delivered")}
-                        className="ml-2 text-xs px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-40"
+                        className="ml-2 text-xs px-3 py-1.5 rounded-lg bg-status-ok/15 border border-status-ok/25 text-status-ok hover:bg-status-ok/25 disabled:opacity-40"
                       >
                         Delivered
                       </button>
@@ -350,8 +350,8 @@ export function OperationsPage() {
                       {s.service_type} · {s.provider}
                     </td>
                     <td className="px-4 py-3 text-right text-ink-muted">{s.total}</td>
-                    <td className="px-4 py-3 text-right text-emerald-400">{s.delivered}</td>
-                    <td className={`px-4 py-3 text-right ${s.failed > 0 ? "text-rose-400" : "text-ink-muted"}`}>
+                    <td className="px-4 py-3 text-right text-status-ok">{s.delivered}</td>
+                    <td className={`px-4 py-3 text-right ${s.failed > 0 ? "text-status-fail" : "text-ink-muted"}`}>
                       {s.failed}
                     </td>
                   </tr>
@@ -407,7 +407,7 @@ export function OperationsPage() {
         </div>
       </section>
 
-      {error ? <div className="text-sm text-rose-400">{error}</div> : null}
+      {error ? <div className="text-sm text-status-fail">{error}</div> : null}
     </div>
   );
 }

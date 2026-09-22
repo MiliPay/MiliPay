@@ -130,7 +130,7 @@ export function LogoutModal({
         <div className="flex items-start gap-2.5 p-3 rounded-xl bg-status-warn/5 border border-status-warn/15 text-left">
           <Lock className="w-4 h-4 text-status-warn shrink-0 mt-0.5" />
           <p className="text-[11px] text-ink-muted leading-snug">
-            Encrypted session keys and biometric cache on this device will be purged. You will need your password to log back in.
+            Your session will be cleared from this browser. You'll need your password to sign in again.
           </p>
         </div>
 

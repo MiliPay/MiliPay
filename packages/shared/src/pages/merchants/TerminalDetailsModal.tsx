@@ -218,13 +218,9 @@ export function TerminalDetailsModal({
                 <span className="font-mono text-signal-bright">{terminal.deviceSerialNumber}</span>
               </div>
               <div className="bg-white/[0.02] border border-white/[0.04] p-3 rounded-lg">
-                <span className="text-ink-muted block mb-1">Matching Engine</span>
-                <span className="text-white">Local C++ Microservice (NDPA Sovereign)</span>
-              </div>
-              <div className="bg-white/[0.02] border border-white/[0.04] p-3 rounded-lg">
                 <span className="text-ink-muted block mb-1">Operational State</span>
                 <span className={terminal.isActive ? "text-status-ok font-semibold" : "text-status-fail font-semibold"}>
-                  {terminal.isActive ? "Active & Authorized for Field Processing" : "Deactivated / Locked"}
+                  {terminal.isActive ? "Active" : "Deactivated"}
                 </span>
               </div>
             </div>

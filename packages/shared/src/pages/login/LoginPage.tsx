@@ -201,7 +201,7 @@ export default function LoginPage({ portal }: LoginPageProps) {
       <LoadingState
         fullScreen
         title="Securing Session..."
-        description="Authenticating staff clearance and establishing session."
+        description="Checking your account."
       />
     );
   }

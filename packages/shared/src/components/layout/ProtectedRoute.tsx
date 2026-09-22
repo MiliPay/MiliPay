@@ -12,8 +12,8 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     return (
       <LoadingState
         fullScreen
-        title="Securing & Terminating Session..."
-        description="Revoking active session tokens, purging device caches, and disconnecting from MiliPay Enterprise Network."
+        title="Signing out"
+        description="Ending your session."
       />
     );
   }
@@ -22,8 +22,8 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     return (
       <LoadingState
         fullScreen
-        title="Securing Session..."
-        description="Authenticating your staff credentials and establishing encrypted session clearance."
+        title="Signing in"
+        description="Checking your account."
       />
     );
   }

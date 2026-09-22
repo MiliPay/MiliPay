@@ -65,7 +65,7 @@ export default function MerchantsPage() {
           <div className="flex items-center gap-2 mb-1">
             <Store className="w-5 h-5 text-signal-bright" />
             <span className="text-xs font-semibold uppercase tracking-wider text-signal-bright">
-              Enterprise Network
+              Merchant network
             </span>
           </div>
           <h1 className="font-display text-3xl font-bold text-ink">Merchants & Terminals</h1>

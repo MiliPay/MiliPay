@@ -880,7 +880,7 @@ export default function MerchantDetailsPage() {
             <ShieldAlert className="w-5 h-5 text-status-fail shrink-0 mt-0.5" />
             <div className="text-xs text-status-fail leading-relaxed">
               <strong className="font-bold block mb-1">Permanent Administrative Action</strong>
-              Deleting this merchant will permanently remove the store profile, unbind all associated POS scanners, and terminate merchant portal access. In compliance with CBN financial regulations, past transaction records will be retained in decoupled audit logs.
+              This removes the store profile, deletes its POS terminals and revokes the merchant's portal login. Past transactions are kept, with the store's name, but are no longer linked to a merchant record. It cannot be undone.
             </div>
           </div>
 

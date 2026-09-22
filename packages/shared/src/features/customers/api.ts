@@ -550,7 +550,7 @@ export async function deleteCustomer(id: string): Promise<boolean> {
     .maybeSingle();
 
   if (!staff || (staff.role !== "admin" && staff.role !== "super_admin")) {
-    throw new Error("Forbidden: Field agents and support staff do not have permission to delete customers. Only administrators have deletion clearance.");
+    throw new Error("Only administrators can delete customers.");
   }
 
   // 1. First attempt: Use PostgreSQL SECURITY DEFINER RPC function
