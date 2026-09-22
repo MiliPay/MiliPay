@@ -176,7 +176,9 @@ export default function QuickServiceScreen({ route, navigation }: any) {
   const isDark = colorScheme !== 'light';
 
   const user = useAuthStore((state) => state.user);
-  const { linkedAccounts, activeBankIndex, setActiveBankIndex } = useBankStore();
+  const linkedAccounts = useBankStore((s) => s.linkedAccounts);
+  const activeBankIndex = useBankStore((s) => s.activeBankIndex);
+  const setActiveBankIndex = useBankStore((s) => s.setActiveBankIndex);
   const [selectedBankIndex, setSelectedBankIndex] = useState<number>(activeBankIndex || 0);
 
   useEffect(() => {

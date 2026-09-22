@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useColorScheme } from 'nativewind';
-import { View, Text, ScrollView, Pressable, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, ScrollView, Pressable, ActivityIndicator, Modal, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronLeft, FileText, Zap, Smartphone, Tv, Copy, CheckCheck, CreditCard, Share2, Check, X, ArrowUpRight, ArrowDownLeft } from 'lucide-react-native';
@@ -10,14 +10,125 @@ import * as Clipboard from 'expo-clipboard';
 import { useAuthStore, useTransactionStore, useBankStore } from '../../store/useStore';
 import { shareReceiptAsPdf, shareReceiptAsImage } from '../../lib/receiptSharing';
 import { isMoneyReturned, rowStatus } from '../../lib/transactionStatus';
+import { colors } from '../../theme/tokens';
+
+/**
+ * One history row, memoised.
+ *
+ * Every row re-rendered whenever anything in the transaction store changed —
+ * which a realtime event does on every payment — even though nothing about the
+ * row had. React.memo plus a FlatList means only the rows on screen exist and
+ * only the ones whose data changed redraw.
+ */
+const TransactionRow = React.memo(function TransactionRow({
+  tx,
+  isDark,
+  accountLabel,
+  dateLabel,
+  onPress,
+}: {
+  tx: any;
+  isDark: boolean;
+  accountLabel: string | null;
+  dateLabel: string;
+  onPress: (tx: any) => void;
+}) {
+  const isCredit = tx.category === 'received' || tx.type === 'credit' || tx.direction === 'inflow';
+  const badge = rowStatus(tx.status);
+  // A declined or refunded payment is money the customer still has. Showing it
+  // as a plain debit tells them the opposite.
+  const returned = isMoneyReturned(tx.status);
+
+  const badgeBg =
+    badge?.tone === 'fail'
+      ? 'bg-status-fail/10'
+      : badge?.tone === 'warn'
+      ? 'bg-status-warn/10'
+      : 'bg-black/[0.05] dark:bg-white/[0.07]';
+  const badgeText =
+    badge?.tone === 'fail'
+      ? 'text-status-fail'
+      : badge?.tone === 'warn'
+      ? 'text-status-warn'
+      : 'text-slate-500 dark:text-zinc-400';
+
+  return (
+    <Pressable
+      onPress={() => onPress(tx)}
+      className="flex-row items-center justify-between py-3.5 px-2 rounded-2xl active:opacity-60"
+    >
+      <View className="flex-row items-center flex-1 mr-3">
+        <View
+          className={`w-11 h-11 rounded-full items-center justify-center mr-3.5 ${
+            isCredit ? 'bg-signal/15 dark:bg-signal/20' : 'bg-status-fail/15 dark:bg-status-fail/20'
+          }`}
+        >
+          {isCredit ? (
+            <ArrowDownLeft color={colors.signal.base} size={18} strokeWidth={2.5} />
+          ) : (
+            <ArrowUpRight color={colors.status.fail} size={18} strokeWidth={2.5} />
+          )}
+        </View>
+
+        <View className="flex-1">
+          <Text
+            className="text-slate-900 dark:text-white font-inter-semibold text-base"
+            numberOfLines={1}
+          >
+            {tx.merchant_name}
+          </Text>
+          <View className="flex-row items-center mt-0.5">
+            <Text className="text-slate-400 dark:text-zinc-500 font-inter text-xs">{dateLabel}</Text>
+            {accountLabel && (
+              <>
+                <Text className="text-slate-300 dark:text-zinc-600 mx-1.5">•</Text>
+                <Text
+                  className="text-slate-500 dark:text-zinc-400 font-inter text-xs"
+                  numberOfLines={1}
+                >
+                  {accountLabel}
+                </Text>
+              </>
+            )}
+          </View>
+          {badge && (
+            <View className={`self-start mt-1 px-1.5 py-0.5 rounded ${badgeBg}`}>
+              <Text className={`font-inter-medium text-[10px] ${badgeText}`}>{badge.label}</Text>
+            </View>
+          )}
+        </View>
+      </View>
+
+      <View className="items-end">
+        <Text
+          className={`font-mono-bold text-base ${
+            returned
+              ? 'text-slate-400 dark:text-zinc-500 line-through'
+              : isCredit
+              ? 'text-signal dark:text-signal-bright'
+              : 'text-slate-900 dark:text-white'
+          }`}
+        >
+          {isCredit ? '+' : '-'}₦
+          {Number(tx.amount).toLocaleString('en-NG', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}
+        </Text>
+      </View>
+    </Pressable>
+  );
+});
 
 export default function TransactionsScreen({ navigation }: any) {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme !== 'light';
 
   const user = useAuthStore((state) => state.user);
-  const { transactions, fetchTransactions, isLoading } = useTransactionStore();
-  const { linkedAccounts } = useBankStore();
+  const transactions = useTransactionStore((s) => s.transactions);
+  const fetchTransactions = useTransactionStore((s) => s.fetchTransactions);
+  const isLoading = useTransactionStore((s) => s.isLoading);
+  const linkedAccounts = useBankStore((s) => s.linkedAccounts);
 
   const [selectedTx, setSelectedTx] = useState<any | null>(null);
   const [isSharingPdf, setIsSharingPdf] = useState(false);
@@ -89,10 +200,10 @@ export default function TransactionsScreen({ navigation }: any) {
     setTimeout(() => setCopiedId(null), 3000);
   };
 
-  const handleSelectTx = (tx: any) => {
+  const handleSelectTx = useCallback((tx: any) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedTx(tx);
-  };
+  }, []);
 
   const handleShareSelectedPdf = async () => {
     if (!selectedTx) return;
@@ -255,116 +366,48 @@ export default function TransactionsScreen({ navigation }: any) {
         </ScrollView>
       </View>
 
-      {/* Transactions List */}
-      <ScrollView className="flex-1 px-5 pt-3" showsVerticalScrollIndicator={false}>
-        {isLoading && filteredTransactions.length === 0 ? (
-          <View className="items-center justify-center py-20">
-            <ActivityIndicator color="#00C896" size="small" />
-          </View>
-        ) : filteredTransactions.length === 0 ? (
-          <View className="items-center justify-center py-20 mt-10">
-            <View className="w-20 h-20 rounded-full bg-black/5 dark:bg-white/10 items-center justify-center mb-6">
-              <FileText color={isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)"} size={32} />
-            </View>
-            <Text className="text-slate-900 dark:text-white font-inter-medium text-lg text-center mb-2">No transactions found</Text>
-            <Text className="text-slate-500 dark:text-white/60 font-inter text-sm text-center px-4">
-              Try adjusting your bank or category filter to view matching transactions.
-            </Text>
-          </View>
-        ) : (
-          <View className="pb-12">
-            {filteredTransactions.map((tx) => {
-              const isCredit = tx.category === 'received' || tx.type === 'credit' || tx.direction === 'inflow';
-              const badge = rowStatus(tx.status);
-              // A declined or refunded payment is money the customer still has.
-              // Showing it as a plain debit tells them the opposite.
-              const returned = isMoneyReturned(tx.status);
-              return (
-                <Pressable
-                  key={tx.id}
-                  onPress={() => handleSelectTx(tx)}
-                  className="flex-row items-center justify-between py-3.5 px-2 rounded-2xl active:opacity-60"
-                >
-                  <View className="flex-row items-center flex-1 mr-3">
-                    {/* Circle Icon: Red ↗ for debit, Green ↙ for credit */}
-                    <View className={`w-11 h-11 rounded-full items-center justify-center mr-3.5 ${
-                      isCredit 
-                        ? 'bg-signal/15 dark:bg-signal/20' 
-                        : 'bg-rose-500/15 dark:bg-rose-500/20'
-                    }`}>
-                      {isCredit ? (
-                        <ArrowDownLeft color="#00C896" size={18} strokeWidth={2.5} />
-                      ) : (
-                        <ArrowUpRight color="#f43f5e" size={18} strokeWidth={2.5} />
-                      )}
-                    </View>
-
-                    <View className="flex-1">
-                      <Text className="text-slate-900 dark:text-white font-inter-semibold text-base" numberOfLines={1}>
-                        {tx.merchant_name}
-                      </Text>
-                      <View className="flex-row items-center mt-0.5">
-                        <Text className="text-slate-400 dark:text-zinc-500 font-inter text-xs">
-                          {formatTxDate(tx.created_at)}
-                        </Text>
-                        {getAccountLabel(tx.account_used) && (
-                          <>
-                            <Text className="text-slate-300 dark:text-zinc-600 mx-1.5">•</Text>
-                            <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs" numberOfLines={1}>
-                              {getAccountLabel(tx.account_used)}
-                            </Text>
-                          </>
-                        )}
-                      </View>
-                      {badge && (
-                        <View
-                          className={`self-start mt-1 px-1.5 py-0.5 rounded ${
-                            badge.tone === 'fail'
-                              ? 'bg-status-fail/10'
-                              : badge.tone === 'warn'
-                              ? 'bg-status-warn/10'
-                              : 'bg-black/[0.05] dark:bg-white/[0.07]'
-                          }`}
-                        >
-                          <Text
-                            className={`font-inter-medium text-[10px] ${
-                              badge.tone === 'fail'
-                                ? 'text-status-fail'
-                                : badge.tone === 'warn'
-                                ? 'text-status-warn'
-                                : 'text-slate-500 dark:text-zinc-400'
-                            }`}
-                          >
-                            {badge.label}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-
-                  <View className="items-end">
-                    <Text
-                      className={`font-mono-bold text-base ${
-                        returned
-                          ? 'text-slate-400 dark:text-zinc-500 line-through'
-                          : isCredit
-                          ? 'text-signal dark:text-signal-bright'
-                          : 'text-slate-900 dark:text-white'
-                      }`}
-                    >
-                      {isCredit ? '+' : '-'}₦
-                      {Number(tx.amount).toLocaleString('en-NG', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </Text>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
+      {/* Transactions List. FlatList, not ScrollView + map: the list used to
+          mount every row at once, so a customer with a few hundred
+          transactions paid for all of them before the first one appeared. */}
+      <FlatList
+        data={filteredTransactions}
+        keyExtractor={(tx) => tx.id}
+        className="flex-1 px-5 pt-3"
+        contentContainerStyle={{ paddingBottom: 48 }}
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={12}
+        maxToRenderPerBatch={12}
+        windowSize={9}
+        removeClippedSubviews
+        renderItem={({ item }) => (
+          <TransactionRow
+            tx={item}
+            isDark={isDark}
+            accountLabel={getAccountLabel(item.account_used)}
+            dateLabel={formatTxDate(item.created_at)}
+            onPress={handleSelectTx}
+          />
         )}
-      </ScrollView>
+        ListEmptyComponent={
+          isLoading ? (
+            <View className="items-center justify-center py-20">
+              <ActivityIndicator color={colors.signal.base} size="small" />
+            </View>
+          ) : (
+            <View className="items-center justify-center py-20 mt-10">
+              <View className="w-20 h-20 rounded-full bg-black/5 dark:bg-white/10 items-center justify-center mb-6">
+                <FileText color={isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'} size={32} />
+              </View>
+              <Text className="text-slate-900 dark:text-white font-inter-medium text-lg text-center mb-2">
+                No transactions found
+              </Text>
+              <Text className="text-slate-500 dark:text-white/60 font-inter text-sm text-center px-4">
+                Try adjusting your bank or category filter to view matching transactions.
+              </Text>
+            </View>
+          )
+        }
+      />
 
       {/* Transaction Receipt Modal (OPay Standard) */}
       <Modal

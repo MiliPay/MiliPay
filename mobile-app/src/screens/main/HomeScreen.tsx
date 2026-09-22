@@ -63,7 +63,7 @@ const CARD_THEMES = [
 
 const LinkBankCard = ({ index, scrollX, isDark }: any) => {
   const { init } = useMonoConnect();
-  const { linkedAccounts } = useBankStore();
+  const linkedAccounts = useBankStore((s) => s.linkedAccounts);
   const user = useAuthStore((state) => state.user);
   const [isConfirming, setIsConfirming] = useState(false);
 
@@ -350,8 +350,14 @@ function HomeScreenContent({ navigation }: any) {
   const isDark = colorScheme !== 'light';
 
   const user = useAuthStore((state) => state.user);
-  const { linkedAccounts, activeBankIndex, isLoading, fetchAccounts, setActiveBankIndex } = useBankStore();
-  const { transactions, fetchTransactions, subscribeToLive } = useTransactionStore();
+  const linkedAccounts = useBankStore((s) => s.linkedAccounts);
+  const activeBankIndex = useBankStore((s) => s.activeBankIndex);
+  const isLoading = useBankStore((s) => s.isLoading);
+  const fetchAccounts = useBankStore((s) => s.fetchAccounts);
+  const setActiveBankIndex = useBankStore((s) => s.setActiveBankIndex);
+  const transactions = useTransactionStore((s) => s.transactions);
+  const fetchTransactions = useTransactionStore((s) => s.fetchTransactions);
+  const subscribeToLive = useTransactionStore((s) => s.subscribeToLive);
   
   const [isBalanceHidden, setIsBalanceHidden] = useState(true);
   const [isMoreServicesVisible, setIsMoreServicesVisible] = useState(false);
@@ -1034,7 +1040,7 @@ export default function HomeScreen({ navigation }: any) {
   const isDark = colorScheme !== 'light';
 
   const user = useAuthStore((state) => state.user);
-  const { linkMonoAccount } = useBankStore();
+  const linkMonoAccount = useBankStore((s) => s.linkMonoAccount);
 
   // Mono records this as the identity behind the bank connection, and under the
   // Direct Debit model it is the identity a mandate is signed against. It used

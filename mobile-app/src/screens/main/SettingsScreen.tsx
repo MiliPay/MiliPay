@@ -93,7 +93,8 @@ export default function SettingsScreen({ navigation }: any) {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const recordBiometricEnrolled = useAuthStore((state) => state.setBiometricEnrolled);
-  const { linkedAccounts, unlinkAccount } = useBankStore();
+  const linkedAccounts = useBankStore((s) => s.linkedAccounts);
+  const unlinkAccount = useBankStore((s) => s.unlinkAccount);
   
   const { colorScheme, setColorScheme } = useColorScheme();
   const isDark = colorScheme !== 'light';

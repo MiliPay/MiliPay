@@ -99,21 +99,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const fullName = meta.full_name || '';
         const names = fullName.split(' ');
         
-        let customerData: any = null;
-        try {
-          const { data } = await supabase
-            .from('customers')
-            .select(CUSTOMER_COLUMNS)
-            .eq('auth_user_id', session.user.id)
-            .maybeSingle();
-          customerData = data;
-        } catch (err) {
-          console.warn('Could not fetch customer details:', err);
-        }
+        // Both are needed before the navigator renders — the profile to draw
+        // the screen, the onboarding state to know which screen — but neither
+        // depends on the other, so they go together. They used to run one
+        // after the other, which meant two full round trips of splash screen
+        // on every cold start instead of one.
+        const loadCustomer = async () => {
+          try {
+            const { data } = await supabase
+              .from('customers')
+              .select(CUSTOMER_COLUMNS)
+              .eq('auth_user_id', session.user.id)
+              .maybeSingle();
+            return data as any;
+          } catch (err) {
+            console.warn('Could not fetch customer details:', err);
+            return null;
+          }
+        };
 
-        // Resolved before the navigator renders, so the first frame after a
-        // restored session already knows whether onboarding is outstanding.
-        await get().refreshOnboarding();
+        const [customerData] = await Promise.all([
+          loadCustomer(),
+          get().refreshOnboarding(),
+        ]);
         
         set({ 
           isAuthenticated: true, 
@@ -780,7 +788,10 @@ export const useSupportStore = create<SupportState>((set, get) => ({
         .from('ticket_messages')
         .select('*')
         .eq('ticket_id', ticketId)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: true })
+        // A long-running ticket is not a reason to load a thousand bubbles
+        // before the first one can be drawn.
+        .limit(200);
 
       if (msgError) throw msgError;
 
@@ -940,6 +951,16 @@ interface TransactionState {
   subscribeToLive: (userId: string) => () => void;
 }
 
+/** What a history row actually renders. */
+const TRANSACTION_LIST_COLUMNS =
+  'id, reference, customer_id, user_id, merchant_name, amount, status, account_used, created_at';
+
+/**
+ * Newest N. Deep history belongs behind a "load older" control rather than in
+ * every cold start; nobody scrolls two thousand rows.
+ */
+const TRANSACTION_PAGE_SIZE = 100;
+
 export const useTransactionStore = create<TransactionState>((set, get) => ({
   transactions: [],
   isLoading: false,
@@ -948,10 +969,19 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   fetchTransactions: async (userId: string, customerId?: string) => {
     set({ isLoading: true, error: null });
     try {
+      // Named columns, not '*'. The payment rail added base_amount, fee_amount,
+      // service_charge, the four lifecycle timestamps, tokens and failure
+      // reasons — none of which these lists show. '*' pulled all of it over the
+      // wire on every app open and again on every realtime event.
+      //
+      // And a limit. There was none, so the query returned every transaction
+      // the customer had ever made; a year of daily airtime is a few thousand
+      // rows fetched, parsed and mounted to draw a screen that shows five.
       let query = supabase
         .from('transactions')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select(TRANSACTION_LIST_COLUMNS)
+        .order('created_at', { ascending: false })
+        .limit(TRANSACTION_PAGE_SIZE);
 
       if (customerId) {
         query = query.or(`user_id.eq.${userId},customer_id.eq.${customerId}`);

@@ -37,19 +37,17 @@ export default function SupportScreen({ navigation }: any) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme !== 'light';
   
-  const { 
-    conversations, 
-    activeTicket, 
-    activeTicketId, 
-    messages, 
-    isLoading, 
-    isLoadingMessages,
-    fetchConversations, 
-    startNewChat, 
-    selectChat, 
-    leaveChat, 
-    sendMessage 
-  } = useSupportStore();
+  const conversations = useSupportStore((s) => s.conversations);
+  const activeTicket = useSupportStore((s) => s.activeTicket);
+  const activeTicketId = useSupportStore((s) => s.activeTicketId);
+  const messages = useSupportStore((s) => s.messages);
+  const isLoading = useSupportStore((s) => s.isLoading);
+  const isLoadingMessages = useSupportStore((s) => s.isLoadingMessages);
+  const fetchConversations = useSupportStore((s) => s.fetchConversations);
+  const startNewChat = useSupportStore((s) => s.startNewChat);
+  const selectChat = useSupportStore((s) => s.selectChat);
+  const leaveChat = useSupportStore((s) => s.leaveChat);
+  const sendMessage = useSupportStore((s) => s.sendMessage);
 
   const [inputText, setInputText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
