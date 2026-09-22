@@ -3,11 +3,10 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { useColorScheme } from 'nativewind';
-import { Home, Compass, Settings } from 'lucide-react-native';
+import { Home, Receipt, Settings } from 'lucide-react-native';
 
 import HomeScreen from '../screens/main/HomeScreen';
 import ServicesScreen from '../screens/main/ServicesScreen';
-import ExploreScreen from '../screens/main/ExploreScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
 import TransactionsScreen from '../screens/main/TransactionsScreen';
 import ProfileSettingsScreen from '../screens/main/ProfileSettingsScreen';
@@ -84,12 +83,12 @@ export default function TabNavigator() {
           };
         }}
       />
-      <Tab.Screen 
-        name="ExploreTab" 
-        component={ExploreScreen} 
+      <Tab.Screen
+        name="ActivityTab"
+        component={TransactionsScreen}
         options={{
-          tabBarLabel: 'Explore',
-          tabBarIcon: ({ color, size }) => <Compass color={color} size={size} />
+          tabBarLabel: 'Activity',
+          tabBarIcon: ({ color, size }) => <Receipt color={color} size={size} />,
         }}
       />
       <Tab.Screen 

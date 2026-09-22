@@ -178,15 +178,18 @@ export default function TransactionsScreen({ navigation }: any) {
     <SafeAreaView className="flex-1 bg-slate-50 dark:bg-black">
       <LinearGradient colors={isDark ? ['rgba(16, 185, 129, 0.08)', '#000'] : ['rgba(16, 185, 129, 0.08)', '#f8fafc']} className="absolute inset-0" />
       
-      {/* Header */}
+      {/* Header. This screen is both a tab root and a push target from Home, so
+          the back button only appears when there is somewhere to go back to. */}
       <View className="px-6 pt-6 pb-4 flex-row items-center">
-        <Pressable 
-          onPress={() => navigation.goBack()} 
-          className="w-10 h-10 items-center justify-center rounded-full bg-black/5 dark:bg-white/10 border border-slate-200 dark:border-white/10 active:bg-black/10 dark:active:bg-white/20"
-        >
-          <ChevronLeft color={isDark ? "#fff" : "#000"} size={20} />
-        </Pressable>
-        <Text className="text-slate-900 dark:text-white font-inter-bold text-xl ml-4">Transactions</Text>
+        {navigation.canGoBack() && (
+          <Pressable
+            onPress={() => navigation.goBack()}
+            className="w-10 h-10 items-center justify-center rounded-full bg-black/5 dark:bg-white/10 border border-slate-200 dark:border-white/10 active:bg-black/10 dark:active:bg-white/20 mr-4"
+          >
+            <ChevronLeft color={isDark ? "#fff" : "#000"} size={20} />
+          </Pressable>
+        )}
+        <Text className="text-slate-900 dark:text-white font-inter-bold text-xl">Transactions</Text>
       </View>
 
       {/* Bank Filter Bar (if linked accounts exist) */}
