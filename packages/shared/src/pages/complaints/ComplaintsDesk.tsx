@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MessageSquareWarning, Filter, MoreVertical, CheckCircle2, Search } from "lucide-react";
+import { MessageSquareWarning, CheckCircle2, Search } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@milipay/shared/lib/supabase";
 import { fetchSupportTickets } from "@milipay/shared/features/support/api";
@@ -13,6 +13,7 @@ export function ComplaintsDesk() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | SupportTicket["status"]>("all");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -48,6 +49,11 @@ export function ComplaintsDesk() {
     }
   };
 
+  const visibleComplaints =
+    statusFilter === "all"
+      ? complaints
+      : complaints.filter((t) => t.status === statusFilter);
+
   const getSLAColor = (createdAt: string) => {
     const hoursOpen = (new Date().getTime() - new Date(createdAt).getTime()) / (1000 * 60 * 60);
     if (hoursOpen >= 4) return "bg-status-fail/10 text-status-fail border-status-fail/20"; // Red (Critical)
@@ -80,10 +86,27 @@ export function ComplaintsDesk() {
                 <Search className="w-4 h-4" />
               </button>
             </form>
-            <button className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl bg-white/[0.05] border border-white/[0.1] text-ink text-xs sm:text-sm hover:bg-white/[0.1] transition-colors">
-              <Filter className="w-4 h-4" />
-              Filter Tickets
-            </button>
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-white/[0.03] border border-white/[0.1]">
+              {([
+                { id: "all", label: "All" },
+                { id: "open", label: "Open" },
+                { id: "in_progress", label: "In progress" },
+                { id: "resolved", label: "Resolved" },
+              ] as const).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setStatusFilter(tab.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    statusFilter === tab.id
+                      ? "bg-white/[0.1] text-ink"
+                      : "text-ink-muted hover:text-ink"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
         
@@ -99,18 +122,21 @@ export function ComplaintsDesk() {
                   <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Issue Description</th>
                   <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Status</th>
                   <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Assigned To</th>
-                  <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.05]">
                 {isLoading ? (
-                  <TableSkeletonRows columns={6} rows={5} />
-                ) : complaints.length === 0 ? (
+                  <TableSkeletonRows columns={5} rows={5} />
+                ) : visibleComplaints.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-ink-muted">No tickets found.</td>
+                    <td colSpan={5} className="p-8 text-center text-ink-muted">
+                      {statusFilter === "all"
+                        ? "No tickets yet."
+                        : `No ${statusFilter.replace("_", " ")} tickets.`}
+                    </td>
                   </tr>
                 ) : (
-                  complaints.map((ticket) => (
+                  visibleComplaints.map((ticket) => (
                     <tr 
                       key={ticket.id} 
                       className="hover:bg-white/[0.02] transition-colors group cursor-pointer"
@@ -141,11 +167,6 @@ export function ComplaintsDesk() {
                     </td>
                     <td className="p-4 text-sm text-ink-muted">
                       {ticket.assignedToName || "Unassigned"}
-                    </td>
-                    <td className="p-4">
-                      <button className="text-ink-muted hover:text-ink transition-colors">
-                        <MoreVertical className="w-5 h-5" />
-                      </button>
                     </td>
                   </tr>
                 ))

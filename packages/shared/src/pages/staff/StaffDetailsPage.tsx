@@ -179,9 +179,10 @@ export default function StaffDetailsPage() {
   const portal = getPortalDetails(staff.role);
   const agentStats = details.stats;
   const totalEvaluated = agentStats ? agentStats.approvedKYC + agentStats.rejectedKYC : 0;
-  const successRate = totalEvaluated > 0 
-    ? Math.round((agentStats!.approvedKYC / totalEvaluated) * 100) 
-    : (agentStats?.totalEnrolled ? 100 : 0);
+  const successRate =
+    totalEvaluated > 0
+      ? Math.round((agentStats!.approvedKYC / totalEvaluated) * 100)
+      : null;
 
   const customerColumns: Column<any>[] = [
     {
@@ -332,28 +333,36 @@ export default function StaffDetailsPage() {
             <div>
               <span className="text-ink-faint block">Assigned Web App</span>
               <span className="text-sm font-bold text-white mt-0.5 block">{portal.portalName}</span>
-              <span className="text-signal-bright font-data block text-xs mt-0.5">{portal.portalUrl}</span>
+              {portal.portalUrl ? (
+                <span className="text-signal-bright font-data block text-xs mt-0.5">{portal.portalUrl}</span>
+              ) : (
+                <span className="text-ink-faint block text-xs mt-0.5">
+                  Address not configured for this environment
+                </span>
+              )}
             </div>
 
-            <div className="flex items-center gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => handleCopyPortal(portal.portalUrl)}
-                className="px-3 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/10 text-white transition-colors border border-white/10 flex items-center gap-1.5"
-              >
-                {hasCopiedPortal ? <Check className="w-3.5 h-3.5 text-status-ok" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{hasCopiedPortal ? "Copied" : "Copy Link"}</span>
-              </button>
-              <a
-                href={portal.portalUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 rounded-lg bg-signal/15 hover:bg-signal/25 text-signal-bright transition-colors border border-signal/30 flex items-center gap-1.5"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Launch</span>
-              </a>
-            </div>
+            {portal.portalUrl && (
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleCopyPortal(portal.portalUrl)}
+                  className="px-3 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/10 text-white transition-colors border border-white/10 flex items-center gap-1.5"
+                >
+                  {hasCopiedPortal ? <Check className="w-3.5 h-3.5 text-status-ok" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{hasCopiedPortal ? "Copied" : "Copy Link"}</span>
+                </button>
+                <a
+                  href={portal.portalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-lg bg-signal/15 hover:bg-signal/25 text-signal-bright transition-colors border border-signal/30 flex items-center gap-1.5"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Launch</span>
+                </a>
+              </div>
+            )}
 
             <div className="p-2.5 rounded-lg bg-ledger-line border border-white/[0.06] text-[11px] text-ink-muted flex items-start gap-2">
               <Key className="w-3.5 h-3.5 text-signal-bright shrink-0 mt-0.5" />
@@ -410,8 +419,12 @@ export default function StaffDetailsPage() {
                 <span className="text-xs font-semibold text-signal-bright uppercase tracking-wider block flex items-center gap-1">
                   <TrendingUp className="w-3.5 h-3.5" /> Success Rate
                 </span>
-                <span className="text-3xl font-display text-white font-bold mt-2 block">{successRate}%</span>
-                <p className="text-[11px] text-ink-faint mt-1">Approval accuracy</p>
+                <span className="text-3xl font-display text-white font-bold mt-2 block">
+                  {successRate === null ? "—" : `${successRate}%`}
+                </span>
+                <p className="text-[11px] text-ink-faint mt-1">
+                  {successRate === null ? "Nothing evaluated yet" : "Approval accuracy"}
+                </p>
               </div>
             </div>
           </div>

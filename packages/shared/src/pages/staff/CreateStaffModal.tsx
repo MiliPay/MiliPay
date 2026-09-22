@@ -118,7 +118,9 @@ Phone: ${createdResult.profile.phone}
 NIN: •••••••${createdResult.profile.ninLast4}
 
 Portal Access:
-URL: ${createdResult.portalUrl} (${createdResult.portalName})
+${createdResult.portalUrl
+  ? `URL: ${createdResult.portalUrl} (${createdResult.portalName})`
+  : `Portal: ${createdResult.portalName} — ask your administrator for the address`}
 
 IMPORTANT:
 A one-time password has been sent to your phone. Log in to your portal with your
@@ -172,15 +174,21 @@ email address and that password. You will be asked to change it immediately.
             )}
             <div className="flex justify-between items-center py-1.5 border-b border-white/[0.05]">
               <span className="text-xs text-ink-muted uppercase font-semibold">Designated Portal</span>
-              <a 
-                href={createdResult.portalUrl} 
-                target="_blank" 
-                rel="noreferrer"
-                className="text-xs font-semibold text-signal-bright hover:underline flex items-center gap-1"
-              >
-                {createdResult.portalName} ({createdResult.portalUrl})
-                <ExternalLink className="w-3 h-3" />
-              </a>
+              {createdResult.portalUrl ? (
+                <a
+                  href={createdResult.portalUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs font-semibold text-signal-bright hover:underline flex items-center gap-1"
+                >
+                  {createdResult.portalName} ({createdResult.portalUrl})
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              ) : (
+                <span className="text-xs font-semibold text-ink-muted">
+                  {createdResult.portalName}
+                </span>
+              )}
             </div>
 
             {/* Credential delivery */}

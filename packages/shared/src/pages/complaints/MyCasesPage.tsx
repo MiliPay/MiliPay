@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Users, MoreVertical, CheckCircle2 } from "lucide-react";
+import { Users, CheckCircle2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { fetchSupportTickets } from "@milipay/shared/features/support/api";
 import type { SupportTicket } from "@milipay/shared/types";
@@ -52,15 +52,14 @@ export function MyCasesPage() {
                   <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Customer</th>
                   <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Issue Description</th>
                   <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Status</th>
-                  <th className="p-4 text-xs font-semibold text-ink-muted uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.05]">
                 {isLoading ? (
-                  <TableSkeletonRows columns={5} rows={5} />
+                  <TableSkeletonRows columns={4} rows={5} />
                 ) : complaints.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-ink-muted text-xs sm:text-sm">You have no active cases assigned to you.</td>
+                    <td colSpan={4} className="p-8 text-center text-ink-muted text-xs sm:text-sm">You have no active cases assigned to you.</td>
                   </tr>
                 ) : (
                   complaints.map((ticket) => (
@@ -91,11 +90,6 @@ export function MyCasesPage() {
                       )}
                       {ticket.status === "in_progress" && <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-status-info/10 text-status-info border border-status-info/20">In Progress</span>}
                       {ticket.status === "resolved" && <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-status-ok/10 text-status-ok border border-status-ok/20"><CheckCircle2 className="w-3 h-3 mr-1"/>Resolved</span>}
-                    </td>
-                    <td className="p-4">
-                      <button className="text-ink-muted hover:text-ink transition-colors">
-                        <MoreVertical className="w-5 h-5" />
-                      </button>
                     </td>
                   </tr>
                 ))

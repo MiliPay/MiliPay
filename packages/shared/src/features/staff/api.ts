@@ -15,29 +15,28 @@ interface FetchStaffOptions {
   role?: Role | "";
 }
 
+/**
+ * Where a member of staff signs in.
+ *
+ * These were hardcoded to http://localhost:5173/4/5, and this is the address
+ * handed to a newly created employee along with their one-time password — so
+ * in any deployed build every new hire was told to sign in on a machine that
+ * is not theirs. They come from the environment now, and when a portal's
+ * address is not configured the URL is empty and callers show the portal name
+ * without a link rather than printing something that cannot work.
+ */
 export function getPortalDetails(role: Role): { portalName: string; portalUrl: string } {
+  const env = (import.meta as any).env ?? {};
   switch (role) {
     case "admin":
     case "super_admin":
-      return {
-        portalName: "Admin Console",
-        portalUrl: "http://localhost:5173",
-      };
+      return { portalName: "Admin Console", portalUrl: env.VITE_ADMIN_PORTAL_URL ?? "" };
     case "agent":
-      return {
-        portalName: "Agent Portal",
-        portalUrl: "http://localhost:5174",
-      };
+      return { portalName: "Agent Portal", portalUrl: env.VITE_AGENT_PORTAL_URL ?? "" };
     case "support":
-      return {
-        portalName: "Service Portal",
-        portalUrl: "http://localhost:5175",
-      };
+      return { portalName: "Service Portal", portalUrl: env.VITE_SUPPORT_PORTAL_URL ?? "" };
     default:
-      return {
-        portalName: "Portal",
-        portalUrl: "http://localhost:5173",
-      };
+      return { portalName: "Portal", portalUrl: "" };
   }
 }
 
