@@ -4,7 +4,7 @@
     "slug": "biopay",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon-black.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
@@ -16,20 +16,26 @@
         "android.permission.USE_BIOMETRIC"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#ffffff",
-        "foregroundImage": "./assets/icon-black.png"
+        "foregroundImage": "./assets/adaptive-foreground.png",
+        "monochromeImage": "./assets/adaptive-monochrome.png",
+        "backgroundColor": "#FFFFFF"
       }
     },
     "web": {
-      "favicon": "./assets/icon-white.png"
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       [
         "expo-splash-screen",
         {
-          "image": "./assets/icon-white.png",
+          "image": "./assets/splash-mark.png",
+          "imageWidth": 180,
           "resizeMode": "contain",
-          "backgroundColor": "#111827"
+          "backgroundColor": "#FFFFFF",
+          "dark": {
+            "image": "./assets/splash-mark.png",
+            "backgroundColor": "#080C0A"
+          }
         }
       ],
       "expo-status-bar",
@@ -50,7 +56,7 @@
     "owner": "b.stallon",
     "description": "Pay with your palm. Airtime, data, electricity and TV, paid straight from your bank account.",
     "scheme": "milipay",
-    "primaryColor": "#10b981",
-    "backgroundColor": "#000000"
+    "primaryColor": "#00C896",
+    "backgroundColor": "#080C0A"
   }
 }
