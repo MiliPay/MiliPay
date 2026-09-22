@@ -111,7 +111,7 @@ function toResult(data: any, error: any): VtuRechargeResult {
   return data as VtuRechargeResult;
 }
 
-/** Retail bundle catalogue (VTPass) for data and cable. */
+/** Retail bundle catalogue for data and cable. */
 export async function fetchDynamicVariations(
   serviceType: string,
   provider: string,

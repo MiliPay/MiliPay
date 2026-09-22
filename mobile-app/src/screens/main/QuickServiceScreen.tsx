@@ -22,6 +22,7 @@ import {
   CreditCard,
   Zap,
   ShieldCheck,
+  AlertTriangle,
   Lock,
   Copy,
   CheckCheck,
@@ -33,6 +34,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useColorScheme } from 'nativewind';
 
 import { useAuthStore, useBankStore, useTransactionStore } from '../../store/useStore';
+import { colors } from '../../theme/tokens';
 import { shareReceiptAsPdf, shareReceiptAsImage } from '../../lib/receiptSharing';
 import { supabase } from '../../lib/supabase';
 import {
@@ -69,7 +71,7 @@ const DISCOS = [
   { id: 'kedco', name: 'Kano Electric (KEDCO)', short: 'KEDCO' },
 ];
 
-// Cable Providers (Dynamic live bouquets pulled via VTPass Variations API)
+// Cable providers. Packages themselves are fetched live, never hardcoded.
 const CABLE_PROVIDERS = [
   { id: 'dstv', name: 'DSTV' },
   { id: 'gotv', name: 'GOtv' },
@@ -96,6 +98,78 @@ function detectTelcoFromPrefix(phone: string): string | null {
   if (nineMobilePrefixes.includes(prefix)) return '9mobile';
   return null;
 }
+
+/** A catalogue that came back with nothing in it, said out loud. */
+const CatalogueEmpty = ({ title, body }: { title: string; body: string }) => (
+  <View className="py-7 px-4 items-center">
+    <View className="w-10 h-10 rounded-full bg-black/[0.04] dark:bg-white/[0.06] items-center justify-center mb-3">
+      <AlertTriangle color={colors.ink.faint} size={18} />
+    </View>
+    <Text className="text-slate-700 dark:text-white/80 font-inter-semibold text-sm text-center">
+      {title}
+    </Text>
+    <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs text-center mt-1 leading-[17px]">
+      {body}
+    </Text>
+  </View>
+);
+
+/**
+ * Who the provider says owns this meter or smartcard.
+ *
+ * The name is only ever shown when a provider returned it. Two effects used to
+ * set it to a hardcoded string as soon as the field held ten digits, so a
+ * customer saw a plausible name confirm a number nobody had checked.
+ */
+const AccountHolderBadge = ({
+  isVerifying,
+  name,
+  address,
+  error,
+}: {
+  isVerifying: boolean;
+  name: string | null;
+  address: string | null;
+  error: string | null;
+}) => {
+  if (isVerifying) {
+    return (
+      <View className="flex-row items-center px-3 py-2 rounded-lg bg-black/[0.03] dark:bg-white/[0.05] mt-1">
+        <ActivityIndicator size="small" color={colors.ink.faint} />
+        <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs ml-2">
+          Checking this account…
+        </Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View className="flex-row items-center bg-status-fail/10 px-3 py-2 rounded-lg border border-status-fail/25 mt-1">
+        <AlertTriangle color={colors.status.fail} size={14} />
+        <Text className="text-status-fail font-inter-medium text-xs flex-1 ml-1.5">{error}</Text>
+      </View>
+    );
+  }
+
+  if (!name) return null;
+
+  return (
+    <View className="bg-signal/10 px-3 py-2 rounded-lg border border-signal/25 mt-1">
+      <View className="flex-row items-center">
+        <ShieldCheck color={colors.signal.base} size={14} />
+        <Text className="text-emerald-700 dark:text-signal-bright font-inter-semibold text-xs flex-1 ml-1.5">
+          {name}
+        </Text>
+      </View>
+      {address ? (
+        <Text className="text-slate-500 dark:text-zinc-400 font-inter text-[11px] mt-0.5 ml-[22px]">
+          {address}
+        </Text>
+      ) : null}
+    </View>
+  );
+};
 
 export default function QuickServiceScreen({ route, navigation }: any) {
   const { colorScheme } = useColorScheme();
@@ -130,7 +204,6 @@ export default function QuickServiceScreen({ route, navigation }: any) {
   const [selectedDisco, setSelectedDisco] = useState<string>('ikedc');
   const [meterType, setMeterType] = useState<'prepaid' | 'postpaid'>('prepaid');
   const [meterNumber, setMeterNumber] = useState<string>('');
-  const [meterVerifiedName, setMeterVerifiedName] = useState<string | null>(null);
 
   // Cable state
   const [selectedCable, setSelectedCable] = useState<string>('dstv');
@@ -164,6 +237,8 @@ export default function QuickServiceScreen({ route, navigation }: any) {
   // BigiSub's own endpoints require it.
   const [verifiedName, setVerifiedName] = useState<string | null>(null);
   const [verifiedAddress, setVerifiedAddress] = useState<string | null>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [isAutoVerifying, setIsAutoVerifying] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
 
   useEffect(() => {
@@ -234,21 +309,22 @@ export default function QuickServiceScreen({ route, navigation }: any) {
     let isMounted = true;
     if (serviceType === 'cable') {
       setIsLoadingVariations(true);
+
+      // Clear the previous provider's package first, for the same reason as
+      // the data catalogue below: an empty result left the old provider's
+      // selection live behind a blank list.
+      setDynamicBouquets([]);
+      setSelectedBouquet(null);
+
       fetchDynamicVariations('cable', selectedCable)
         .then((bouquets) => {
           if (!isMounted) return;
           setDynamicBouquets(bouquets);
-          if (bouquets.length > 0) {
-            const defaultB = bouquets[1] || bouquets[0];
-            const defaultId = defaultB.id || `${defaultB.variation_code}_0`;
-            setSelectedBouquet({
-              id: defaultId,
-              variationCode: defaultB.variation_code,
-              name: defaultB.name,
-              price: defaultB.price,
-              basePrice: defaultB.baseAmount,
-            });
-          }
+          // No package is pre-selected. This used to default to `bouquets[1]`,
+          // an arbitrary index into a list that runs from a ₦1,900 bouquet to a
+          // ₦44,500 one — so the confirmation sheet could open pre-filled with
+          // a package the customer never chose, needing only a fingerprint to
+          // pay for it. Which bouquet someone wants is not guessable.
         })
         .finally(() => {
           if (isMounted) setIsLoadingVariations(false);
@@ -264,6 +340,17 @@ export default function QuickServiceScreen({ route, navigation }: any) {
     let isMounted = true;
     if (serviceType === 'data') {
       setIsLoadingVariations(true);
+
+      // Drop the previous network's selection before fetching the new one.
+      // Without this, switching from MTN to a network whose catalogue comes
+      // back empty — either because the provider does not carry it or because
+      // the lookup failed, both of which return [] — left the MTN plan selected
+      // behind a blank list. The total still showed the MTN price and the
+      // purchase would have been submitted with the MTN variation code against
+      // a Glo number.
+      setDynamicDataPlans([]);
+      setSelectedDataPlan(null);
+
       const fetcher = dataCategory === 'sme'
         ? fetchSmeDataPlans(selectedTelco)
         : fetchDynamicVariations('data', selectedTelco);
@@ -295,23 +382,63 @@ export default function QuickServiceScreen({ route, navigation }: any) {
     };
   }, [selectedTelco, serviceType, dataCategory]);
 
-  // Meter lookup simulation
+  /**
+   * Clear any confirmed account holder as soon as the number it belonged to is
+   * edited.
+   *
+   * This replaces two "lookup simulation" effects that set the displayed name
+   * to a hardcoded string — 'ADEKUNLE OLAITAN (RESIDENTIAL)' for any meter
+   * number of ten digits or more, and 'CHUKWUDI EZE (ACTIVE)' for any
+   * smartcard. No request was made. A customer typing a meter number saw a
+   * plausible name appear beneath it, read that as the network confirming whose
+   * meter it was, and paid.
+   *
+   * The real lookup already exists: runVerification() calls verifyBillAccount()
+   * before the confirmation sheet opens, and its result is what the badge shows
+   * now. A name is only ever displayed if a provider returned it.
+   */
   useEffect(() => {
-    if (meterNumber.trim().length >= 10) {
-      setMeterVerifiedName('ADEKUNLE OLAITAN (RESIDENTIAL)');
-    } else {
-      setMeterVerifiedName(null);
-    }
-  }, [meterNumber]);
+    setVerifiedName(null);
+    setVerifiedAddress(null);
+    setVerifyError(null);
 
-  // Smartcard lookup simulation
-  useEffect(() => {
-    if (smartcardNumber.trim().length >= 10) {
-      setMeterVerifiedName('CHUKWUDI EZE (ACTIVE)');
-    } else if (serviceType === 'cable') {
-      setMeterVerifiedName(null);
-    }
-  }, [smartcardNumber, serviceType]);
+    const destination = serviceType === 'power' ? meterNumber : smartcardNumber;
+    const provider = serviceType === 'power' ? selectedDisco : selectedCable;
+    if (serviceType !== 'power' && serviceType !== 'cable') return;
+    if (destination.trim().length < 10) return;
+
+    // Debounced so this is one lookup per finished number rather than one per
+    // keystroke. The purchase path verifies again before taking any money —
+    // this is only so the customer sees whose account it is while they can
+    // still fix a typo for free.
+    let cancelled = false;
+    setIsAutoVerifying(true);
+    const timer = setTimeout(() => {
+      verifyBillAccount({
+        serviceType,
+        provider,
+        destination,
+        meterType: serviceType === 'power' ? meterType : undefined,
+      })
+        .then((result) => {
+          if (cancelled) return;
+          if (result.success) {
+            setVerifiedName(result.customerName);
+            setVerifiedAddress(result.customerAddress ?? null);
+          } else {
+            setVerifyError(result.error);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setIsAutoVerifying(false);
+        });
+    }, 600);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [meterNumber, smartcardNumber, selectedDisco, selectedCable, meterType, serviceType]);
 
   // Use enrolled user phone number
   const handleUseMyNumber = () => {
@@ -356,24 +483,44 @@ export default function QuickServiceScreen({ route, navigation }: any) {
     if (serviceType === 'airtime' || serviceType === 'data') {
       const cleanPhone = recipientNumber.replace(/[^0-9]/g, '');
       if (cleanPhone.length < 10) {
-        alert('Please enter a valid 11-digit phone number');
+        Alert.alert('Check the number', 'Enter a valid 11-digit phone number.');
         return false;
       }
-    } else if (serviceType === 'power') {
+    }
+
+    // A data purchase is a specific bundle, not an amount. Nothing downstream
+    // can recover if this is missing or stale.
+    if (serviceType === 'data' && !selectedDataPlan) {
+      Alert.alert(
+        'Choose a bundle',
+        'Select a data bundle for this network before paying.',
+      );
+      return false;
+    }
+
+    if (serviceType === 'cable' && !selectedBouquet) {
+      Alert.alert(
+        'Choose a package',
+        'Select the package you want to pay for before continuing.',
+      );
+      return false;
+    }
+
+    if (serviceType === 'power') {
       if (meterNumber.trim().length < 8) {
-        alert('Please enter a valid Meter Number');
+        Alert.alert('Check the meter number', 'Enter a valid meter number.');
         return false;
       }
     } else if (serviceType === 'cable') {
       if (smartcardNumber.trim().length < 8) {
-        alert('Please enter a valid Smartcard / IUC Number');
+        Alert.alert('Check the smartcard number', 'Enter a valid smartcard or IUC number.');
         return false;
       }
     }
 
     const payable = getPayableAmount();
     if (!payable || payable < 50) {
-      alert('Minimum payment amount is ₦50');
+      Alert.alert('Amount too small', 'The minimum payment is ₦50.');
       return false;
     }
 
@@ -443,7 +590,6 @@ export default function QuickServiceScreen({ route, navigation }: any) {
 
     setVerifiedName(result.customerName);
     setVerifiedAddress(result.customerAddress ?? null);
-    if (serviceType === 'power') setMeterVerifiedName(result.customerName);
     return true;
   };
 
@@ -819,7 +965,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                 </View>
               )}
 
-              {/* DATA: Bundle Picker (BigiSub SME Data vs VTPass Direct Data) */}
+              {/* DATA: bundle picker — SME (wholesale) or direct (retail) */}
               {serviceType === 'data' && (
                 <View className="bg-white dark:bg-zinc-900 rounded-2xl p-4 mb-4 border border-slate-200 dark:border-zinc-800">
                   {/* Category Segmented Toggle */}
@@ -896,11 +1042,24 @@ export default function QuickServiceScreen({ route, navigation }: any) {
 
                   {isLoadingVariations ? (
                     <View className="py-8 items-center justify-center">
-                      <ActivityIndicator color="#10b981" size="small" />
+                      <ActivityIndicator color={colors.signal.base} size="small" />
                       <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs mt-2">
-                        Pulling real-time {selectedTelco.toUpperCase()} {dataCategory === 'sme' ? 'SME bundles' : 'data plans'}...
+                        Loading {selectedTelco.toUpperCase()} {dataCategory === 'sme' ? 'SME bundles' : 'data plans'}…
                       </Text>
                     </View>
+                  ) : dynamicDataPlans.length === 0 ? (
+                    // An empty catalogue used to render as blank space under a
+                    // heading — no message, no way forward. It happens whenever
+                    // a network does not carry the selected category, and
+                    // whenever the lookup fails, since both return [].
+                    <CatalogueEmpty
+                      title={`No ${dataCategory === 'sme' ? 'SME' : 'direct'} bundles for ${selectedTelco.toUpperCase()}`}
+                      body={
+                        dataCategory === 'sme'
+                          ? 'This network may not offer SME bundles. Try Direct instead.'
+                          : 'We could not load this catalogue. Check your connection and try again.'
+                      }
+                    />
                   ) : (
                     <View className="space-y-2.5">
                       {dynamicDataPlans.map((bundle, idx) => {
@@ -1055,14 +1214,12 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                   />
                 </View>
 
-                {meterVerifiedName && (
-                  <View className="flex-row items-center bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20 mt-1">
-                    <ShieldCheck color="#10b981" size={14} className="mr-1.5" />
-                    <Text className="text-emerald-700 dark:text-emerald-400 font-inter-semibold text-xs flex-1">
-                      {meterVerifiedName}
-                    </Text>
-                  </View>
-                )}
+                <AccountHolderBadge
+                  isVerifying={isAutoVerifying}
+                  name={verifiedName}
+                  address={verifiedAddress}
+                  error={verifyError}
+                />
               </View>
 
               {/* Electricity Amount Presets */}
@@ -1178,17 +1335,15 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                   />
                 </View>
 
-                {meterVerifiedName && (
-                  <View className="flex-row items-center bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20 mt-1">
-                    <ShieldCheck color="#10b981" size={14} className="mr-1.5" />
-                    <Text className="text-emerald-700 dark:text-emerald-400 font-inter-semibold text-xs flex-1">
-                      {meterVerifiedName}
-                    </Text>
-                  </View>
-                )}
+                <AccountHolderBadge
+                  isVerifying={isAutoVerifying}
+                  name={verifiedName}
+                  address={verifiedAddress}
+                  error={verifyError}
+                />
               </View>
 
-              {/* Bouquet / Package List (Dynamically pulled live from VTPass) */}
+              {/* Package list, fetched live from the provider */}
               <View className="bg-white dark:bg-zinc-900 rounded-2xl p-4 mb-4 border border-slate-200 dark:border-zinc-800">
                 <View className="flex-row items-center justify-between mb-3">
                   <Text className="text-slate-500 dark:text-zinc-400 font-inter-semibold text-xs uppercase tracking-wider">
@@ -1203,11 +1358,16 @@ export default function QuickServiceScreen({ route, navigation }: any) {
 
                 {isLoadingVariations ? (
                   <View className="py-8 items-center justify-center">
-                    <ActivityIndicator color="#10b981" size="small" />
+                    <ActivityIndicator color={colors.signal.base} size="small" />
                     <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs mt-2">
-                      Pulling real-time {selectedCable.toUpperCase()} bouquets...
+                      Loading {selectedCable.toUpperCase()} packages…
                     </Text>
                   </View>
+                ) : dynamicBouquets.length === 0 ? (
+                  <CatalogueEmpty
+                    title={`No packages for ${selectedCable.toUpperCase()}`}
+                    body="We could not load this provider's packages. Check your connection and try again."
+                  />
                 ) : (
                   <View className="space-y-2">
                     {dynamicBouquets.map((b, idx) => {
