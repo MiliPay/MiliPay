@@ -51,7 +51,7 @@ export default function ChangePasswordScreen({ navigation }: any) {
     const borderColor = interpolateColor(
       securityLevel.value,
       [0, 0.5, 1],
-      ['rgba(255,255,255,0.1)', 'rgba(234, 179, 8, 0.8)', 'rgba(16, 185, 129, 1)']
+      ['rgba(255,255,255,0.1)', 'rgba(234, 179, 8, 0.8)', 'rgba(0, 200, 150, 1)']
     );
     return { borderColor, borderWidth: 2 };
   });
@@ -111,7 +111,7 @@ export default function ChangePasswordScreen({ navigation }: any) {
                 style={animatedRingStyle}
                 className="w-24 h-24 rounded-full bg-white/5 items-center justify-center mb-6 shadow-xl"
               >
-                <ShieldCheck color={securityScore === 1 ? "#10b981" : "rgba(255,255,255,0.4)"} size={40} strokeWidth={1.5} />
+                <ShieldCheck color={securityScore === 1 ? "#00C896" : "rgba(255,255,255,0.4)"} size={40} strokeWidth={1.5} />
               </Animated.View>
               
               <Text className="text-white text-3xl font-inter-bold tracking-tight mb-2 text-center">
@@ -147,7 +147,7 @@ export default function ChangePasswordScreen({ navigation }: any) {
                   />
                   <View className="flex-row justify-between mt-2 px-1">
                     <Text className="text-white/40 text-xs font-inter uppercase">Security Strength</Text>
-                    <Text className={`text-xs font-inter-bold uppercase ${newPassword.length === 0 ? 'text-white/40' : securityScore >= 0.8 ? 'text-emerald-400' : securityScore >= 0.6 ? 'text-yellow-500' : 'text-red-400'}`}>
+                    <Text className={`text-xs font-inter-bold uppercase ${newPassword.length === 0 ? 'text-white/40' : securityScore >= 0.8 ? 'text-signal-bright' : securityScore >= 0.6 ? 'text-yellow-500' : 'text-red-400'}`}>
                       {newPassword.length === 0
                         ? 'Empty'
                         : securityScore >= 0.8

@@ -202,9 +202,9 @@ export default function AccountLimitsScreen({ navigation }: any) {
         >
           {/* Current Tier Overview (OPay Style Green Card) */}
           <View 
-            className="bg-emerald-600 rounded-3xl p-6 mb-6"
+            className="bg-signal rounded-3xl p-6 mb-6"
             style={{
-              shadowColor: '#059669',
+              shadowColor: '#0A6650',
               shadowOffset: { width: 0, height: 6 },
               shadowOpacity: 0.25,
               shadowRadius: 12,
@@ -216,8 +216,8 @@ export default function AccountLimitsScreen({ navigation }: any) {
                 <Text className="text-white font-inter-bold text-2xl mr-2.5">
                   Tier {tier}
                 </Text>
-                <View className="bg-emerald-700/80 px-3 py-1 rounded-full border border-emerald-500/30">
-                  <Text className="text-emerald-100 font-inter-semibold text-xs">
+                <View className="bg-signal-dim/80 px-3 py-1 rounded-full border border-signal/30">
+                  <Text className="text-ink font-inter-semibold text-xs">
                     Current Level
                   </Text>
                 </View>
@@ -230,29 +230,29 @@ export default function AccountLimitsScreen({ navigation }: any) {
               </View>
             </View>
 
-            <View className="flex-row pt-4 border-t border-emerald-500/50">
+            <View className="flex-row pt-4 border-t border-signal/50">
               <View className="flex-1">
-                <Text className="text-emerald-100 font-inter-medium text-xs mb-1">
+                <Text className="text-ink font-inter-medium text-xs mb-1">
                   Daily Limit
                 </Text>
                 <Text className="text-white font-inter-bold text-2xl">
                   ₦{currentDaily.toLocaleString()}
                 </Text>
                 {onboarding?.dailyLimit != null && onboarding.dailyLimit < caps.maxDaily && (
-                  <Text className="text-emerald-100/70 font-inter text-[10px] mt-0.5">
+                  <Text className="text-ink/70 font-inter text-[10px] mt-0.5">
                     you set this · cap ₦{caps.maxDaily.toLocaleString()}
                   </Text>
                 )}
               </View>
-              <View className="flex-1 pl-4 border-l border-emerald-500/50">
-                <Text className="text-emerald-100 font-inter-medium text-xs mb-1">
+              <View className="flex-1 pl-4 border-l border-signal/50">
+                <Text className="text-ink font-inter-medium text-xs mb-1">
                   Single Limit
                 </Text>
                 <Text className="text-white font-inter-bold text-2xl">
                   ₦{currentSingle.toLocaleString()}
                 </Text>
                 {onboarding?.singleLimit != null && onboarding.singleLimit < caps.maxSingle && (
-                  <Text className="text-emerald-100/70 font-inter text-[10px] mt-0.5">
+                  <Text className="text-ink/70 font-inter text-[10px] mt-0.5">
                     you set this · cap ₦{caps.maxSingle.toLocaleString()}
                   </Text>
                 )}
@@ -303,7 +303,7 @@ export default function AccountLimitsScreen({ navigation }: any) {
               className={`h-14 rounded-2xl flex-row items-center justify-center mt-5 ${
                 !limitsModified
                   ? 'bg-slate-200 dark:bg-zinc-800 opacity-60'
-                  : 'bg-emerald-500 active:bg-emerald-600'
+                  : 'bg-signal active:bg-signal'
               } ${isSavingLimits ? 'opacity-70' : ''}`}
             >
               {isSavingLimits ? (
@@ -365,7 +365,7 @@ export default function AccountLimitsScreen({ navigation }: any) {
                     onPress={() => handleSelectPreset(item.value)}
                     className={`px-4 py-2.5 rounded-2xl border ${
                       isSelected
-                        ? 'bg-emerald-500 border-emerald-500'
+                        ? 'bg-signal border-signal'
                         : 'bg-slate-50 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700'
                     }`}
                   >
@@ -390,10 +390,10 @@ export default function AccountLimitsScreen({ navigation }: any) {
               className={`h-14 rounded-2xl flex-row items-center justify-center ${
                 isOverLimit || isInvalid
                   ? 'bg-slate-200 dark:bg-zinc-800 opacity-60'
-                  : 'bg-emerald-500 active:bg-emerald-600'
+                  : 'bg-signal active:bg-signal'
               } ${isSaving ? 'opacity-70' : ''}`}
               style={{
-                shadowColor: isOverLimit || isInvalid ? 'transparent' : '#10b981',
+                shadowColor: isOverLimit || isInvalid ? 'transparent' : '#00C896',
                 shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: 0.25,
                 shadowRadius: 8,
@@ -456,19 +456,19 @@ export default function AccountLimitsScreen({ navigation }: any) {
             </View>
 
             {/* Tier 2 (Current Active) */}
-            <View className="bg-white dark:bg-zinc-900 rounded-2xl p-4 mb-3 border-2 border-emerald-500">
+            <View className="bg-white dark:bg-zinc-900 rounded-2xl p-4 mb-3 border-2 border-signal">
               <View className="flex-row items-center justify-between mb-1.5">
                 <View className="flex-row items-center">
                   <Text className="text-slate-900 dark:text-white font-inter-bold text-sm mr-2">
                     Tier 2 (Biometric)
                   </Text>
-                  <View className="bg-emerald-500/15 px-2 py-0.5 rounded-full">
-                    <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-[10px]">
+                  <View className="bg-signal/15 px-2 py-0.5 rounded-full">
+                    <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-[10px]">
                       Current Level
                     </Text>
                   </View>
                 </View>
-                <Check color="#10b981" size={18} strokeWidth={2.5} />
+                <Check color="#00C896" size={18} strokeWidth={2.5} />
               </View>
               <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs mb-3">
                 Confirmed NIN & Palm Vein Enrollment
@@ -536,11 +536,11 @@ export default function AccountLimitsScreen({ navigation }: any) {
             }}
           >
             {/* Green Badge with Ring */}
-            <View className="w-20 h-20 rounded-full bg-emerald-500/15 dark:bg-emerald-500/20 items-center justify-center mb-4">
+            <View className="w-20 h-20 rounded-full bg-signal/15 dark:bg-signal/20 items-center justify-center mb-4">
               <View
-                className="w-13 h-13 rounded-full bg-emerald-500 items-center justify-center"
+                className="w-13 h-13 rounded-full bg-signal items-center justify-center"
                 style={{
-                  shadowColor: '#10b981',
+                  shadowColor: '#00C896',
                   shadowOffset: { width: 0, height: 4 },
                   shadowOpacity: 0.3,
                   shadowRadius: 8,
@@ -565,7 +565,7 @@ export default function AccountLimitsScreen({ navigation }: any) {
                 <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">
                   New PIN Threshold
                 </Text>
-                <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-base">
+                <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-base">
                   ₦{selectedAmount.toLocaleString()}
                 </Text>
               </View>
@@ -597,8 +597,8 @@ export default function AccountLimitsScreen({ navigation }: any) {
                   Network Status
                 </Text>
                 <View className="flex-row items-center">
-                  <View className="w-2 h-2 rounded-full bg-emerald-500 mr-1.5" />
-                  <Text className="text-emerald-600 dark:text-emerald-400 font-inter-semibold text-xs">
+                  <View className="w-2 h-2 rounded-full bg-signal mr-1.5" />
+                  <Text className="text-signal-dim dark:text-signal-bright font-inter-semibold text-xs">
                     Active on all POS
                   </Text>
                 </View>
@@ -611,9 +611,9 @@ export default function AccountLimitsScreen({ navigation }: any) {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setShowSuccessModal(false);
               }}
-              className="w-full h-13 rounded-xl bg-emerald-500 active:bg-emerald-600 items-center justify-center"
+              className="w-full h-13 rounded-xl bg-signal active:bg-signal items-center justify-center"
               style={{
-                shadowColor: '#10b981',
+                shadowColor: '#00C896',
                 shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: 0.2,
                 shadowRadius: 6,

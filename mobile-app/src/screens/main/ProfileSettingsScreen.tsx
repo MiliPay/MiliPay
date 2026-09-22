@@ -45,7 +45,7 @@ export default function ProfileSettingsScreen({ navigation }: any) {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50 dark:bg-black">
-      <LinearGradient colors={isDark ? ['rgba(16, 185, 129, 0.08)', '#000'] : ['rgba(16, 185, 129, 0.08)', '#f8fafc']} className="absolute inset-0" />
+      <LinearGradient colors={isDark ? ['rgba(0, 200, 150, 0.08)', '#000'] : ['rgba(0, 200, 150, 0.08)', '#f8fafc']} className="absolute inset-0" />
       
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -69,18 +69,18 @@ export default function ProfileSettingsScreen({ navigation }: any) {
           <View className="items-center mt-2 mb-10">
             <View className="relative">
               {/* Soft glow behind avatar */}
-              <View className="absolute inset-0 bg-emerald-500/20 rounded-full blur-xl scale-110" />
+              <View className="absolute inset-0 bg-signal/20 rounded-full blur-xl scale-110" />
               
               <View className="w-28 h-28 rounded-full bg-white dark:bg-[#111318] border border-slate-200 dark:border-white/10 items-center justify-center z-10">
-                <Text className="text-emerald-400 font-inter-bold text-4xl tracking-tight">
+                <Text className="text-signal-bright font-inter-bold text-4xl tracking-tight">
                   {user?.initials || 'ME'}
                 </Text>
               </View>
               
               <Pressable 
                 onPress={handlePickImage}
-                className="absolute bottom-0 right-0 w-9 h-9 bg-emerald-500 rounded-full border-[3px] border-black items-center justify-center z-20"
-                style={{ shadowColor: '#10b981', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 3 }}
+                className="absolute bottom-0 right-0 w-9 h-9 bg-signal rounded-full border-[3px] border-black items-center justify-center z-20"
+                style={{ shadowColor: '#00C896', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 3 }}
               >
                 <Camera color="#111827" size={14} strokeWidth={2.5} />
               </Pressable>
@@ -171,7 +171,7 @@ export default function ProfileSettingsScreen({ navigation }: any) {
               <View className="flex-row items-center px-4 h-14">
                 <ShieldCheck color={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"} size={18} />
                 <TextInput
-                  className="flex-1 text-emerald-400/80 font-inter-medium ml-3 text-sm tracking-widest"
+                  className="flex-1 text-signal-bright/80 font-inter-medium ml-3 text-sm tracking-widest"
                   value={nin}
                   editable={false}
                   placeholder="NIN"
@@ -198,8 +198,8 @@ export default function ProfileSettingsScreen({ navigation }: any) {
               className="bg-white dark:bg-[#111318] border border-slate-200 dark:border-white/10 rounded-2xl p-4 flex-row items-center justify-between active:opacity-70"
             >
               <View className="flex-row items-center flex-1 mr-3">
-                <View className="w-10 h-10 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 items-center justify-center mr-3 border border-emerald-500/20">
-                  <Sliders color="#10b981" size={18} />
+                <View className="w-10 h-10 rounded-xl bg-signal/10 dark:bg-signal/20 items-center justify-center mr-3 border border-signal/20">
+                  <Sliders color="#00C896" size={18} />
                 </View>
                 <View className="flex-1">
                   <Text className="text-slate-900 dark:text-white font-inter-bold text-sm">
@@ -218,7 +218,7 @@ export default function ProfileSettingsScreen({ navigation }: any) {
           <Pressable 
             onPress={handleSave}
             disabled={isSaving}
-            className={`h-14 rounded-2xl items-center justify-center flex-row mb-12 ${isSaving ? 'bg-emerald-500/50' : 'bg-emerald-500 active:bg-emerald-600'}`}
+            className={`h-14 rounded-2xl items-center justify-center flex-row mb-12 ${isSaving ? 'bg-signal/50' : 'bg-signal active:bg-signal'}`}
           >
             <Text className="text-[#000] font-inter-bold text-sm tracking-wide mr-2">
               {isSaving ? 'Saving Changes...' : 'Save Changes'}

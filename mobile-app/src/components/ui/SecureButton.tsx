@@ -70,7 +70,7 @@ export const SecureButton: React.FC<SecureButtonProps> = ({
     >
       {(variant === 'primary' && !props.disabled) ? (
         <LinearGradient
-          colors={['#10b981', '#059669']}
+          colors={['#00C896', '#0A6650']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           className="absolute inset-0"
@@ -78,7 +78,7 @@ export const SecureButton: React.FC<SecureButtonProps> = ({
       ) : null}
       
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? 'white' : '#10b981'} />
+        <ActivityIndicator color={variant === 'primary' ? 'white' : '#00C896'} />
       ) : (
         <Text className={`font-inter-semibold text-lg tracking-wide ${getTextColor()}`}>
           {title}

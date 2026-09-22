@@ -132,7 +132,7 @@ export default function LoginScreen() {
                     Password
                   </Text>
                   <Pressable onPress={handleForgotPassword} hitSlop={8}>
-                    <Text className="text-emerald-600 dark:text-emerald-400 font-inter-medium text-xs">
+                    <Text className="text-signal-dim dark:text-signal-bright font-inter-medium text-xs">
                       Forgot password?
                     </Text>
                   </Pressable>
@@ -169,7 +169,7 @@ export default function LoginScreen() {
               <Pressable
                 onPress={handleLogin}
                 disabled={isLoading}
-                className={`h-14 rounded-xl items-center justify-center bg-emerald-500 active:bg-emerald-600 ${
+                className={`h-14 rounded-xl items-center justify-center bg-signal active:bg-signal ${
                   isLoading ? 'opacity-70' : ''
                 }`}
               >

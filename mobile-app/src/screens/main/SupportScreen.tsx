@@ -156,7 +156,7 @@ export default function SupportScreen({ navigation }: any) {
     return (
       <View style={{ flex: 1, backgroundColor: bgMain }}>
         <LinearGradient 
-          colors={isDark ? ['rgba(16, 185, 129, 0.08)', 'rgba(2, 6, 23, 1)'] : ['rgba(16, 185, 129, 0.06)', '#f8fafc']} 
+          colors={isDark ? ['rgba(0, 200, 150, 0.08)', 'rgba(2, 6, 23, 1)'] : ['rgba(0, 200, 150, 0.06)', '#f8fafc']} 
           style={StyleSheet.absoluteFill}
         />
 
@@ -173,8 +173,8 @@ export default function SupportScreen({ navigation }: any) {
             <View style={{ alignItems: 'center' }}>
               <Text style={{ color: textPrimary, fontWeight: 'bold', fontSize: 18 }}>Help & Support</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10b981', marginRight: 6, shadowColor: '#10b981', shadowOpacity: 0.8, shadowRadius: 8, elevation: 2 }} />
-                <Text style={{ color: '#10b981', fontWeight: '600', fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#00C896', marginRight: 6, shadowColor: '#00C896', shadowOpacity: 0.8, shadowRadius: 8, elevation: 2 }} />
+                <Text style={{ color: '#00C896', fontWeight: '600', fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase' }}>
                   Replies under 5 mins
                 </Text>
               </View>
@@ -188,7 +188,7 @@ export default function SupportScreen({ navigation }: any) {
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10b981" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00C896" />}
         >
           {/* Main "Talk to Support" CTA Banner */}
           <Pressable 
@@ -198,8 +198,8 @@ export default function SupportScreen({ navigation }: any) {
                 borderRadius: 24,
                 overflow: 'hidden',
                 borderWidth: 1,
-                borderColor: isDark ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.25)',
-                shadowColor: '#10b981',
+                borderColor: isDark ? 'rgba(0, 200, 150, 0.3)' : 'rgba(0, 200, 150, 0.25)',
+                shadowColor: '#00C896',
                 shadowOpacity: isDark ? 0.15 : 0.08,
                 shadowRadius: 16,
                 elevation: 4,
@@ -208,18 +208,18 @@ export default function SupportScreen({ navigation }: any) {
             ]}
           >
             <LinearGradient
-              colors={isDark ? ['rgba(16, 185, 129, 0.15)', 'rgba(15, 23, 42, 0.85)'] : ['rgba(16, 185, 129, 0.12)', 'rgba(255, 255, 255, 0.95)']}
+              colors={isDark ? ['rgba(0, 200, 150, 0.15)', 'rgba(15, 23, 42, 0.85)'] : ['rgba(0, 200, 150, 0.12)', 'rgba(255, 255, 255, 0.95)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={{ padding: 22 }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: '#10b981', alignItems: 'center', justifyContent: 'center', shadowColor: '#10b981', shadowOpacity: 0.4, shadowRadius: 10, elevation: 3 }}>
+                <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: '#00C896', alignItems: 'center', justifyContent: 'center', shadowColor: '#00C896', shadowOpacity: 0.4, shadowRadius: 10, elevation: 3 }}>
                   <Headphones color="#ffffff" size={26} />
                 </View>
 
-                <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: 'rgba(16, 185, 129, 0.15)', borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.3)' }}>
-                  <Text style={{ color: '#10b981', fontWeight: '700', fontSize: 11 }}>24/7 LIVE SUPPORT</Text>
+                <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: 'rgba(0, 200, 150, 0.15)', borderWidth: 1, borderColor: 'rgba(0, 200, 150, 0.3)' }}>
+                  <Text style={{ color: '#00C896', fontWeight: '700', fontSize: 11 }}>24/7 LIVE SUPPORT</Text>
                 </View>
               </View>
 
@@ -230,7 +230,7 @@ export default function SupportScreen({ navigation }: any) {
                 Have an issue with a POS payment, bank account, or transfer? Connect instantly with our dedicated support staff.
               </Text>
 
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 18, alignSelf: 'flex-start', backgroundColor: isDark ? 'rgba(16, 185, 129, 0.2)' : '#10b981', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 18, alignSelf: 'flex-start', backgroundColor: isDark ? 'rgba(0, 200, 150, 0.2)' : '#00C896', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14 }}>
                 <MessageSquarePlus color="#ffffff" size={16} style={{ marginRight: 6 }} />
                 <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 14 }}>Start a New Chat</Text>
               </View>
@@ -274,7 +274,7 @@ export default function SupportScreen({ navigation }: any) {
 
             {isLoading && conversations.length === 0 ? (
               <View style={{ padding: 32, alignItems: 'center' }}>
-                <ActivityIndicator color="#10b981" />
+                <ActivityIndicator color="#00C896" />
                 <Text style={{ color: textSecondary, fontSize: 13, marginTop: 8 }}>Loading your conversations...</Text>
               </View>
             ) : conversations.length === 0 ? (
@@ -313,8 +313,8 @@ export default function SupportScreen({ navigation }: any) {
                     badgeColor = '#f59e0b';
                     badgeLabel = 'Escalated to Admin';
                   } else if (isInProgress) {
-                    badgeBg = 'rgba(16, 185, 129, 0.15)';
-                    badgeColor = '#10b981';
+                    badgeBg = 'rgba(0, 200, 150, 0.15)';
+                    badgeColor = '#00C896';
                     badgeLabel = 'In Progress';
                   }
 
@@ -354,8 +354,8 @@ export default function SupportScreen({ navigation }: any) {
                       </Text>
 
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 8 }}>
-                        <Text style={{ color: '#10b981', fontSize: 12, fontWeight: '600', marginRight: 4 }}>Open Chat</Text>
-                        <ChevronRight color="#10b981" size={14} />
+                        <Text style={{ color: '#00C896', fontSize: 12, fontWeight: '600', marginRight: 4 }}>Open Chat</Text>
+                        <ChevronRight color="#00C896" size={14} />
                       </View>
                     </Pressable>
                   );
@@ -376,7 +376,7 @@ export default function SupportScreen({ navigation }: any) {
   return (
     <View style={{ flex: 1, backgroundColor: bgMain }}>
       <LinearGradient 
-        colors={isDark ? ['rgba(16, 185, 129, 0.05)', 'rgba(2, 6, 23, 1)'] : ['rgba(16, 185, 129, 0.04)', '#f8fafc']} 
+        colors={isDark ? ['rgba(0, 200, 150, 0.05)', 'rgba(2, 6, 23, 1)'] : ['rgba(0, 200, 150, 0.04)', '#f8fafc']} 
         style={StyleSheet.absoluteFill}
       />
 
@@ -399,11 +399,11 @@ export default function SupportScreen({ navigation }: any) {
                 width: 7, 
                 height: 7, 
                 borderRadius: 4, 
-                backgroundColor: isResolved ? '#94a3b8' : '#10b981', 
+                backgroundColor: isResolved ? '#94a3b8' : '#00C896', 
                 marginRight: 5 
               }} />
               <Text style={{ 
-                color: isResolved ? textSecondary : '#10b981', 
+                color: isResolved ? textSecondary : '#00C896', 
                 fontWeight: '600', 
                 fontSize: 11, 
                 textTransform: 'uppercase',
@@ -441,7 +441,7 @@ export default function SupportScreen({ navigation }: any) {
               borderWidth: 1, 
               borderColor: cardBorder 
             }}>
-              <ShieldCheck color="#10b981" size={14} style={{ marginRight: 6 }} />
+              <ShieldCheck color="#00C896" size={14} style={{ marginRight: 6 }} />
               <Text style={{ color: textSecondary, fontSize: 11, fontWeight: '500' }}>
                 End-to-end encrypted support session
               </Text>
@@ -450,12 +450,12 @@ export default function SupportScreen({ navigation }: any) {
 
           {isLoadingMessages ? (
             <View style={{ padding: 40, alignItems: 'center' }}>
-              <ActivityIndicator color="#10b981" />
+              <ActivityIndicator color="#00C896" />
               <Text style={{ color: textSecondary, fontSize: 13, marginTop: 8 }}>Loading messages...</Text>
             </View>
           ) : messages.length === 0 ? (
             <View style={{ padding: 24, alignItems: 'center', marginHorizontal: 20, borderRadius: 20, backgroundColor: cardBg, borderWidth: 1, borderColor: cardBorder }}>
-              <Headphones color="#10b981" size={32} style={{ marginBottom: 12 }} />
+              <Headphones color="#00C896" size={32} style={{ marginBottom: 12 }} />
               <Text style={{ color: textPrimary, fontWeight: 'bold', fontSize: 16 }}>Welcome to MiliPay Support</Text>
               <Text style={{ color: textSecondary, fontSize: 13, textAlign: 'center', marginTop: 4, lineHeight: 18 }}>
                 Drop a message below detailing your request. An agent will attend to you in under 5 minutes.
@@ -499,14 +499,14 @@ export default function SupportScreen({ navigation }: any) {
                       width: 32, 
                       height: 32, 
                       borderRadius: 16, 
-                      backgroundColor: 'rgba(16, 185, 129, 0.15)', 
+                      backgroundColor: 'rgba(0, 200, 150, 0.15)', 
                       alignItems: 'center', 
                       justifyContent: 'center', 
                       marginRight: 8, 
                       borderWidth: 1, 
-                      borderColor: 'rgba(16, 185, 129, 0.3)' 
+                      borderColor: 'rgba(0, 200, 150, 0.3)' 
                     }}>
-                      <Headphones color="#10b981" size={14} />
+                      <Headphones color="#00C896" size={14} />
                     </View>
                   )}
                   
@@ -514,7 +514,7 @@ export default function SupportScreen({ navigation }: any) {
                     maxWidth: '78%', 
                     paddingHorizontal: 16, 
                     paddingVertical: 12, 
-                    backgroundColor: isUser ? '#10b981' : agentBubbleBg,
+                    backgroundColor: isUser ? '#00C896' : agentBubbleBg,
                     borderWidth: isUser ? 0 : 1,
                     borderColor: isUser ? 'transparent' : agentBubbleBorder,
                     borderRadius: 22,
@@ -551,7 +551,7 @@ export default function SupportScreen({ navigation }: any) {
               borderColor: cardBorder, 
               alignItems: 'center' 
             }}>
-              <CheckCheck color="#10b981" size={24} style={{ marginBottom: 6 }} />
+              <CheckCheck color="#00C896" size={24} style={{ marginBottom: 6 }} />
               <Text style={{ color: textPrimary, fontWeight: 'bold', fontSize: 14 }}>This Issue Was Marked As Solved</Text>
               <Text style={{ color: textSecondary, fontSize: 12, textAlign: 'center', marginTop: 2 }}>
                 This conversation is closed. If you need further assistance, please tap back and start a new chat.
@@ -582,7 +582,7 @@ export default function SupportScreen({ navigation }: any) {
               borderColor: cardBorder, 
               gap: 8 
             }}>
-              <CheckCheck color="#10b981" size={18} />
+              <CheckCheck color="#00C896" size={18} />
               <Text style={{ color: textSecondary, fontSize: 13, fontWeight: '500' }}>
                 This ticket has been solved. Chat is closed.
               </Text>
@@ -617,7 +617,7 @@ export default function SupportScreen({ navigation }: any) {
                 style={[
                   { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
                   hasText 
-                    ? { backgroundColor: '#10b981', shadowColor: '#10b981', shadowOpacity: 0.4, shadowRadius: 12, elevation: 4 }
+                    ? { backgroundColor: '#00C896', shadowColor: '#00C896', shadowOpacity: 0.4, shadowRadius: 12, elevation: 4 }
                     : { backgroundColor: borderButton, borderWidth: 1, borderColor: borderSubtle }
                 ]}
               >

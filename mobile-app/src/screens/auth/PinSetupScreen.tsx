@@ -25,7 +25,7 @@ const PinWell = ({ filled, isError }: { filled: boolean, isError: boolean }) => 
     transform: [{ scale: scale.value }],
     backgroundColor: isError 
       ? 'rgba(239, 68, 68, 1)' 
-      : filled ? 'rgba(16, 185, 129, 1)' : 'rgba(255,255,255,0.1)'
+      : filled ? 'rgba(0, 200, 150, 1)' : 'rgba(255,255,255,0.1)'
   }));
 
   return (
@@ -137,7 +137,7 @@ export default function PinSetupScreen({ navigation, route }: any) {
 
   return (
     <SafeAreaView className="flex-1 bg-black">
-      <LinearGradient colors={['#000', 'rgba(16, 185, 129, 0.05)']} className="absolute inset-0" />
+      <LinearGradient colors={['#000', 'rgba(0, 200, 150, 0.05)']} className="absolute inset-0" />
       
       <View className="flex-1 justify-between py-12">
         <View className="items-center px-6 mt-8">

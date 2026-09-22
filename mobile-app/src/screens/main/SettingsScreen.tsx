@@ -56,12 +56,12 @@ const SettingRow = ({ icon: Icon, label, subtitle, value, type = 'nav', danger =
         <Switch 
           value={value} 
           onValueChange={onPress}
-          trackColor={{ false: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', true: '#10b981' }}
+          trackColor={{ false: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', true: '#00C896' }}
           thumbColor="#fff"
         />
       ) : type === 'badge' ? (
-        <View className="bg-emerald-500/15 px-2.5 py-1 rounded-lg">
-          <Text className="text-emerald-600 dark:text-emerald-400 font-inter-semibold text-xs">{value}</Text>
+        <View className="bg-signal/15 px-2.5 py-1 rounded-lg">
+          <Text className="text-signal-dim dark:text-signal-bright font-inter-semibold text-xs">{value}</Text>
         </View>
       ) : type === 'value' ? (
         <Text className="text-slate-400 dark:text-white/40 font-inter text-sm">{value}</Text>
@@ -179,7 +179,7 @@ export default function SettingsScreen({ navigation }: any) {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50 dark:bg-black">
-      <LinearGradient colors={isDark ? ['rgba(16, 185, 129, 0.08)', '#000'] : ['rgba(16, 185, 129, 0.08)', '#f8fafc']} className="absolute inset-0" />
+      <LinearGradient colors={isDark ? ['rgba(0, 200, 150, 0.08)', '#000'] : ['rgba(0, 200, 150, 0.08)', '#f8fafc']} className="absolute inset-0" />
       
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {/* Header */}
@@ -195,8 +195,8 @@ export default function SettingsScreen({ navigation }: any) {
               className="flex-row items-center py-2"
               style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
             >
-              <View className="w-14 h-14 rounded-full bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-500/20 dark:border-emerald-500/30 items-center justify-center mr-4">
-                <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-lg">
+              <View className="w-14 h-14 rounded-full bg-signal/10 dark:bg-signal/20 border border-signal/20 dark:border-signal/30 items-center justify-center mr-4">
+                <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-lg">
                   {user?.initials || 'ME'}
                 </Text>
               </View>
@@ -363,7 +363,7 @@ export default function SettingsScreen({ navigation }: any) {
             }}
           >
             <LinearGradient 
-              colors={isDark ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0)'] : ['rgba(16,185,129,0.03)', 'rgba(255,255,255,0)']} 
+              colors={isDark ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0)'] : ['rgba(0, 200, 150,0.03)', 'rgba(255,255,255,0)']} 
               className="absolute inset-0" 
             />
             
@@ -391,8 +391,8 @@ export default function SettingsScreen({ navigation }: any) {
                 style={({pressed}) => [
                   { transform: [{scale: pressed ? 0.97 : 1}] },
                   {
-                    borderColor: activeTheme === 'system' ? '#34d399' : (isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'),
-                    backgroundColor: activeTheme === 'system' ? (isDark ? 'rgba(16,185,129,0.1)' : '#ecfdf5') : (isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc'),
+                    borderColor: activeTheme === 'system' ? '#33E0B5' : (isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'),
+                    backgroundColor: activeTheme === 'system' ? (isDark ? 'rgba(0, 200, 150,0.1)' : '#ecfdf5') : (isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc'),
                   }
                 ]}
                 className="w-full h-24 rounded-3xl mb-4 overflow-hidden border-2"
@@ -402,10 +402,10 @@ export default function SettingsScreen({ navigation }: any) {
                   <View 
                     className="w-12 h-12 rounded-2xl items-center justify-center mr-4"
                     style={{
-                      backgroundColor: activeTheme === 'system' ? 'rgba(16,185,129,0.2)' : (isDark ? 'rgba(255,255,255,0.1)' : '#e2e8f0')
+                      backgroundColor: activeTheme === 'system' ? 'rgba(0, 200, 150,0.2)' : (isDark ? 'rgba(255,255,255,0.1)' : '#e2e8f0')
                     }}
                   >
-                    <Smartphone color={activeTheme === 'system' ? '#10b981' : (isDark ? '#fff' : '#000')} size={24} />
+                    <Smartphone color={activeTheme === 'system' ? '#00C896' : (isDark ? '#fff' : '#000')} size={24} />
                   </View>
                   <View className="flex-1">
                     <Text className="text-slate-900 dark:text-white font-inter-bold text-lg mb-0.5">System Match</Text>
@@ -413,9 +413,9 @@ export default function SettingsScreen({ navigation }: any) {
                   </View>
                   {activeTheme === 'system' && (
                     <View 
-                      className="w-8 h-8 rounded-full bg-emerald-500 items-center justify-center"
+                      className="w-8 h-8 rounded-full bg-signal items-center justify-center"
                       style={{
-                        shadowColor: '#10b981',
+                        shadowColor: '#00C896',
                         shadowOffset: { width: 0, height: 0 },
                         shadowOpacity: 0.5,
                         shadowRadius: 8,
@@ -437,8 +437,8 @@ export default function SettingsScreen({ navigation }: any) {
                   style={({pressed}) => [
                     { transform: [{scale: pressed ? 0.95 : 1}] },
                     {
-                      borderColor: activeTheme === 'light' ? '#34d399' : (isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'),
-                      backgroundColor: activeTheme === 'light' ? (isDark ? 'rgba(16,185,129,0.1)' : '#ecfdf5') : (isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc'),
+                      borderColor: activeTheme === 'light' ? '#33E0B5' : (isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'),
+                      backgroundColor: activeTheme === 'light' ? (isDark ? 'rgba(0, 200, 150,0.1)' : '#ecfdf5') : (isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc'),
                     }
                   ]}
                   className="w-[48%] h-full rounded-3xl overflow-hidden border-2 p-4 justify-between"
@@ -450,9 +450,9 @@ export default function SettingsScreen({ navigation }: any) {
                     </View>
                     {activeTheme === 'light' && (
                       <View 
-                        className="w-6 h-6 rounded-full bg-emerald-500 items-center justify-center"
+                        className="w-6 h-6 rounded-full bg-signal items-center justify-center"
                         style={{
-                          shadowColor: '#10b981',
+                          shadowColor: '#00C896',
                           shadowOffset: { width: 0, height: 0 },
                           shadowOpacity: 0.5,
                           shadowRadius: 6,
@@ -475,8 +475,8 @@ export default function SettingsScreen({ navigation }: any) {
                   style={({pressed}) => [
                     { transform: [{scale: pressed ? 0.95 : 1}] },
                     {
-                      borderColor: activeTheme === 'dark' ? '#34d399' : (isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'),
-                      backgroundColor: activeTheme === 'dark' ? (isDark ? 'rgba(16,185,129,0.1)' : '#ecfdf5') : (isDark ? '#020617' : '#f8fafc'),
+                      borderColor: activeTheme === 'dark' ? '#33E0B5' : (isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'),
+                      backgroundColor: activeTheme === 'dark' ? (isDark ? 'rgba(0, 200, 150,0.1)' : '#ecfdf5') : (isDark ? '#020617' : '#f8fafc'),
                     }
                   ]}
                   className="w-[48%] h-full rounded-3xl overflow-hidden border-2 p-4 justify-between"
@@ -489,9 +489,9 @@ export default function SettingsScreen({ navigation }: any) {
                     </View>
                     {activeTheme === 'dark' && (
                       <View 
-                        className="w-6 h-6 rounded-full bg-emerald-500 items-center justify-center"
+                        className="w-6 h-6 rounded-full bg-signal items-center justify-center"
                         style={{
-                          shadowColor: '#10b981',
+                          shadowColor: '#00C896',
                           shadowOffset: { width: 0, height: 0 },
                           shadowOpacity: 0.5,
                           shadowRadius: 6,
@@ -542,7 +542,7 @@ export default function SettingsScreen({ navigation }: any) {
             }}
           >
             <LinearGradient 
-              colors={isDark ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0)'] : ['rgba(16,185,129,0.03)', 'rgba(255,255,255,0)']} 
+              colors={isDark ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0)'] : ['rgba(0, 200, 150,0.03)', 'rgba(255,255,255,0)']} 
               className="absolute inset-0" 
             />
             
@@ -566,7 +566,7 @@ export default function SettingsScreen({ navigation }: any) {
               <ScrollView showsVerticalScrollIndicator={false} className="max-h-96">
                 {linkedAccounts.length === 0 ? (
                   <View className="items-center py-12">
-                    <View className="w-20 h-20 rounded-full bg-emerald-500/10 items-center justify-center mb-4">
+                    <View className="w-20 h-20 rounded-full bg-signal/10 items-center justify-center mb-4">
                       <Building color={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"} size={32} />
                     </View>
                     <Text className="text-slate-500 dark:text-white/40 font-inter-medium text-base">No banks linked yet.</Text>
@@ -585,8 +585,8 @@ export default function SettingsScreen({ navigation }: any) {
                       }}
                     >
                       <View className="flex-row items-center flex-1">
-                        <View className="w-14 h-14 rounded-2xl bg-emerald-500/10 items-center justify-center mr-4 border border-emerald-500/20">
-                          <Building color="#10b981" size={24} />
+                        <View className="w-14 h-14 rounded-2xl bg-signal/10 items-center justify-center mr-4 border border-signal/20">
+                          <Building color="#00C896" size={24} />
                         </View>
                         <View className="flex-1">
                           <Text className="text-slate-900 dark:text-white font-inter-bold text-lg mb-1">{acc.bankName}</Text>

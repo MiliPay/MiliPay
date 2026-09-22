@@ -50,7 +50,7 @@ function StepRow({
 }) {
   const colour =
     state === 'complete'
-      ? 'rgba(16, 185, 129, 1)'
+      ? 'rgba(0, 200, 150, 1)'
       : state === 'failed'
         ? 'rgba(239, 68, 68, 1)'
         : state === 'active'
@@ -64,7 +64,7 @@ function StepRow({
         style={{
           backgroundColor:
             state === 'complete'
-              ? 'rgba(16,185,129,0.15)'
+              ? 'rgba(0, 200, 150,0.15)'
               : state === 'failed'
                 ? 'rgba(239,68,68,0.15)'
                 : 'rgba(255,255,255,0.06)',
@@ -140,7 +140,7 @@ export function PurchaseProgressSheet({
                 className="rounded-2xl px-4 py-3 flex-row items-start"
                 style={{
                   backgroundColor: succeeded
-                    ? 'rgba(16,185,129,0.08)'
+                    ? 'rgba(0, 200, 150,0.08)'
                     : settled
                       ? 'rgba(239,68,68,0.08)'
                       : 'rgba(255,255,255,0.04)',
@@ -196,7 +196,7 @@ export function PurchaseProgressSheet({
                   ) : null}
                   <Pressable
                     onPress={onClose}
-                    className="flex-1 bg-emerald-500 rounded-2xl py-4 items-center"
+                    className="flex-1 bg-signal rounded-2xl py-4 items-center"
                   >
                     <Text className="text-black font-inter-bold">Done</Text>
                   </Pressable>

@@ -50,7 +50,7 @@ const PinWell = ({ filled, isError }: { filled: boolean; isError: boolean }) => 
       backgroundColor: isError
         ? 'rgba(239, 68, 68, 1)'
         : filled
-        ? 'rgba(16, 185, 129, 1)'
+        ? 'rgba(0, 200, 150, 1)'
         : 'rgba(255,255,255,0.12)',
     }}
   />
@@ -201,14 +201,14 @@ export function ConfirmIdentitySheet({
 
             {mode === 'checking' || mode === 'biometric' ? (
               <View className="items-center py-10">
-                <View className="w-24 h-24 rounded-full border-2 border-emerald-500/40 bg-emerald-500/10 items-center justify-center mb-6">
-                  <BiometricIcon size={44} color="#10b981" strokeWidth={1.2} />
+                <View className="w-24 h-24 rounded-full border-2 border-signal/40 bg-signal/10 items-center justify-center mb-6">
+                  <BiometricIcon size={44} color="#00C896" strokeWidth={1.2} />
                 </View>
                 <Text className="text-white/60 font-inter text-sm">
                   Waiting for {capability?.label.toLowerCase() ?? 'biometrics'}…
                 </Text>
                 <Pressable onPress={() => setMode('pin')} className="mt-6" hitSlop={8}>
-                  <Text className="text-emerald-400 font-inter-medium text-sm">Use PIN instead</Text>
+                  <Text className="text-signal-bright font-inter-medium text-sm">Use PIN instead</Text>
                 </Pressable>
               </View>
             ) : (
@@ -221,7 +221,7 @@ export function ConfirmIdentitySheet({
 
                 <View className="h-6 justify-center">
                   {isVerifying ? (
-                    <ActivityIndicator color="#10b981" size="small" />
+                    <ActivityIndicator color="#00C896" size="small" />
                   ) : message ? (
                     <Text
                       className={`font-inter text-xs text-center px-8 ${
@@ -242,7 +242,7 @@ export function ConfirmIdentitySheet({
 
                 {capability?.hasHardware && capability?.isEnrolled ? (
                   <Pressable onPress={tryBiometric} className="mt-3 mb-2" hitSlop={8}>
-                    <Text className="text-emerald-400 font-inter-medium text-sm">
+                    <Text className="text-signal-bright font-inter-medium text-sm">
                       Use {capability.label.toLowerCase()} instead
                     </Text>
                   </Pressable>

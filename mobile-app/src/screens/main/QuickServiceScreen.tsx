@@ -56,7 +56,7 @@ import {
 const TELCOS = [
   { id: 'mtn', name: 'MTN', color: '#eab308', bg: 'bg-yellow-500/15', border: 'border-yellow-500', text: 'text-yellow-600 dark:text-yellow-400', badge: 'bg-yellow-500' },
   { id: 'airtel', name: 'Airtel', color: '#ef4444', bg: 'bg-red-500/15', border: 'border-red-500', text: 'text-red-600 dark:text-red-400', badge: 'bg-red-500' },
-  { id: 'glo', name: 'Glo', color: '#22c55e', bg: 'bg-emerald-500/15', border: 'border-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', badge: 'bg-emerald-500' },
+  { id: 'glo', name: 'Glo', color: '#22c55e', bg: 'bg-signal/15', border: 'border-signal', text: 'text-signal-dim dark:text-signal-bright', badge: 'bg-signal' },
   { id: '9mobile', name: '9mobile', color: '#16a34a', bg: 'bg-green-600/15', border: 'border-green-600', text: 'text-green-700 dark:text-green-400', badge: 'bg-green-600' },
 ];
 
@@ -158,7 +158,7 @@ const AccountHolderBadge = ({
     <View className="bg-signal/10 px-3 py-2 rounded-lg border border-signal/25 mt-1">
       <View className="flex-row items-center">
         <ShieldCheck color={colors.signal.base} size={14} />
-        <Text className="text-emerald-700 dark:text-signal-bright font-inter-semibold text-xs flex-1 ml-1.5">
+        <Text className="text-signal-dim dark:text-signal-bright font-inter-semibold text-xs flex-1 ml-1.5">
           {name}
         </Text>
       </View>
@@ -780,7 +780,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
               Haptics.selectionAsync();
               setServiceType('airtime');
             }}
-            className={`px-2.5 py-1 rounded-full ${serviceType === 'airtime' ? 'bg-emerald-500' : ''}`}
+            className={`px-2.5 py-1 rounded-full ${serviceType === 'airtime' ? 'bg-signal' : ''}`}
           >
             <Smartphone color={serviceType === 'airtime' ? '#000' : (isDark ? '#94a3b8' : '#64748b')} size={14} />
           </Pressable>
@@ -789,7 +789,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
               Haptics.selectionAsync();
               setServiceType('data');
             }}
-            className={`px-2.5 py-1 rounded-full ${serviceType === 'data' ? 'bg-emerald-500' : ''}`}
+            className={`px-2.5 py-1 rounded-full ${serviceType === 'data' ? 'bg-signal' : ''}`}
           >
             <Wifi color={serviceType === 'data' ? '#000' : (isDark ? '#94a3b8' : '#64748b')} size={14} />
           </Pressable>
@@ -798,7 +798,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
               Haptics.selectionAsync();
               setServiceType('power');
             }}
-            className={`px-2.5 py-1 rounded-full ${serviceType === 'power' ? 'bg-emerald-500' : ''}`}
+            className={`px-2.5 py-1 rounded-full ${serviceType === 'power' ? 'bg-signal' : ''}`}
           >
             <Lightbulb color={serviceType === 'power' ? '#000' : (isDark ? '#94a3b8' : '#64748b')} size={14} />
           </Pressable>
@@ -807,7 +807,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
               Haptics.selectionAsync();
               setServiceType('cable');
             }}
-            className={`px-2.5 py-1 rounded-full ${serviceType === 'cable' ? 'bg-emerald-500' : ''}`}
+            className={`px-2.5 py-1 rounded-full ${serviceType === 'cable' ? 'bg-signal' : ''}`}
           >
             <Tv color={serviceType === 'cable' ? '#000' : (isDark ? '#94a3b8' : '#64748b')} size={14} />
           </Pressable>
@@ -824,15 +824,15 @@ export default function QuickServiceScreen({ route, navigation }: any) {
           keyboardShouldPersistTaps="handled"
         >
           {/* Cashback Banner (OPay Standard) */}
-          <View className="flex-row items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-4 py-3 mb-5">
+          <View className="flex-row items-center justify-between bg-signal/10 border border-signal/20 rounded-2xl px-4 py-3 mb-5">
             <View className="flex-row items-center flex-1 mr-2">
-              <Zap color="#10b981" size={18} className="mr-2" />
-              <Text className="text-emerald-700 dark:text-emerald-400 font-inter-semibold text-xs">
+              <Zap color="#00C896" size={18} className="mr-2" />
+              <Text className="text-signal-dim dark:text-signal-bright font-inter-semibold text-xs">
                 Enjoy zero convenience fees & instant top-up
               </Text>
             </View>
-            <View className="bg-emerald-500/20 px-2 py-0.5 rounded">
-              <Text className="text-emerald-600 dark:text-emerald-300 font-inter-bold text-[10px]">FREE</Text>
+            <View className="bg-signal/20 px-2 py-0.5 rounded">
+              <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-[10px]">FREE</Text>
             </View>
           </View>
 
@@ -891,9 +891,9 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                     {user?.phone && (
                       <Pressable
                         onPress={handleUseMyNumber}
-                        className="bg-emerald-500/15 px-2.5 py-1 rounded-full flex-row items-center"
+                        className="bg-signal/15 px-2.5 py-1 rounded-full flex-row items-center"
                       >
-                        <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-[11px]">
+                        <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-[11px]">
                           My Number
                         </Text>
                       </Pressable>
@@ -931,7 +931,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                           onPress={() => handleAmountSelect(amt)}
                           className={`w-[31%] py-3.5 mb-2.5 rounded-2xl items-center justify-center border ${
                             isSelected
-                              ? 'bg-emerald-500 border-emerald-500'
+                              ? 'bg-signal border-signal'
                               : 'bg-slate-50 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700'
                           }`}
                         >
@@ -987,14 +987,14 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                       <Text
                         className={`text-xs font-inter-bold ${
                           dataCategory === 'sme'
-                            ? 'text-emerald-600 dark:text-emerald-400'
+                            ? 'text-signal-dim dark:text-signal-bright'
                             : 'text-slate-500 dark:text-zinc-400'
                         }`}
                       >
                         SME Data (Budget)
                       </Text>
-                      <View className="ml-1.5 bg-emerald-500/15 px-1.5 py-0.5 rounded">
-                        <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-[9px]">
+                      <View className="ml-1.5 bg-signal/15 px-1.5 py-0.5 rounded">
+                        <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-[9px]">
                           Save 60%
                         </Text>
                       </View>
@@ -1016,7 +1016,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                       <Text
                         className={`text-xs font-inter-bold ${
                           dataCategory === 'direct'
-                            ? 'text-emerald-600 dark:text-emerald-400'
+                            ? 'text-signal-dim dark:text-signal-bright'
                             : 'text-slate-500 dark:text-zinc-400'
                         }`}
                       >
@@ -1034,8 +1034,8 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                     <Text className="text-slate-500 dark:text-zinc-400 font-inter-semibold text-xs uppercase tracking-wider">
                       Select {dataCategory === 'sme' ? 'SME Data' : 'Official Data'} ({selectedTelco.toUpperCase()})
                     </Text>
-                    <View className="bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                      <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-[10px]">
+                    <View className="bg-signal/10 px-2 py-0.5 rounded-full">
+                      <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-[10px]">
                         {dataCategory === 'sme' ? 'Wholesale SME' : 'Direct Retail'}
                       </Text>
                     </View>
@@ -1082,7 +1082,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                             }}
                             className={`flex-row items-center justify-between p-4 rounded-2xl border mb-2.5 ${
                               isSelected
-                                ? 'bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-500'
+                                ? 'bg-emerald-50 dark:bg-signal-dim/40 border-2 border-signal'
                                 : 'bg-slate-50 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700'
                             }`}
                           >
@@ -1094,18 +1094,18 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                                 <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs mr-2">
                                   {bundle.validity}
                                 </Text>
-                                <View className="bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                                  <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-[9px]">
+                                <View className="bg-signal/10 px-1.5 py-0.5 rounded">
+                                  <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-[9px]">
                                     {dataCategory === 'sme' ? 'SME Instant' : 'Instant'}
                                   </Text>
                                 </View>
                               </View>
                             </View>
                             <View className="flex-row items-center">
-                              <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-sm mr-2">
+                              <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-sm mr-2">
                                 ₦{bundle.price.toLocaleString()}
                               </Text>
-                              {isSelected && <Check color="#10b981" size={18} strokeWidth={2.5} />}
+                              {isSelected && <Check color="#00C896" size={18} strokeWidth={2.5} />}
                             </View>
                           </Pressable>
                         );
@@ -1137,7 +1137,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                         }}
                         className={`px-4 py-2.5 rounded-xl border mr-2 ${
                           isSelected
-                            ? 'bg-emerald-500 border-emerald-500'
+                            ? 'bg-signal border-signal'
                             : 'bg-slate-50 dark:bg-zinc-800/50 border-slate-200 dark:border-zinc-700'
                         }`}
                       >
@@ -1162,7 +1162,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                       setMeterType('prepaid');
                     }}
                     className={`flex-1 py-2.5 rounded-lg items-center ${
-                      meterType === 'prepaid' ? 'bg-emerald-500' : ''
+                      meterType === 'prepaid' ? 'bg-signal' : ''
                     }`}
                   >
                     <Text className={`font-inter-bold text-xs ${meterType === 'prepaid' ? 'text-black' : 'text-slate-600 dark:text-zinc-400'}`}>
@@ -1175,7 +1175,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                       setMeterType('postpaid');
                     }}
                     className={`flex-1 py-2.5 rounded-lg items-center ${
-                      meterType === 'postpaid' ? 'bg-emerald-500' : ''
+                      meterType === 'postpaid' ? 'bg-signal' : ''
                     }`}
                   >
                     <Text className={`font-inter-bold text-xs ${meterType === 'postpaid' ? 'text-black' : 'text-slate-600 dark:text-zinc-400'}`}>
@@ -1237,7 +1237,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                         onPress={() => handleAmountSelect(amt)}
                         className={`w-[31%] py-3.5 mb-2.5 rounded-2xl items-center justify-center border ${
                           isSelected
-                            ? 'bg-emerald-500 border-emerald-500'
+                            ? 'bg-signal border-signal'
                             : 'bg-slate-50 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700'
                         }`}
                       >
@@ -1293,7 +1293,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                         }}
                         className={`flex-1 py-3 rounded-xl border items-center justify-center ${
                           isSelected
-                            ? 'bg-emerald-500 border-emerald-500'
+                            ? 'bg-signal border-signal'
                             : 'bg-slate-50 dark:bg-zinc-800/50 border-slate-200 dark:border-zinc-700'
                         }`}
                       >
@@ -1350,8 +1350,8 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                   <Text className="text-slate-500 dark:text-zinc-400 font-inter-semibold text-xs uppercase tracking-wider">
                     Select Package ({selectedCable.toUpperCase()})
                   </Text>
-                  <View className="bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                    <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-[10px]">
+                  <View className="bg-signal/10 px-2 py-0.5 rounded-full">
+                    <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-[10px]">
                       Live Pricing
                     </Text>
                   </View>
@@ -1389,7 +1389,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                           }}
                           className={`flex-row items-center justify-between p-4 rounded-2xl border mb-2.5 ${
                             isSelected
-                              ? 'bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-500'
+                              ? 'bg-emerald-50 dark:bg-signal-dim/40 border-2 border-signal'
                               : 'bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700'
                           }`}
                         >
@@ -1402,10 +1402,10 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                             </Text>
                           </View>
                           <View className="flex-row items-center">
-                            <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-sm mr-2">
+                            <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-sm mr-2">
                               ₦{b.price.toLocaleString()}
                             </Text>
-                            {isSelected && <Check color="#10b981" size={18} strokeWidth={2.5} />}
+                            {isSelected && <Check color="#00C896" size={18} strokeWidth={2.5} />}
                           </View>
                         </Pressable>
                       );
@@ -1422,8 +1422,8 @@ export default function QuickServiceScreen({ route, navigation }: any) {
               <Text className="text-slate-500 dark:text-zinc-400 font-inter-semibold text-xs uppercase tracking-wider">
                 Payment Account
               </Text>
-              <View className="bg-emerald-500/15 px-2 py-0.5 rounded-full">
-                <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-[10px]">
+              <View className="bg-signal/15 px-2 py-0.5 rounded-full">
+                <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-[10px]">
                   Mono DirectPay
                 </Text>
               </View>
@@ -1443,14 +1443,14 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                       }}
                       className={`p-3 rounded-xl border flex-row items-center justify-between ${
                         isChosen
-                          ? 'border-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/15'
+                          ? 'border-signal bg-signal/10 dark:bg-signal/15'
                           : 'border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-800/40 active:bg-slate-100'
                       }`}
                     >
                       <View className="flex-row items-center flex-1 mr-2">
                         <View
                           className={`w-9 h-9 rounded-full items-center justify-center mr-3 ${
-                            isChosen ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-zinc-700'
+                            isChosen ? 'bg-signal' : 'bg-slate-200 dark:bg-zinc-700'
                           }`}
                         >
                           <CreditCard color={isChosen ? '#000' : '#94a3b8'} size={18} />
@@ -1458,7 +1458,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                         <View className="flex-1">
                           <Text
                             className={`font-inter-bold text-sm ${
-                              isChosen ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'
+                              isChosen ? 'text-signal-dim dark:text-signal-bright' : 'text-slate-900 dark:text-white'
                             }`}
                           >
                             {acc.bankName}
@@ -1470,7 +1470,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                       </View>
                       <View
                         className={`w-5 h-5 rounded-full border items-center justify-center ${
-                          isChosen ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300 dark:border-zinc-600'
+                          isChosen ? 'border-signal bg-signal' : 'border-slate-300 dark:border-zinc-600'
                         }`}
                       >
                         {isChosen && <Check color="#000" size={12} strokeWidth={3} />}
@@ -1482,8 +1482,8 @@ export default function QuickServiceScreen({ route, navigation }: any) {
             ) : (
               <View className="flex-row items-center justify-between">
                 <View className="flex-row items-center">
-                  <View className="w-10 h-10 rounded-full bg-emerald-500/15 items-center justify-center mr-3">
-                    <CreditCard color="#10b981" size={20} />
+                  <View className="w-10 h-10 rounded-full bg-signal/15 items-center justify-center mr-3">
+                    <CreditCard color="#00C896" size={20} />
                   </View>
                   <View>
                     <Text className="text-slate-900 dark:text-white font-inter-bold text-sm">
@@ -1502,9 +1502,9 @@ export default function QuickServiceScreen({ route, navigation }: any) {
           <Pressable
             onPress={handleInitiatePayment}
             disabled={isProcessing}
-            className="h-14 rounded-2xl bg-emerald-500 active:bg-emerald-600 items-center justify-center mb-10"
+            className="h-14 rounded-2xl bg-signal active:bg-signal items-center justify-center mb-10"
             style={{
-              shadowColor: '#10b981',
+              shadowColor: '#00C896',
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.3,
               shadowRadius: 10,
@@ -1582,7 +1582,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
               </View>
               <View className="flex-row justify-between">
                 <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">Transaction Fee</Text>
-                <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-xs">
+                <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-xs">
                   ₦0.00 (FREE)
                 </Text>
               </View>
@@ -1591,9 +1591,9 @@ export default function QuickServiceScreen({ route, navigation }: any) {
             {/* Confirm & Pay CTA */}
             <Pressable
               onPress={handleConfirmPayment}
-              className="h-14 rounded-2xl bg-emerald-500 active:bg-emerald-600 items-center justify-center"
+              className="h-14 rounded-2xl bg-signal active:bg-signal items-center justify-center"
               style={{
-                shadowColor: '#10b981',
+                shadowColor: '#00C896',
                 shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: 0.25,
                 shadowRadius: 8,
@@ -1619,8 +1619,8 @@ export default function QuickServiceScreen({ route, navigation }: any) {
       <Modal visible={isProcessing} transparent animationType="fade">
         <View className="flex-1 justify-center items-center px-6 bg-black/70">
           <View className="w-full max-w-xs rounded-3xl p-6 bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 items-center">
-            <View className="w-16 h-16 rounded-full bg-emerald-500/15 items-center justify-center mb-4">
-              <ActivityIndicator size="large" color="#10b981" />
+            <View className="w-16 h-16 rounded-full bg-signal/15 items-center justify-center mb-4">
+              <ActivityIndicator size="large" color="#00C896" />
             </View>
             <Text className="text-slate-900 dark:text-white font-inter-bold text-base text-center mb-1">
               Processing Top-Up...
@@ -1661,11 +1661,11 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                 className="w-full items-center bg-white dark:bg-zinc-900 p-1 rounded-2xl"
               >
                 {/* Big Green Badge */}
-                <View className="w-22 h-22 rounded-full bg-emerald-500/15 items-center justify-center mb-3">
+                <View className="w-22 h-22 rounded-full bg-signal/15 items-center justify-center mb-3">
                   <View
-                    className="w-16 h-16 rounded-full bg-emerald-500 items-center justify-center"
+                    className="w-16 h-16 rounded-full bg-signal items-center justify-center"
                     style={{
-                      shadowColor: '#10b981',
+                      shadowColor: '#00C896',
                       shadowOffset: { width: 0, height: 4 },
                       shadowOpacity: 0.35,
                       shadowRadius: 10,
@@ -1680,14 +1680,14 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                 <Text className="text-slate-900 dark:text-white font-inter-bold text-2xl text-center mb-1 tracking-tight">
                   Payment Successful!
                 </Text>
-                <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-3xl mb-4">
+                <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-3xl mb-4">
                   ₦{successReceipt?.amount?.toLocaleString()}
                 </Text>
 
                 {/* PREPAID ELECTRICITY TOKEN CARD (Special Feature) */}
                 {successReceipt?.token && (
-                  <View className="w-full bg-emerald-500/10 border-2 border-dashed border-emerald-500/40 rounded-2xl p-4 mb-4 items-center">
-                    <Text className="text-emerald-800 dark:text-emerald-300 font-inter-semibold text-xs mb-1 uppercase tracking-wider">
+                  <View className="w-full bg-signal/10 border-2 border-dashed border-signal/40 rounded-2xl p-4 mb-4 items-center">
+                    <Text className="text-signal-dim dark:text-signal-bright font-inter-semibold text-xs mb-1 uppercase tracking-wider">
                       20-Digit Recharge Token
                     </Text>
                     <Text className="text-slate-900 dark:text-white font-inter-bold text-lg tracking-wider mb-2 text-center select-all">
@@ -1700,7 +1700,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                     )}
                     <Pressable
                       onPress={() => copyToClipboard(successReceipt.token)}
-                      className="flex-row items-center bg-emerald-500 px-4 py-2 rounded-xl active:bg-emerald-600"
+                      className="flex-row items-center bg-signal px-4 py-2 rounded-xl active:bg-signal"
                     >
                       {hasCopiedToken ? (
                         <>
@@ -1760,10 +1760,10 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                   className="flex-1 h-12 rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 flex-row items-center justify-center active:bg-slate-200 dark:active:bg-zinc-700"
                 >
                   {isSharingPdf ? (
-                    <ActivityIndicator color="#10b981" size="small" />
+                    <ActivityIndicator color="#00C896" size="small" />
                   ) : (
                     <>
-                      <FileText color="#10b981" size={16} className="mr-1.5" />
+                      <FileText color="#00C896" size={16} className="mr-1.5" />
                       <Text className="text-slate-800 dark:text-zinc-200 font-inter-bold text-xs">Share PDF</Text>
                     </>
                   )}
@@ -1775,10 +1775,10 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                   className="flex-1 h-12 rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 flex-row items-center justify-center active:bg-slate-200 dark:active:bg-zinc-700"
                 >
                   {isSharingImage ? (
-                    <ActivityIndicator color="#10b981" size="small" />
+                    <ActivityIndicator color="#00C896" size="small" />
                   ) : (
                     <>
-                      <Share2 color="#10b981" size={16} className="mr-1.5" />
+                      <Share2 color="#00C896" size={16} className="mr-1.5" />
                       <Text className="text-slate-800 dark:text-zinc-200 font-inter-bold text-xs">Share Picture</Text>
                     </>
                   )}
@@ -1794,7 +1794,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                     navigation.goBack();
                   }
                 }}
-                className="w-full h-15 rounded-2xl bg-emerald-500 active:bg-emerald-600 items-center justify-center shadow-md shadow-emerald-500/20"
+                className="w-full h-15 rounded-2xl bg-signal active:bg-signal items-center justify-center shadow-md shadow-signal/20"
               >
                 <Text className="text-black font-inter-bold text-lg tracking-wide">Done</Text>
               </Pressable>

@@ -152,7 +152,7 @@ export default function TransactionsScreen({ navigation }: any) {
   const getTransactionIcon = (name: string) => {
     const lower = name.toLowerCase();
     if (lower.includes('airtime') || lower.includes('data') || lower.includes('mtn') || lower.includes('glo') || lower.includes('airtel') || lower.includes('9mobile')) {
-      return <Smartphone color="#10b981" size={20} />;
+      return <Smartphone color="#00C896" size={20} />;
     }
     if (lower.includes('electric') || lower.includes('power') || lower.includes('ikedc') || lower.includes('ekedc') || lower.includes('aedc')) {
       return <Zap color="#f97316" size={20} />;
@@ -160,15 +160,15 @@ export default function TransactionsScreen({ navigation }: any) {
     if (lower.includes('dstv') || lower.includes('gotv') || lower.includes('cable') || lower.includes('startimes')) {
       return <Tv color="#a855f7" size={20} />;
     }
-    return <CreditCard color="#10b981" size={20} />;
+    return <CreditCard color="#00C896" size={20} />;
   };
 
   const FilterButton = ({ id, label }: { id: any, label: string }) => (
     <Pressable 
       onPress={() => handleFilter(id)} 
-      className={`px-5 py-2 rounded-full mr-3 ${filter === id ? 'bg-emerald-500/20 border border-emerald-500/50' : 'bg-black/5 dark:bg-white/10 border border-slate-200 dark:border-white/10 active:bg-black/10 dark:active:bg-white/20'}`}
+      className={`px-5 py-2 rounded-full mr-3 ${filter === id ? 'bg-signal/20 border border-signal/50' : 'bg-black/5 dark:bg-white/10 border border-slate-200 dark:border-white/10 active:bg-black/10 dark:active:bg-white/20'}`}
     >
-      <Text className={`${filter === id ? 'text-emerald-400 font-inter-semibold' : 'text-slate-500 dark:text-white/60 font-inter-medium'} text-xs tracking-wide`}>
+      <Text className={`${filter === id ? 'text-signal-dim dark:text-signal-bright font-inter-semibold' : 'text-slate-500 dark:text-white/60 font-inter-medium'} text-xs tracking-wide`}>
         {label}
       </Text>
     </Pressable>
@@ -176,7 +176,7 @@ export default function TransactionsScreen({ navigation }: any) {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50 dark:bg-black">
-      <LinearGradient colors={isDark ? ['rgba(16, 185, 129, 0.08)', '#000'] : ['rgba(16, 185, 129, 0.08)', '#f8fafc']} className="absolute inset-0" />
+      <LinearGradient colors={isDark ? ['rgba(0, 200, 150, 0.08)', '#000'] : ['rgba(0, 200, 150, 0.08)', '#f8fafc']} className="absolute inset-0" />
       
       {/* Header. This screen is both a tab root and a push target from Home, so
           the back button only appears when there is somewhere to go back to. */}
@@ -207,11 +207,11 @@ export default function TransactionsScreen({ navigation }: any) {
               }} 
               className={`px-4 py-1.5 rounded-full mr-2.5 border ${
                 selectedBankId === 'all' 
-                  ? 'bg-emerald-500/20 border-emerald-500/50' 
+                  ? 'bg-signal/20 border-signal/50' 
                   : 'bg-black/5 dark:bg-white/10 border-slate-200 dark:border-white/10 active:opacity-60'
               }`}
             >
-              <Text className={`${selectedBankId === 'all' ? 'text-emerald-400 font-inter-semibold' : 'text-slate-500 dark:text-white/60 font-inter-medium'} text-xs tracking-wide`}>
+              <Text className={`${selectedBankId === 'all' ? 'text-signal-bright font-inter-semibold' : 'text-slate-500 dark:text-white/60 font-inter-medium'} text-xs tracking-wide`}>
                 All Banks
               </Text>
             </Pressable>
@@ -226,11 +226,11 @@ export default function TransactionsScreen({ navigation }: any) {
                   }} 
                   className={`px-4 py-1.5 rounded-full mr-2.5 border ${
                     isSelected 
-                      ? 'bg-emerald-500/20 border-emerald-500/50' 
+                      ? 'bg-signal/20 border-signal/50' 
                       : 'bg-black/5 dark:bg-white/10 border-slate-200 dark:border-white/10 active:opacity-60'
                   }`}
                 >
-                  <Text className={`${isSelected ? 'text-emerald-400 font-inter-semibold' : 'text-slate-500 dark:text-white/60 font-inter-medium'} text-xs tracking-wide`}>
+                  <Text className={`${isSelected ? 'text-signal-bright font-inter-semibold' : 'text-slate-500 dark:text-white/60 font-inter-medium'} text-xs tracking-wide`}>
                     {account.bankName} (****{account.accountNumber.slice(-4)})
                   </Text>
                 </Pressable>
@@ -258,7 +258,7 @@ export default function TransactionsScreen({ navigation }: any) {
       <ScrollView className="flex-1 px-5 pt-3" showsVerticalScrollIndicator={false}>
         {isLoading && filteredTransactions.length === 0 ? (
           <View className="items-center justify-center py-20">
-            <ActivityIndicator color="#10b981" size="small" />
+            <ActivityIndicator color="#00C896" size="small" />
           </View>
         ) : filteredTransactions.length === 0 ? (
           <View className="items-center justify-center py-20 mt-10">
@@ -284,11 +284,11 @@ export default function TransactionsScreen({ navigation }: any) {
                     {/* Circle Icon: Red ↗ for debit, Green ↙ for credit */}
                     <View className={`w-11 h-11 rounded-full items-center justify-center mr-3.5 ${
                       isCredit 
-                        ? 'bg-emerald-500/15 dark:bg-emerald-500/20' 
+                        ? 'bg-signal/15 dark:bg-signal/20' 
                         : 'bg-rose-500/15 dark:bg-rose-500/20'
                     }`}>
                       {isCredit ? (
-                        <ArrowDownLeft color="#10b981" size={18} strokeWidth={2.5} />
+                        <ArrowDownLeft color="#00C896" size={18} strokeWidth={2.5} />
                       ) : (
                         <ArrowUpRight color="#f43f5e" size={18} strokeWidth={2.5} />
                       )}
@@ -317,7 +317,7 @@ export default function TransactionsScreen({ navigation }: any) {
                   <View className="items-end">
                     <Text className={`font-mono-bold text-base ${
                       isCredit 
-                        ? 'text-emerald-500 dark:text-emerald-400' 
+                        ? 'text-signal dark:text-signal-bright' 
                         : 'text-slate-900 dark:text-white'
                     }`}>
                       {isCredit ? '+' : '-'}₦{Number(tx.amount).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -364,11 +364,11 @@ export default function TransactionsScreen({ navigation }: any) {
                 className="w-full bg-white dark:bg-zinc-900 items-center p-2 rounded-2xl"
               >
                 {/* Brand / Green Badge */}
-                <View className="w-20 h-20 rounded-full bg-emerald-500/15 items-center justify-center mb-3">
+                <View className="w-20 h-20 rounded-full bg-signal/15 items-center justify-center mb-3">
                   <View
-                    className="w-14 h-14 rounded-full bg-emerald-500 items-center justify-center"
+                    className="w-14 h-14 rounded-full bg-signal items-center justify-center"
                     style={{
-                      shadowColor: '#10b981',
+                      shadowColor: '#00C896',
                       shadowOffset: { width: 0, height: 4 },
                       shadowOpacity: 0.35,
                       shadowRadius: 8,
@@ -379,8 +379,8 @@ export default function TransactionsScreen({ navigation }: any) {
                   </View>
                 </View>
 
-                <View className="px-3 py-1 rounded-full bg-emerald-500/15 mb-2">
-                  <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-xs uppercase tracking-wider">
+                <View className="px-3 py-1 rounded-full bg-signal/15 mb-2">
+                  <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-xs uppercase tracking-wider">
                     Transaction Successful
                   </Text>
                 </View>
@@ -391,8 +391,8 @@ export default function TransactionsScreen({ navigation }: any) {
 
                 {/* STS Token card if electricity */}
                 {selectedTx?.token && (
-                  <View className="w-full bg-emerald-500/10 border-2 border-dashed border-emerald-500/40 rounded-2xl p-4 mb-4 items-center">
-                    <Text className="text-emerald-800 dark:text-emerald-300 font-inter-semibold text-xs mb-1 uppercase tracking-wider">
+                  <View className="w-full bg-signal/10 border-2 border-dashed border-signal/40 rounded-2xl p-4 mb-4 items-center">
+                    <Text className="text-signal-dim dark:text-signal-bright font-inter-semibold text-xs mb-1 uppercase tracking-wider">
                       20-Digit Recharge Token
                     </Text>
                     <Text className="text-slate-900 dark:text-white font-inter-bold text-lg tracking-wider mb-2 text-center select-all">
@@ -400,7 +400,7 @@ export default function TransactionsScreen({ navigation }: any) {
                     </Text>
                     <Pressable
                       onPress={() => copyToken(selectedTx.id, selectedTx.token!)}
-                      className="flex-row items-center bg-emerald-500 px-4 py-2 rounded-xl active:bg-emerald-600"
+                      className="flex-row items-center bg-signal px-4 py-2 rounded-xl active:bg-signal"
                     >
                       {copiedId === selectedTx.id ? (
                         <>
@@ -442,7 +442,7 @@ export default function TransactionsScreen({ navigation }: any) {
 
                   <View className="flex-row justify-between mb-3">
                     <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">Transaction Fee</Text>
-                    <Text className="text-emerald-600 dark:text-emerald-400 font-inter-bold text-xs text-right flex-1 ml-3">
+                    <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-xs text-right flex-1 ml-3">
                       ₦0.00 (FREE)
                     </Text>
                   </View>
@@ -464,7 +464,7 @@ export default function TransactionsScreen({ navigation }: any) {
                         {selectedTx?.reference}
                       </Text>
                       {hasCopiedRef ? (
-                        <CheckCheck color="#10b981" size={13} />
+                        <CheckCheck color="#00C896" size={13} />
                       ) : (
                         <Copy color="#64748b" size={13} />
                       )}
@@ -486,10 +486,10 @@ export default function TransactionsScreen({ navigation }: any) {
                   className="flex-1 h-12 rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 flex-row items-center justify-center active:bg-slate-200 dark:active:bg-zinc-700"
                 >
                   {isSharingPdf ? (
-                    <ActivityIndicator color="#10b981" size="small" />
+                    <ActivityIndicator color="#00C896" size="small" />
                   ) : (
                     <>
-                      <FileText color="#10b981" size={16} className="mr-1.5" />
+                      <FileText color="#00C896" size={16} className="mr-1.5" />
                       <Text className="text-slate-800 dark:text-zinc-200 font-inter-bold text-xs">Share as PDF</Text>
                     </>
                   )}
@@ -501,10 +501,10 @@ export default function TransactionsScreen({ navigation }: any) {
                   className="flex-1 h-12 rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 flex-row items-center justify-center active:bg-slate-200 dark:active:bg-zinc-700"
                 >
                   {isSharingImage ? (
-                    <ActivityIndicator color="#10b981" size="small" />
+                    <ActivityIndicator color="#00C896" size="small" />
                   ) : (
                     <>
-                      <Share2 color="#10b981" size={16} className="mr-1.5" />
+                      <Share2 color="#00C896" size={16} className="mr-1.5" />
                       <Text className="text-slate-800 dark:text-zinc-200 font-inter-bold text-xs">Share as Picture</Text>
                     </>
                   )}
@@ -517,7 +517,7 @@ export default function TransactionsScreen({ navigation }: any) {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setSelectedTx(null);
                 }}
-                className="w-full h-14 rounded-2xl bg-emerald-500 active:bg-emerald-600 items-center justify-center shadow-md shadow-emerald-500/20"
+                className="w-full h-14 rounded-2xl bg-signal active:bg-signal items-center justify-center shadow-md shadow-signal/20"
               >
                 <Text className="text-black font-inter-bold text-base tracking-wide">Close Receipt</Text>
               </Pressable>

@@ -12,7 +12,7 @@ const ServiceAction = ({ icon: Icon, label, color, onPress }: any) => (
     className="items-center justify-center w-1/4 mb-6 active:opacity-70"
   >
     <View className={`w-14 h-14 rounded-full items-center justify-center mb-2 bg-${color}-500/10 border border-${color}-500/20`}>
-      <Icon color={color === 'emerald' ? '#10b981' : color === 'blue' ? '#3b82f6' : color === 'purple' ? '#a855f7' : color === 'orange' ? '#f97316' : '#fff'} size={24} />
+      <Icon color={color === 'emerald' ? '#00C896' : color === 'blue' ? '#3b82f6' : color === 'purple' ? '#a855f7' : color === 'orange' ? '#f97316' : '#fff'} size={24} />
     </View>
     <Text className="text-slate-500 dark:text-white/60 font-inter text-xs text-center">{label}</Text>
   </Pressable>
@@ -29,7 +29,7 @@ export default function ServicesScreen({ navigation }: any) {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50 dark:bg-black">
-      <LinearGradient colors={isDark ? ['rgba(16, 185, 129, 0.08)', '#000'] : ['rgba(16, 185, 129, 0.08)', '#f8fafc']} className="absolute inset-0" />
+      <LinearGradient colors={isDark ? ['rgba(0, 200, 150, 0.08)', '#000'] : ['rgba(0, 200, 150, 0.08)', '#f8fafc']} className="absolute inset-0" />
       
       <ScrollView className="flex-1 px-6 pt-6" showsVerticalScrollIndicator={false}>
         <View className="mb-8">

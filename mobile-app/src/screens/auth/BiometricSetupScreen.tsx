@@ -126,7 +126,7 @@ export default function BiometricSetupScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-black">
-      <LinearGradient colors={['#000', 'rgba(16, 185, 129, 0.1)']} className="absolute inset-0" />
+      <LinearGradient colors={['#000', 'rgba(0, 200, 150, 0.1)']} className="absolute inset-0" />
 
       <View className="flex-1 justify-between py-12 px-6">
         <View className="items-center mt-12">
@@ -155,7 +155,7 @@ export default function BiometricSetupScreen() {
               style={animatedScannerStyle}
               className={`w-40 h-40 rounded-full border-2 items-center justify-center overflow-hidden ${
                 isSuccess
-                  ? 'border-emerald-500 bg-emerald-500/10'
+                  ? 'border-signal bg-signal/10'
                   : unsupported
                   ? 'border-white/5 bg-white/[0.02]'
                   : 'border-white/10 bg-white/5'
@@ -163,7 +163,7 @@ export default function BiometricSetupScreen() {
             >
               {isSuccess ? (
                 <Animated.View style={animatedSuccessStyle}>
-                  <CheckCircle size={64} color="#10b981" strokeWidth={1.5} />
+                  <CheckCircle size={64} color="#00C896" strokeWidth={1.5} />
                 </Animated.View>
               ) : unsupported ? (
                 <ShieldOff size={64} color="rgba(255,255,255,0.15)" strokeWidth={1} />
@@ -171,12 +171,12 @@ export default function BiometricSetupScreen() {
                 <>
                   <BiometricIcon
                     size={64}
-                    color={isScanning ? '#10b981' : 'rgba(255,255,255,0.2)'}
+                    color={isScanning ? '#00C896' : 'rgba(255,255,255,0.2)'}
                     strokeWidth={1}
                   />
                   <Animated.View
                     style={animatedLineStyle}
-                    className="absolute w-full h-1 bg-emerald-400"
+                    className="absolute w-full h-1 bg-signal-bright"
                   />
                 </>
               )}

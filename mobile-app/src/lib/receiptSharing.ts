@@ -47,7 +47,7 @@ function presentStatus(status: string): { label: string; tone: 'ok' | 'pending' 
 }
 
 const STATUS_TONES = {
-  ok: { bg: '#d1fae5', fg: '#065f46', mark: '#10b981', glyph: '&#10003;' },
+  ok: { bg: '#d1fae5', fg: '#065f46', mark: '#00C896', glyph: '&#10003;' },
   pending: { bg: '#fef3c7', fg: '#92400e', mark: '#f59e0b', glyph: '&#8226;' },
   bad: { bg: '#fee2e2', fg: '#991b1b', mark: '#ef4444', glyph: '&#33;' },
 } as const;
@@ -138,7 +138,7 @@ export function generateReceiptHtml(receipt: ReceiptInfo): string {
     .amount-val {
       font-size: 34px;
       font-weight: 800;
-      color: #10b981;
+      color: #00C896;
       letter-spacing: -1px;
     }
     .details-table {
@@ -170,7 +170,7 @@ export function generateReceiptHtml(receipt: ReceiptInfo): string {
     }
     .token-box {
       background: #ecfdf5;
-      border: 2px dashed #10b981;
+      border: 2px dashed #00C896;
       border-radius: 16px;
       padding: 16px;
       text-align: center;
@@ -242,7 +242,7 @@ export function generateReceiptHtml(receipt: ReceiptInfo): string {
           ? ''
           : `<div class="row">
         <span class="row-label">Fee</span>
-        <span class="row-val"${receipt.fee === 0 ? ' style="color: #10b981;"' : ''}>${
+        <span class="row-val"${receipt.fee === 0 ? ' style="color: #00C896;"' : ''}>${
           receipt.fee === 0
             ? 'No fee'
             : `₦${receipt.fee.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`

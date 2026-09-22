@@ -61,7 +61,7 @@ export default function TabNavigator() {
           backgroundColor: isDark ? '#000' : '#fff', 
           borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', 
         },
-        tabBarActiveTintColor: '#10b981', 
+        tabBarActiveTintColor: '#00C896', 
         tabBarInactiveTintColor: isDark ? '#6b7280' : '#9ca3af', 
       }}
     >
