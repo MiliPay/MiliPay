@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -40,11 +41,15 @@ import { supabase } from '../../lib/supabase';
 import {
   fetchDynamicVariations,
   fetchSmeDataPlans,
+  fetchElectricityProviders,
+  getActiveVtuMargins,
   executeVtuRecharge,
   verifyBillAccount,
   DynamicVariation,
+  VtuMargins,
 } from '../../lib/vtuService';
 import { ConfirmIdentitySheet } from '../../components/ui/ConfirmIdentitySheet';
+import { NetworkLogo } from '../../components/ui/NetworkLogo';
 import { PurchaseProgressSheet } from '../../components/ui/PurchaseProgressSheet';
 import {
   watchTransaction,
@@ -52,12 +57,19 @@ import {
   type TransactionSnapshot,
 } from '../../lib/transactionStatus';
 
-// Telco Configuration
+/**
+ * Telco selection. The mark itself lives in NetworkLogo, which holds each
+ * carrier's real brand colours; what stays here is only how the SELECTED tile
+ * is tinted, which is a MiliPay UI decision rather than a brand one.
+ *
+ * `badge` and `color` are gone: badge was the coloured dot the logo replaced,
+ * and colour was never read by anything.
+ */
 const TELCOS = [
-  { id: 'mtn', name: 'MTN', color: '#eab308', bg: 'bg-yellow-500/15', border: 'border-yellow-500', text: 'text-yellow-600 dark:text-yellow-400', badge: 'bg-yellow-500' },
-  { id: 'airtel', name: 'Airtel', color: '#ef4444', bg: 'bg-red-500/15', border: 'border-red-500', text: 'text-red-600 dark:text-red-400', badge: 'bg-red-500' },
-  { id: 'glo', name: 'Glo', color: '#22c55e', bg: 'bg-signal/15', border: 'border-signal', text: 'text-signal-dim dark:text-signal-bright', badge: 'bg-signal' },
-  { id: '9mobile', name: '9mobile', color: '#16a34a', bg: 'bg-green-600/15', border: 'border-green-600', text: 'text-green-700 dark:text-green-400', badge: 'bg-green-600' },
+  { id: 'mtn', name: 'MTN', bg: 'bg-yellow-500/15', border: 'border-yellow-500', text: 'text-yellow-600 dark:text-yellow-400' },
+  { id: 'airtel', name: 'Airtel', bg: 'bg-red-500/15', border: 'border-red-500', text: 'text-red-600 dark:text-red-400' },
+  { id: 'glo', name: 'Glo', bg: 'bg-signal/15', border: 'border-signal', text: 'text-signal-dim dark:text-signal-bright' },
+  { id: '9mobile', name: '9mobile', bg: 'bg-green-600/15', border: 'border-green-600', text: 'text-green-700 dark:text-green-400' },
 ];
 
 // Electricity Discos
@@ -217,11 +229,33 @@ export default function QuickServiceScreen({ route, navigation }: any) {
   const [dynamicBouquets, setDynamicBouquets] = useState<DynamicVariation[]>([]);
   const [isLoadingVariations, setIsLoadingVariations] = useState(false);
 
+  // What the platform adds on top, and what each disco levies. Both are read
+  // from the server for display only — it re-derives them when it prices the
+  // transaction, so nothing here can be tampered with to pay less.
+  const [margins, setMargins] = useState<VtuMargins | null>(null);
+  const [discoCharges, setDiscoCharges] = useState<
+    Record<string, { serviceCharge: number; serviceChargeType: string; minAmount: number }>
+  >({});
+  /**
+   * Tracked separately from the map being non-empty, and deliberately so.
+   *
+   * The disco codes in DISCOS below are ours; the ones in this map come from
+   * BigiSub. If the two ever disagree, "we have no entry for this disco" must
+   * not be confused with "we are still loading" — the first would otherwise
+   * disable the Pay button for ever with no explanation. Loaded-but-absent
+   * means we show what we know and let the server, which looks the charge up
+   * itself, be the authority.
+   */
+  const [discoChargesLoaded, setDiscoChargesLoaded] = useState(false);
+
   // Modals & confirmation
   const [isConfirmModalVisible, setIsConfirmModalVisible] = useState(false);
-  const [isPinModalVisible, setIsPinModalVisible] = useState(false);
-  const [enteredPin, setEnteredPin] = useState<string>('');
-  const [pinError, setPinError] = useState<string | null>(null);
+  /**
+   * Set when the SERVER asked for a PIN — either because the amount crossed
+   * the customer's threshold or because the one we sent was wrong. Holding the
+   * server's own wording means the customer is told which of the two it was.
+   */
+  const [pinChallenge, setPinChallenge] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Step 4: fingerprint, PIN as fallback. Above the customer's PIN threshold
@@ -443,6 +477,54 @@ export default function QuickServiceScreen({ route, navigation }: any) {
     };
   }, [meterNumber, smartcardNumber, selectedDisco, selectedCable, meterType, serviceType]);
 
+  /**
+   * The two things the screen cannot price without.
+   *
+   * Margins are cheap and apply to every tab, so they load once on mount. The
+   * disco list is only fetched when electricity is actually opened — it is a
+   * live call to BigiSub and there is no reason to make it for someone buying
+   * airtime.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    void getActiveVtuMargins().then((value) => {
+      if (!cancelled) setMargins(value);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (serviceType !== 'power' || discoChargesLoaded) return;
+
+    let cancelled = false;
+    void fetchElectricityProviders()
+      .then((providers) => {
+        if (cancelled) return;
+        const byCode: Record<
+          string,
+          { serviceCharge: number; serviceChargeType: string; minAmount: number }
+        > = {};
+        for (const p of providers) {
+          byCode[p.code] = {
+            serviceCharge: Number(p.serviceCharge) || 0,
+            serviceChargeType: p.serviceChargeType,
+            minAmount: Number(p.minAmount) || 0,
+          };
+        }
+        setDiscoCharges(byCode);
+      })
+      .finally(() => {
+        // Marked loaded even on an empty or failed result: the screen has
+        // stopped waiting, which is the only thing this flag is for.
+        if (!cancelled) setDiscoChargesLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [serviceType, discoChargesLoaded]);
+
   // Use enrolled user phone number
   const handleUseMyNumber = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -469,12 +551,84 @@ export default function QuickServiceScreen({ route, navigation }: any) {
     }
   };
 
-  // Compute payable amount based on service
-  const getPayableAmount = () => {
-    if (serviceType === 'data') return selectedDataPlan?.price || 1200;
-    if (serviceType === 'cable') return selectedBouquet?.price || 5100;
-    return selectedAmount;
-  };
+  /**
+   * The same arithmetic the server performs in priceTransaction(), so the
+   * figure the customer authorises with their fingerprint is the figure their
+   * bank is actually asked for.
+   *
+   * It did not agree before. Electricity was the bad one: the screen showed
+   * the meter amount while the server charged that PLUS the disco's own
+   * service charge — a number that only exists in BigiSub's provider list —
+   * and the confirmation sheet stated the fee was "₦0.00 (FREE)" underneath
+   * it. For data and cable the surcharge is already inside the catalogue
+   * price, so the total was right while the fee line was still wrong.
+   *
+   * `base` is what goes on the wire for open-value services, because the
+   * server adds the charges itself; sending the total would have it add them
+   * a second time. `total` is the only number the customer should ever see.
+   */
+  const breakdown = useMemo(() => {
+    const round = (n: number) => Math.round(n * 100) / 100;
+
+    if (serviceType === 'data' || serviceType === 'cable') {
+      const chosen = serviceType === 'data' ? selectedDataPlan : selectedBouquet;
+      // Zero when nothing is chosen yet. This used to fall back to 1200 for
+      // data and 5100 for cable, two numbers with no source, so the Pay button
+      // quoted a price the server had never given while the catalogue loaded.
+      const total = Number(chosen?.price) || 0;
+      const base = Number(chosen?.basePrice) || 0;
+      return { base, fee: base > 0 ? round(total - base) : 0, serviceCharge: 0, total };
+    }
+
+    if (serviceType === 'power') {
+      const base = selectedAmount;
+      const disco = discoCharges[selectedDisco];
+      const serviceCharge = disco
+        ? round(
+            disco.serviceChargeType === 'percentage'
+              ? base * (disco.serviceCharge / 100)
+              : disco.serviceCharge,
+          )
+        : 0;
+      const fee = margins?.power_convenience_fee_ngn ?? 0;
+      return { base, fee, serviceCharge, total: round(base + serviceCharge + fee) };
+    }
+
+    // Airtime. A percentage surcharge, zero on the live settings today, but it
+    // is a setting and the screen must follow it rather than assume.
+    const base = selectedAmount;
+    const fee = round(base * ((margins?.airtime_surcharge_percent ?? 0) / 100));
+    return { base, fee, serviceCharge: 0, total: round(base + fee) };
+  }, [
+    serviceType,
+    selectedAmount,
+    selectedDataPlan,
+    selectedBouquet,
+    selectedDisco,
+    discoCharges,
+    margins,
+  ]);
+
+  /** What the customer sees and authorises. */
+  const getPayableAmount = () => breakdown.total;
+
+  /**
+   * True while a figure on screen might still move — the disco charge has not
+   * arrived, or the bundle catalogue is still loading. Authorising during this
+   * window is how someone approves one amount and is debited another.
+   */
+  const isPriceSettling =
+    (serviceType === 'power' && !discoChargesLoaded) ||
+    ((serviceType === 'data' || serviceType === 'cable') && isLoadingVariations);
+
+  /**
+   * True when we could not find this disco's charge and therefore cannot show
+   * a final total. The server looks it up itself and will charge correctly;
+   * what the customer must not be given is a total presented as complete when
+   * it isn't.
+   */
+  const discoChargeUnknown =
+    serviceType === 'power' && discoChargesLoaded && !discoCharges[selectedDisco];
 
   // The account the money comes from, or null when none is linked.
   const activeAccount =
@@ -523,6 +677,18 @@ export default function QuickServiceScreen({ route, navigation }: any) {
         Alert.alert('Check the meter number', 'Enter a valid meter number.');
         return false;
       }
+
+      // The server rejects anything under the disco's own floor with
+      // BELOW_MINIMUM. Catching it here means the customer is told the actual
+      // figure before they authorise, rather than after.
+      const disco = discoCharges[selectedDisco];
+      if (disco && disco.minAmount > 0 && breakdown.base < disco.minAmount) {
+        Alert.alert(
+          'Below this disco’s minimum',
+          `${DISCOS.find((d) => d.id === selectedDisco)?.short ?? 'This provider'} requires at least ₦${disco.minAmount.toLocaleString()}.`,
+        );
+        return false;
+      }
     } else if (serviceType === 'cable') {
       if (smartcardNumber.trim().length < 8) {
         Alert.alert('Check the smartcard number', 'Enter a valid smartcard or IUC number.');
@@ -530,9 +696,18 @@ export default function QuickServiceScreen({ route, navigation }: any) {
       }
     }
 
-    const payable = getPayableAmount();
-    if (!payable || payable < 50) {
+    // Checked against the base, which is what the server validates — the
+    // charges it adds afterwards cannot make a too-small amount acceptable.
+    if (!breakdown.base || breakdown.base < 50) {
       Alert.alert('Amount too small', 'The minimum payment is ₦50.');
+      return false;
+    }
+
+    if (isPriceSettling) {
+      Alert.alert(
+        'One moment',
+        'We are still confirming the exact charge for this. Try again in a second.',
+      );
       return false;
     }
 
@@ -565,8 +740,8 @@ export default function QuickServiceScreen({ route, navigation }: any) {
    */
   const handleConfirmPayment = async () => {
     setIsConfirmModalVisible(false);
-    setEnteredPin('');
-    setPinError(null);
+    // A fresh attempt starts without the last one's challenge.
+    setPinChallenge(null);
     setIsIdentitySheetVisible(true);
   };
 
@@ -610,7 +785,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
     setIsProcessing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const payable = getPayableAmount();
+    const payable = breakdown.total;
     let provider = selectedTelco;
     let destination = recipientNumber;
     let variationCode: string | undefined = undefined;
@@ -631,25 +806,27 @@ export default function QuickServiceScreen({ route, navigation }: any) {
       provider = selectedCable;
       destination = smartcardNumber;
       variationCode = (selectedBouquet as any)?.variationCode || selectedBouquet?.id;
-
-    } else if (serviceType === 'internet') {
-      provider = 'spectranet';
-      destination = recipientNumber || '08011111111';
-    } else if (serviceType === 'transport') {
-      provider = 'cowry';
-      destination = 'Cowry: 8940192841';
-    } else if (serviceType === 'education') {
-      provider = 'waec';
-      destination = recipientNumber || 'Candidate PIN';
     }
+    // There were three more branches here — internet (spectranet), transport
+    // (a hardcoded 'Cowry: 8940192841') and education (waec) — and all three
+    // were unreachable dead ends. The server's zod enum accepts only
+    // airtime | data | power | cable, so each one was a guaranteed 400, and
+    // nothing has navigated here with those types since the service catalogue
+    // became the single list both the home row and this screen read from.
 
     try {
       const data = await executeVtuRecharge({
         serviceType,
         provider,
-        // Only open-value services carry an amount. Bundle prices are resolved
-        // server-side from the operator catalogue so they cannot be tampered with.
-        amount: serviceType === 'airtime' || serviceType === 'power' ? payable : undefined,
+        // Only open-value services carry an amount, and it is the BASE — the
+        // meter or airtime value. The server adds its surcharge and the
+        // disco's service charge itself, so sending the total would have it
+        // charge those twice.
+        //
+        // Bundle prices are not sent at all: they are resolved server-side
+        // from the operator catalogue so they cannot be tampered with.
+        amount:
+          serviceType === 'airtime' || serviceType === 'power' ? breakdown.base : undefined,
         destination,
         customerPhone: user?.phone || recipientNumber || undefined,
         variationCode,
@@ -660,15 +837,24 @@ export default function QuickServiceScreen({ route, navigation }: any) {
         customerName: verifiedName ?? undefined,
         customerAddress: verifiedAddress ?? undefined,
         accountId: activeAccount?.id || undefined,
-        pin: pin || enteredPin || undefined,
+        pin: pin || undefined,
       });
 
       if (!data || data.success === false) {
-        // PIN challenge, or a rejected PIN that can be retried.
+        // A PIN challenge, or a PIN the server rejected and will accept another
+        // attempt at. This used to flip `isPinModalVisible`, which no nothing
+        // rendered any more — the bespoke PIN modal was removed in favour of
+        // ConfirmIdentitySheet and the setter was left behind. So the screen
+        // simply stopped: processing closed, no sheet, no message, no retry.
+        //
+        // Reopening the identity sheet with the PIN demanded outright is the
+        // right answer anyway: it verifies through verify_own_pin, so a wrong
+        // attempt counts against the same lockout the payment path uses.
         if (data?.requirePin) {
           setIsProcessing(false);
-          setPinError(data.message || data.error || '4-digit PIN required');
-          setIsPinModalVisible(true);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          setPinChallenge(data.error || data.message || 'Enter your 4-digit PIN to authorise this.');
+          setIsIdentitySheetVisible(true);
           return;
         }
 
@@ -706,6 +892,31 @@ export default function QuickServiceScreen({ route, navigation }: any) {
         updatedAt: null,
       });
       setIsProgressVisible(true);
+
+      // In Mono's one-off DirectPay mode the debit is not merely pending — it
+      // has not been authorised at all until the customer completes it at
+      // their bank, and this URL is the only way there. Ignoring it left the
+      // transaction sitting at `initiated` until the watch timed out, with the
+      // customer staring at "Confirming with your bank…" for a confirmation
+      // that was never going to arrive.
+      //
+      // In mandate mode the server returns null here and there is nothing to
+      // open: the standing authorisation is the whole point of that mode.
+      if (data.authorisationUrl) {
+        try {
+          const canOpen = await Linking.canOpenURL(data.authorisationUrl);
+          if (canOpen) {
+            await Linking.openURL(data.authorisationUrl);
+          } else {
+            throw new Error('no handler');
+          }
+        } catch {
+          Alert.alert(
+            'Finish this at your bank',
+            'Your bank needs to approve this payment. We could not open the page automatically — nothing has been charged, so you can safely try again.',
+          );
+        }
+      }
 
       stopWatchingRef.current?.();
       stopWatchingRef.current = watchTransaction({
@@ -757,9 +968,6 @@ export default function QuickServiceScreen({ route, navigation }: any) {
       case 'data': return 'Buy Data';
       case 'power': return 'Electricity Bill';
       case 'cable': return 'Cable TV';
-      case 'internet': return 'Internet Service';
-      case 'transport': return 'Transport & Cowry';
-      case 'education': return 'Education & Exams';
       default: return 'Quick Service';
     }
   };
@@ -865,14 +1073,23 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                           Haptics.selectionAsync();
                           setSelectedTelco(telco.id);
                         }}
-                        className={`items-center py-2 px-3 rounded-xl border ${
+                        className={`items-center py-2.5 px-2 rounded-xl border ${
                           isSelected
                             ? `${telco.border} ${telco.bg}`
                             : 'border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-800/40'
                         } flex-1 mx-1`}
                       >
-                        <View className={`w-3 h-3 rounded-full ${telco.badge} mb-1`} />
-                        <Text className={`font-inter-bold text-xs ${isSelected ? telco.text : 'text-slate-700 dark:text-zinc-300'}`}>
+                        {/* The carrier's own mark, not a coloured dot. Four
+                            dots in four colours asked the customer to recall
+                            which colour meant which network; sending airtime
+                            to the wrong one cannot be undone. */}
+                        <NetworkLogo network={telco.id} size={30} />
+                        <Text
+                          numberOfLines={1}
+                          className={`font-inter-bold text-[11px] mt-1.5 ${
+                            isSelected ? telco.text : 'text-slate-700 dark:text-zinc-300'
+                          }`}
+                        >
                           {telco.name}
                         </Text>
                       </Pressable>
@@ -887,29 +1104,16 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                   <Text className="text-slate-500 dark:text-zinc-400 font-inter-semibold text-xs uppercase tracking-wider">
                     Recipient Phone Number
                   </Text>
-                  <View className="flex-row items-center">
+                  {user?.phone ? (
                     <Pressable
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setRecipientNumber('08011111111');
-                      }}
-                      className="bg-amber-500/15 px-2.5 py-1 rounded-full mr-1.5"
+                      onPress={handleUseMyNumber}
+                      className="bg-signal/15 px-2.5 py-1 rounded-full flex-row items-center"
                     >
-                      <Text className="text-amber-600 dark:text-amber-400 font-inter-bold text-[11px]">
-                        Sandbox Test
+                      <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-[11px]">
+                        My Number
                       </Text>
                     </Pressable>
-                    {user?.phone && (
-                      <Pressable
-                        onPress={handleUseMyNumber}
-                        className="bg-signal/15 px-2.5 py-1 rounded-full flex-row items-center"
-                      >
-                        <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-[11px]">
-                          My Number
-                        </Text>
-                      </Pressable>
-                    )}
-                  </View>
+                  ) : null}
                 </View>
 
                 <View className="flex-row items-center h-14 px-4 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-700">
@@ -1202,17 +1406,6 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                   <Text className="text-slate-500 dark:text-zinc-400 font-inter-semibold text-xs uppercase tracking-wider">
                     Meter Number
                   </Text>
-                  <Pressable
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setMeterNumber(meterType === 'postpaid' ? '1010101010101' : '1111111111111');
-                    }}
-                    className="bg-amber-500/15 px-2.5 py-1 rounded-full"
-                  >
-                    <Text className="text-amber-600 dark:text-amber-400 font-inter-bold text-[11px]">
-                      Sandbox Test
-                    </Text>
-                  </Pressable>
                 </View>
                 <View className="flex-row items-center h-14 px-4 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-700 mb-2">
                   <Lightbulb color={isDark ? '#71717a' : '#94a3b8'} size={20} className="mr-2" />
@@ -1323,17 +1516,6 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                   <Text className="text-slate-500 dark:text-zinc-400 font-inter-semibold text-xs uppercase tracking-wider">
                     Smartcard / IUC Number
                   </Text>
-                  <Pressable
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setSmartcardNumber('1212121212');
-                    }}
-                    className="bg-amber-500/15 px-2.5 py-1 rounded-full"
-                  >
-                    <Text className="text-amber-600 dark:text-amber-400 font-inter-bold text-[11px]">
-                      Sandbox Test
-                    </Text>
-                  </Pressable>
                 </View>
                 <View className="flex-row items-center h-14 px-4 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-700 mb-2">
                   <Tv color={isDark ? '#71717a' : '#94a3b8'} size={20} className="mr-2" />
@@ -1510,10 +1692,21 @@ export default function QuickServiceScreen({ route, navigation }: any) {
           </View>
 
           {/* Pay Action Button */}
+          {/*
+            Verification is a live call to BigiSub that takes a second or two,
+            and it runs BEFORE the confirmation sheet for electricity and
+            cable. `isVerifying` was being set the whole time and rendered
+            nowhere, so the button sat there looking dead and inviting a second
+            tap. It says what it is doing now.
+          */}
           <Pressable
             onPress={handleInitiatePayment}
-            disabled={isProcessing}
-            className="h-14 rounded-2xl bg-signal active:bg-signal items-center justify-center mb-10"
+            disabled={isProcessing || isVerifying || isPriceSettling}
+            className={`h-14 rounded-2xl items-center justify-center mb-10 ${
+              isProcessing || isVerifying || isPriceSettling
+                ? 'bg-signal/50'
+                : 'bg-signal active:bg-signal'
+            }`}
             style={{
               shadowColor: '#00C896',
               shadowOffset: { width: 0, height: 4 },
@@ -1522,11 +1715,22 @@ export default function QuickServiceScreen({ route, navigation }: any) {
               elevation: 4,
             }}
           >
-            {isProcessing ? (
-              <ActivityIndicator color="#000" size="small" />
+            {isProcessing || isVerifying || isPriceSettling ? (
+              <View className="flex-row items-center">
+                <ActivityIndicator color="#000" size="small" />
+                <Text className="text-black font-inter-bold text-base ml-2.5">
+                  {isVerifying
+                    ? serviceType === 'power'
+                      ? 'Checking this meter…'
+                      : 'Checking this smartcard…'
+                    : isPriceSettling
+                      ? 'Getting the price…'
+                      : 'Starting…'}
+                </Text>
+              </View>
             ) : (
               <Text className="text-black font-inter-bold text-base">
-                Pay ₦{getPayableAmount().toLocaleString()}
+                Pay ₦{getPayableAmount().toLocaleString('en-NG', { minimumFractionDigits: 2 })}
               </Text>
             )}
           </Pressable>
@@ -1557,9 +1761,11 @@ export default function QuickServiceScreen({ route, navigation }: any) {
 
             {/* Total Amount Big Banner */}
             <View className="items-center justify-center py-4 bg-slate-50 dark:bg-zinc-800/60 rounded-2xl mb-5 border border-slate-200/80 dark:border-zinc-700/60">
-              <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs mb-1">Total Payable</Text>
+              <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs mb-1">
+                {discoChargeUnknown ? 'Payable, before your disco’s charge' : 'Total Payable'}
+              </Text>
               <Text className="text-slate-900 dark:text-white font-inter-bold text-3xl">
-                ₦{getPayableAmount().toLocaleString()}
+                ₦{getPayableAmount().toLocaleString('en-NG', { minimumFractionDigits: 2 })}
               </Text>
             </View>
 
@@ -1593,11 +1799,54 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                     : 'No account linked'}
                 </Text>
               </View>
-              <View className="flex-row justify-between">
-                <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">Transaction Fee</Text>
-                <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-xs">
-                  ₦0.00 (FREE)
+              {/*
+                This row said "₦0.00 (FREE)" unconditionally. It was false for
+                data and cable, where the platform's surcharge is baked into
+                the catalogue price, and worse for electricity, where the
+                disco's own service charge was added by the server on top of a
+                total the customer had already approved.
+              */}
+              <View className="flex-row justify-between mb-2">
+                <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">
+                  {serviceType === 'data' || serviceType === 'cable' ? 'Bundle price' : 'Amount'}
                 </Text>
+                <Text className="text-slate-900 dark:text-white font-inter-semibold text-xs">
+                  ₦{breakdown.base.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+                </Text>
+              </View>
+
+              {serviceType === 'power' && (breakdown.serviceCharge > 0 || discoChargeUnknown) && (
+                <View className="flex-row justify-between mb-2">
+                  <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">
+                    {DISCOS.find((d) => d.id === selectedDisco)?.short ?? 'Provider'} service charge
+                  </Text>
+                  <Text
+                    className={`font-inter-semibold text-xs ${
+                      discoChargeUnknown
+                        ? 'text-status-warn'
+                        : 'text-slate-900 dark:text-white'
+                    }`}
+                  >
+                    {discoChargeUnknown
+                      ? 'Added by your disco'
+                      : `₦${breakdown.serviceCharge.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`}
+                  </Text>
+                </View>
+              )}
+
+              <View className="flex-row justify-between">
+                <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">
+                  MiliPay fee
+                </Text>
+                {breakdown.fee > 0 ? (
+                  <Text className="text-slate-900 dark:text-white font-inter-semibold text-xs">
+                    ₦{breakdown.fee.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+                  </Text>
+                ) : (
+                  <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-xs">
+                    ₦0.00 (FREE)
+                  </Text>
+                )}
               </View>
             </View>
 
@@ -1635,11 +1884,16 @@ export default function QuickServiceScreen({ route, navigation }: any) {
             <View className="w-16 h-16 rounded-full bg-signal/15 items-center justify-center mb-4">
               <ActivityIndicator size="large" color="#00C896" />
             </View>
+            {/* Nothing has reached a carrier at this point. This modal covers
+                the moment between the fingerprint and the server accepting the
+                purchase; the bank has not confirmed and the network has not
+                been asked. Saying "Connecting with carrier network" here was
+                describing a step two states further on. */}
             <Text className="text-slate-900 dark:text-white font-inter-bold text-base text-center mb-1">
-              Processing Top-Up...
+              Starting your payment…
             </Text>
             <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs text-center">
-              Connecting with carrier network
+              Nothing has been charged yet
             </Text>
           </View>
         </View>
@@ -1837,10 +2091,19 @@ export default function QuickServiceScreen({ route, navigation }: any) {
           verifies the PIN and cannot verify a fingerprint the phone checked. */}
       <ConfirmIdentitySheet
         visible={isIdentitySheetVisible}
-        reason={`Authorise ₦${getPayableAmount().toLocaleString('en-NG')} for ${getServiceTitle()}`}
-        requirePin={pinIsMandatory()}
+        reason={
+          pinChallenge ??
+          `Authorise ₦${getPayableAmount().toLocaleString('en-NG', { minimumFractionDigits: 2 })} for ${getServiceTitle()}`
+        }
+        // Once the server has asked for the PIN, a fingerprint is no longer an
+        // answer: it verifies the PIN itself and cannot verify a fingerprint
+        // this phone checked.
+        requirePin={pinIsMandatory() || pinChallenge !== null}
         onConfirmed={handleIdentityConfirmed}
-        onCancel={() => setIsIdentitySheetVisible(false)}
+        onCancel={() => {
+          setIsIdentitySheetVisible(false);
+          setPinChallenge(null);
+        }}
       />
 
       {/* Step 5: the few real seconds between the fingerprint and the airtime.

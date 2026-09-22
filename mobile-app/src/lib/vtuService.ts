@@ -65,6 +65,13 @@ export interface VtuRechargeResult {
   provider?: string;
   beneficiary?: string;
   merchantTitle?: string;
+  /**
+   * Present only in Mono's one-off DirectPay mode, where the customer has to
+   * authorise this specific debit at their bank. Nothing is confirmed until
+   * they do, so the app must open it — ignoring it leaves the transaction at
+   * `initiated` for ever.
+   */
+  authorisationUrl?: string | null;
   token?: string | null;
   units?: string | null;
   newBalance?: number;
@@ -95,20 +102,46 @@ export function resolveBigisubNetworkId(telco: string): number {
   return 1;
 }
 
-/** Normalises the Edge Function's transport-level and body-level errors into one shape. */
-function toResult(data: any, error: any): VtuRechargeResult {
-  if (error) {
-    // supabase-js surfaces non-2xx as FunctionsHttpError with the body attached.
-    const body = (error as any)?.context?.body ?? (error as any)?.context;
-    if (body && typeof body === 'object') {
-      return { success: false, ...body };
+/**
+ * Normalises the Edge Function's transport-level and body-level errors into
+ * one shape.
+ *
+ * The error branch is the part that matters. supabase-js does NOT parse the
+ * body of a non-2xx response — it throws FunctionsHttpError whose `context` is
+ * the raw, unread `Response`. Reading `context.body` yields a ReadableStream,
+ * and spreading one produces an object carrying none of the server's fields.
+ *
+ * That is how every distinct failure on the purchase screen — "quick services
+ * are switched off", "too many requests", "PIN required", "your bank declined
+ * this" — arrived as the same empty object and was shown to the customer as
+ * the generic "Transaction could not be completed." It also meant `requirePin`
+ * never survived the trip, so a mistyped PIN could not be retried: the server
+ * asked for one and the app never heard the question.
+ *
+ * The body has to be read with .json(), which is why this is async. It can
+ * only be read once, so nothing else may touch the response first.
+ */
+async function unwrap(data: any, error: any): Promise<VtuRechargeResult> {
+  if (!error) {
+    if (!data) return { success: false, error: 'No response from payment service' };
+    return data as VtuRechargeResult;
+  }
+
+  const response = (error as any)?.context;
+  if (response && typeof response.json === 'function') {
+    try {
+      const body = await response.json();
+      if (body && typeof body === 'object') {
+        // The server already sets success:false on every error body; this is
+        // belt and braces so a malformed one can never read as a success.
+        return { ...body, success: false };
+      }
+    } catch {
+      // Not JSON, or already consumed. Fall through to the transport message.
     }
-    return { success: false, error: error.message || 'Service temporarily unavailable' };
   }
-  if (!data) {
-    return { success: false, error: 'No response from payment service' };
-  }
-  return data as VtuRechargeResult;
+
+  return { success: false, error: error?.message || 'Service temporarily unavailable' };
 }
 
 /** Retail bundle catalogue for data and cable. */
@@ -251,7 +284,7 @@ export async function executeVtuRecharge(
     },
   });
 
-  return toResult(data, error);
+  return await unwrap(data, error);
 }
 
 /**
@@ -283,7 +316,22 @@ export async function verifyBillAccount(args: {
     },
   });
 
-  if (error || !data?.success) {
+  // Same trap as unwrap() above: on a non-2xx, `data` is null and the reason
+  // BigiSub gave lives in the unread response body. Reading it is the
+  // difference between "That account could not be verified" and "Meter number
+  // not found on IKEDC".
+  if (error) {
+    const failed = await unwrap(null, error);
+    return {
+      success: false,
+      error:
+        failed.error ??
+        failed.message ??
+        'That account could not be verified. Check the number and try again.',
+    };
+  }
+
+  if (!data?.success) {
     return {
       success: false,
       error: data?.error ?? 'That account could not be verified. Check the number and try again.',
