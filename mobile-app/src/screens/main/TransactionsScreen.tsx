@@ -110,7 +110,7 @@ export default function TransactionsScreen({ navigation }: any) {
         bank: getAccountLabel(selectedTx.account_used) || 'MiliPay Linked Account',
         date: formattedDate,
         token: selectedTx.token,
-        status: 'Successful',
+        status: selectedTx.status,
       });
     } finally {
       setIsSharingPdf(false);
@@ -468,17 +468,10 @@ export default function TransactionsScreen({ navigation }: any) {
                     </Pressable>
                   </View>
 
-                  <View className="flex-row justify-between items-center">
-                    <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">Session ID</Text>
-                    <Text className="text-slate-500 dark:text-zinc-400 font-inter text-[11px] text-right flex-1 ml-3 font-mono" numberOfLines={1}>
-                      {selectedTx ? `000013${selectedTx.reference.replace(/[^0-9]/g, '').padEnd(24, '9').slice(0, 24)}` : ''}
-                    </Text>
-                  </View>
                 </View>
 
-                {/* Footer compliance */}
                 <Text className="text-slate-400 dark:text-zinc-600 font-inter text-[10px] text-center mt-2">
-                  MiliPay Technologies Limited • Licensed by CBN • NDIC Insured
+                  MiliPay Technologies Limited • Keep this reference for support
                 </Text>
               </View>
 

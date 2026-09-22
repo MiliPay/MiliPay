@@ -277,6 +277,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
         date: successReceipt.date,
         token: successReceipt.token,
         units: successReceipt.units,
+        status: successReceipt.status ?? 'delivered',
       });
     } finally {
       setIsSharingPdf(false);

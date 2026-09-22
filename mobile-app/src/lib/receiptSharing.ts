@@ -5,6 +5,7 @@ import { Share, Alert } from 'react-native';
 
 export interface ReceiptInfo {
   reference: string;
+  /** Total debited, in Naira. */
   amount: number;
   merchant: string;
   beneficiary: string;
@@ -12,12 +13,49 @@ export interface ReceiptInfo {
   date: string;
   token?: string | null;
   units?: string | null;
-  status?: string;
+  /**
+   * The transaction's real status, as the server records it. Required, because
+   * the previous shape made it optional and the template then ignored it: every
+   * receipt this app has ever produced said "Transaction Successful", under a
+   * green tick, whatever had actually happened — including for transactions
+   * that failed or were refunded.
+   */
+  status: string;
+  /**
+   * Fee charged, in Naira. Omit only when it genuinely is not known; the
+   * template leaves the row out rather than claiming zero. The fee row used to
+   * be the hardcoded string "₦0.00 (FREE)" while the platform was charging a
+   * data surcharge, a cable surcharge and an electricity convenience fee.
+   */
+  fee?: number;
 }
+
+/** How a status should be shown, and whether it is good news. */
+function presentStatus(status: string): { label: string; tone: 'ok' | 'pending' | 'bad' } {
+  const s = (status || '').toLowerCase();
+  if (s === 'delivered' || s === 'success' || s === 'successful') {
+    return { label: 'Successful', tone: 'ok' };
+  }
+  if (s === 'refunded') return { label: 'Refunded', tone: 'bad' };
+  if (s === 'payment_failed' || s === 'fulfilment_failed' || s === 'failed') {
+    return { label: 'Failed', tone: 'bad' };
+  }
+  if (s === 'refund_failed' || s === 'quarantined') {
+    return { label: 'Needs attention', tone: 'bad' };
+  }
+  return { label: 'In progress', tone: 'pending' };
+}
+
+const STATUS_TONES = {
+  ok: { bg: '#d1fae5', fg: '#065f46', mark: '#10b981', glyph: '&#10003;' },
+  pending: { bg: '#fef3c7', fg: '#92400e', mark: '#f59e0b', glyph: '&#8226;' },
+  bad: { bg: '#fee2e2', fg: '#991b1b', mark: '#ef4444', glyph: '&#33;' },
+} as const;
 
 export function generateReceiptHtml(receipt: ReceiptInfo): string {
   const formattedAmount = `₦${receipt.amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
-  const sessionId = `000013${receipt.reference.replace(/[^0-9]/g, '').padEnd(24, '9').slice(0, 24)}`;
+  const state = presentStatus(receipt.status);
+  const tone = STATUS_TONES[state.tone];
   
   return `
 <!DOCTYPE html>
@@ -57,9 +95,9 @@ export function generateReceiptHtml(receipt: ReceiptInfo): string {
       justify-content: center;
       width: 56px;
       height: 56px;
-      background: #10b981;
+      background: ${tone.mark};
       border-radius: 50%;
-      color: #000;
+      color: #fff;
       font-weight: 900;
       font-size: 24px;
       margin-bottom: 12px;
@@ -74,8 +112,8 @@ export function generateReceiptHtml(receipt: ReceiptInfo): string {
       display: inline-block;
       margin-top: 6px;
       padding: 4px 12px;
-      background: #d1fae5;
-      color: #065f46;
+      background: ${tone.bg};
+      color: ${tone.fg};
       border-radius: 9999px;
       font-size: 11px;
       font-weight: 700;
@@ -168,9 +206,9 @@ export function generateReceiptHtml(receipt: ReceiptInfo): string {
 <body>
   <div class="receipt-card">
     <div class="header">
-      <div class="logo-badge">&#10003;</div>
+      <div class="logo-badge">${tone.glyph}</div>
       <div class="app-name">MiliPay Receipt</div>
-      <div class="status-badge">Transaction Successful</div>
+      <div class="status-badge">${state.label}</div>
     </div>
 
     <div class="amount-box">
@@ -199,10 +237,18 @@ export function generateReceiptHtml(receipt: ReceiptInfo): string {
         <span class="row-label">Payment Method</span>
         <span class="row-val">${receipt.bank || 'MiliPay DirectPay'}</span>
       </div>
-      <div class="row">
-        <span class="row-label">Transaction Fee</span>
-        <span class="row-val" style="color: #10b981;">₦0.00 (FREE)</span>
-      </div>
+      ${
+        receipt.fee === undefined
+          ? ''
+          : `<div class="row">
+        <span class="row-label">Fee</span>
+        <span class="row-val"${receipt.fee === 0 ? ' style="color: #10b981;"' : ''}>${
+          receipt.fee === 0
+            ? 'No fee'
+            : `₦${receipt.fee.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
+        }</span>
+      </div>`
+      }
       <div class="row">
         <span class="row-label">Date & Time</span>
         <span class="row-val">${receipt.date}</span>
@@ -211,16 +257,13 @@ export function generateReceiptHtml(receipt: ReceiptInfo): string {
         <span class="row-label">Transaction Reference</span>
         <span class="row-val">${receipt.reference}</span>
       </div>
-      <div class="row">
-        <span class="row-label">Session ID</span>
-        <span class="row-val" style="font-size: 11px;">${sessionId}</span>
-      </div>
+
     </div>
 
     <div class="footer">
       <strong>MiliPay Technologies Limited</strong><br>
-      Licensed by the Central Bank of Nigeria (CBN). Deposits NDIC Insured.<br>
-      Support: support@milipay.ng | 24/7 Helpline
+      Keep this receipt. Quote the reference above if you contact support.<br>
+      support@milipay.ng
     </div>
   </div>
 </body>
