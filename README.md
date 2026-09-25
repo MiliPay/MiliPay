@@ -264,7 +264,10 @@ unit suite; **not yet proven end to end** against the Mono and VTPass sandboxes.
   purchase, reconciliation and recovery paths.
 - **Mono** — collects the customer's money from their linked bank account.
   `MONO_PAYMENT_MODE=directpay` (one-off authorisation per payment) is the
-  default; `mandate` is wired for later.
+  default; `mandate` is wired for later. Mono fixes each app's product at
+  creation, so this takes **two** Mono apps: a Connect app for bank linking
+  (`MONO_SECRET_KEY`) and a Payments app for DirectPay
+  (`MONO_PAYMENTS_SECRET_KEY`). The webhook is registered on the Payments app.
 - **BigiSub** — parked. `supabase/functions/_shared/bigisub.ts` is still in the
   repository, but nothing live imports it and nothing reads `BIGISUB_*`. It was
   parked because no BigiSub purchase endpoint accepts a client-supplied

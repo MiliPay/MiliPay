@@ -38,7 +38,7 @@ const RULES = [
   },
   {
     name: 'Operator secret assigned inline',
-    re: /\b(?:VTPASS_SECRET_KEY|VTPASS_API_KEY|BIGISUB_API_TOKEN|BIGISUB_TRANSACTION_PIN|MONO_SECRET_KEY|SERVICE_ROLE_KEY|SUPABASE_SERVICE_ROLE_KEY)\b\s*[:=]\s*['"][^'"\s]{8,}['"]/,
+    re: /\b(?:VTPASS_SECRET_KEY|VTPASS_API_KEY|BIGISUB_API_TOKEN|BIGISUB_TRANSACTION_PIN|MONO_SECRET_KEY|MONO_PAYMENTS_SECRET_KEY|MONO_WEBHOOK_SECRET|SERVICE_ROLE_KEY|SUPABASE_SERVICE_ROLE_KEY)\b\s*[:=]\s*['"][^'"\s]{8,}['"]/,
   },
   {
     // The whole class of mistake: a server secret handed to the client bundle.

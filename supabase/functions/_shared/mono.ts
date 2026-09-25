@@ -1,4 +1,5 @@
 import { ApiError } from "./auth.ts";
+import { monoPaymentsSecret } from "./environment.ts";
 import { koboToNaira, nairaToKobo } from "./money.ts";
 
 /**
@@ -32,7 +33,15 @@ import { koboToNaira, nairaToKobo } from "./money.ts";
  *
  * SANDBOX. Mono has no separate sandbox host — test and live are the same
  * host, told apart by the key prefix (test_… / live_…), which is why
- * environment.ts classifies Mono from MONO_SECRET_KEY rather than the URL.
+ * environment.ts classifies Mono from the payments key rather than the URL.
+ *
+ * TWO APPS. Mono fixes each app's product at creation: bank linking is a
+ * Connect app, DirectPay needs a Payments app, and one cannot be converted
+ * into the other. Everything in this module is payments, so it uses the
+ * Payments app's key (MONO_PAYMENTS_SECRET_KEY). The Connect app's key stays
+ * in MONO_SECRET_KEY for link-mono-account and identity lookup. The Payments
+ * app is also where the webhook must be registered: Mono sends payment events
+ * from the app whose key started the payment.
  * Things that behave differently on test keys, and that the flow has to
  * tolerate rather than be surprised by:
  *
@@ -75,8 +84,14 @@ function baseUrl(): string {
   return (Deno.env.get("MONO_BASE_URL") || "https://api.withmono.com").replace(/\/+$/, "");
 }
 
+/**
+ * The PAYMENTS app's key. Mono fixes an app's product scope at creation, so
+ * payments cannot share the Connect app that bank linking uses — see
+ * monoPaymentsSecret() in environment.ts, which falls back to MONO_SECRET_KEY
+ * when no separate payments key is set.
+ */
 function secretKey(): string {
-  return Deno.env.get("MONO_SECRET_KEY") ?? "";
+  return monoPaymentsSecret(Deno.env).key;
 }
 
 export function isMonoConfigured(): boolean {

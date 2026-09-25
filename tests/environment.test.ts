@@ -5,6 +5,7 @@ import {
   classifyMonoKey,
   disabledMessage,
   isSandboxUrl,
+  monoPaymentsSecret,
   readFulfilmentEnvironment,
   resolveDeployment,
   resolveFulfilmentMode,
@@ -276,6 +277,38 @@ describe("readFulfilmentEnvironment", () => {
     expect(result.coherence.reason ?? "").not.toContain("BIGISUB");
   });
 
+  it("judges Mono by the PAYMENTS key — the one that takes the customer's money", () => {
+    // Two Mono apps: Connect (bank linking) and Payments (DirectPay). A live
+    // payments key under a sandbox declaration must be refused even when the
+    // Connect key is a harmless test_ key.
+    const result = readFulfilmentEnvironment(
+      env({
+        VTU_FULFILMENT_MODE: "live",
+        MILIPAY_ENVIRONMENT: "sandbox",
+        VTPASS_BASE_URL: "https://sandbox.vtpass.com/api",
+        MONO_SECRET_KEY: "test_sk_abc123", // secret-scan: allow — fake fixture, only its test_ prefix matters
+        MONO_PAYMENTS_SECRET_KEY: "live_sk_abc123", // secret-scan: allow — fake fixture, only its live_ prefix matters
+      }),
+    );
+    expect(result.coherence.ok).toBe(false);
+    expect(result.coherence.detail?.mono).toBe("production");
+    // Names the variable to fix, not the bank-linking one.
+    expect(result.coherence.reason).toContain("MONO_PAYMENTS_SECRET_KEY");
+  });
+
+  it("still names MONO_SECRET_KEY when there is no separate payments key", () => {
+    const result = readFulfilmentEnvironment(
+      env({
+        VTU_FULFILMENT_MODE: "live",
+        MILIPAY_ENVIRONMENT: "sandbox",
+        MONO_SECRET_KEY: "live_sk_abc123", // secret-scan: allow — fake fixture, only its live_ prefix matters
+      }),
+    );
+    expect(result.coherence.ok).toBe(false);
+    expect(result.coherence.reason).toContain("MONO_SECRET_KEY");
+    expect(result.coherence.reason).not.toContain("MONO_PAYMENTS_SECRET_KEY");
+  });
+
   it("names VTPASS_BASE_URL when VTPass itself disagrees with the declaration", () => {
     const result = readFulfilmentEnvironment(
       env({
@@ -311,5 +344,35 @@ describe("disabledMessage", () => {
 
   it("distinguishes test mode from an outage", () => {
     expect(disabledMessage("simulated")).toMatch(/test mode/i);
+  });
+});
+
+describe("monoPaymentsSecret — which Mono key moves money", () => {
+  const env = (vars: Record<string, string>) => ({ get: (k: string) => vars[k] });
+  // Mono fixes an app's product at creation, so payments and bank linking
+  // live in two apps with two keys.
+  it("prefers the Payments app's key", () => {
+    expect(
+      monoPaymentsSecret(env({ MONO_SECRET_KEY: "connect-key", MONO_PAYMENTS_SECRET_KEY: "payments-key" })), // secret-scan: allow — fake fixture, not a credential
+    ).toEqual({ key: "payments-key", variable: "MONO_PAYMENTS_SECRET_KEY" });
+  });
+
+  it("falls back to MONO_SECRET_KEY when no payments key is set", () => {
+    // One app with both scopes needs only the one variable, and a deployment
+    // that has not set the new one behaves exactly as before.
+    expect(monoPaymentsSecret(env({ MONO_SECRET_KEY: "connect-key" }))).toEqual({ // secret-scan: allow — fake fixture, not a credential
+      key: "connect-key",
+      variable: "MONO_SECRET_KEY",
+    });
+  });
+
+  it("treats a blank payments key as unset rather than as a key", () => {
+    expect(
+      monoPaymentsSecret(env({ MONO_SECRET_KEY: "connect-key", MONO_PAYMENTS_SECRET_KEY: "   " })), // secret-scan: allow — fake fixture, not a credential
+    ).toEqual({ key: "connect-key", variable: "MONO_SECRET_KEY" });
+  });
+
+  it("is empty when neither is set, so payments report not-configured", () => {
+    expect(monoPaymentsSecret(env({})).key).toBe("");
   });
 });

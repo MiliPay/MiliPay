@@ -324,6 +324,29 @@ describe("fulfilment runs on VTPass, only after payment", () => {
   });
 });
 
+describe("each Mono app's key goes where it belongs", () => {
+  // Mono fixes an app's product at creation: bank linking is a Connect app,
+  // DirectPay a Payments app. Crossing them over fails — Mono refuses the
+  // Connect key on the payments API, and the Connect widget's code cannot be
+  // exchanged with the Payments key.
+  it("payments read the payments key, never MONO_SECRET_KEY directly", () => {
+    const mono = code(join(FUNCTIONS, "_shared", "mono.ts"));
+    expect(mono).toMatch(/monoPaymentsSecret\(Deno\.env\)/);
+    expect(mono).not.toMatch(/Deno\.env\.get\("MONO_SECRET_KEY"\)/);
+  });
+
+  it("bank linking keeps the Connect app's key", () => {
+    const link = code(join(FUNCTIONS, "link-mono-account", "index.ts"));
+    expect(link).toMatch(/Deno\.env\.get\(['"]MONO_SECRET_KEY['"]\)/);
+    expect(link).not.toMatch(/MONO_PAYMENTS_SECRET_KEY/);
+  });
+
+  it("the environment check judges the key that moves money", () => {
+    const env = code(join(FUNCTIONS, "_shared", "environment.ts"));
+    expect(env).toMatch(/monoSecretKey:\s*mono\.key/);
+  });
+});
+
 describe("the payment mode stays configurable", () => {
   it("reads MONO_PAYMENT_MODE rather than hardcoding directpay", () => {
     const mono = code(join(FUNCTIONS, "_shared", "mono.ts"));
@@ -441,7 +464,7 @@ describe("provider credentials stay server-side", () => {
     // Anything EXPO_PUBLIC_ is compiled into the bundle and readable by anyone
     // who unzips the APK.
     const forbidden =
-      /VTPASS_API_KEY|VTPASS_SECRET_KEY|VTPASS_PUBLIC_KEY|MONO_SECRET_KEY|MONO_WEBHOOK_SECRET|BIGISUB_API_TOKEN|BIGISUB_TRANSACTION_PIN|SERVICE_ROLE|TERMII_API_KEY|RESEND_API_KEY/;
+      /VTPASS_API_KEY|VTPASS_SECRET_KEY|VTPASS_PUBLIC_KEY|MONO_SECRET_KEY|MONO_PAYMENTS_SECRET_KEY|MONO_WEBHOOK_SECRET|BIGISUB_API_TOKEN|BIGISUB_TRANSACTION_PIN|SERVICE_ROLE|TERMII_API_KEY|RESEND_API_KEY/;
     expect(offending(MOBILE_CODE, forbidden)).toEqual([]);
   });
 

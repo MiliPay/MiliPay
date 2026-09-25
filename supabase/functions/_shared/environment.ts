@@ -116,6 +116,8 @@ export interface CoherenceInput {
   gatewayVariable?: string;
   /** Mono's secret key. Only its prefix is read; it is never echoed. */
   monoSecretKey?: string | null;
+  /** Named only so a refusal can say which variable to fix. */
+  monoVariable?: string;
 }
 
 export interface CoherenceResult {
@@ -149,7 +151,7 @@ export function checkEnvironmentCoherence(input: CoherenceInput): CoherenceResul
     );
   }
   if (mono !== "unknown" && mono !== input.declared) {
-    disagreements.push(`MONO_SECRET_KEY is a ${mono} key`);
+    disagreements.push(`${input.monoVariable ?? "MONO_SECRET_KEY"} is a ${mono} key`);
   }
 
   if (disagreements.length > 0) {
@@ -164,6 +166,36 @@ export function checkEnvironmentCoherence(input: CoherenceInput): CoherenceResul
   }
 
   return { ok: true, detail };
+}
+
+/**
+ * The Mono key that MOVES MONEY, and the variable it came from.
+ *
+ * Mono gives each app one product scope, fixed when the app is created. Bank
+ * linking (Connect) and payments (DirectPay / Direct Debit) therefore live in
+ * two different apps with two different secret keys, and an existing Connect
+ * app cannot be converted — Mono's support confirmed this directly.
+ *
+ *   MONO_PAYMENTS_SECRET_KEY  the Payments app. Initiating, verifying and
+ *                             refunding payments use this.
+ *   MONO_SECRET_KEY           the Connect app. Bank linking and identity
+ *                             lookup keep using this, as does the mobile app's
+ *                             Connect widget through the matching public key.
+ *
+ * When MONO_PAYMENTS_SECRET_KEY is unset, payments fall back to
+ * MONO_SECRET_KEY: a single app carrying both scopes needs only the one
+ * variable, and nothing changes for a deployment that has not set the new one.
+ *
+ * Only this key is judged by the coherence check, because it is the one whose
+ * sandbox-or-live nature decides whether a customer is really charged.
+ */
+export function monoPaymentsSecret(env: { get(key: string): string | undefined }): {
+  key: string;
+  variable: "MONO_PAYMENTS_SECRET_KEY" | "MONO_SECRET_KEY";
+} {
+  const payments = (env.get("MONO_PAYMENTS_SECRET_KEY") ?? "").trim();
+  if (payments) return { key: payments, variable: "MONO_PAYMENTS_SECRET_KEY" };
+  return { key: (env.get("MONO_SECRET_KEY") ?? "").trim(), variable: "MONO_SECRET_KEY" };
 }
 
 /** Human-readable refusal shown to a customer while vending is off. */
@@ -199,6 +231,7 @@ export function readFulfilmentEnvironment(env: {
 } {
   const mode = resolveFulfilmentMode(env.get("VTU_FULFILMENT_MODE"));
   const declared = resolveDeployment(env.get("MILIPAY_ENVIRONMENT"));
+  const mono = monoPaymentsSecret(env);
 
   return {
     mode,
@@ -208,7 +241,9 @@ export function readFulfilmentEnvironment(env: {
       declared,
       gatewayBaseUrl: env.get("VTPASS_BASE_URL"),
       gatewayVariable: "VTPASS_BASE_URL",
-      monoSecretKey: env.get("MONO_SECRET_KEY"),
+      // The key that takes the customer's money, not the bank-linking one.
+      monoSecretKey: mono.key,
+      monoVariable: mono.variable,
     }),
   };
 }
