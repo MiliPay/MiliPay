@@ -27,6 +27,7 @@ import { HOME_ROW_SERVICES, SERVICE_GROUPS, SERVICE_TILES, type ServiceTile, typ
 import { colors } from '../../theme/tokens';
 import { shareReceiptAsPdf, shareReceiptAsImage } from '../../lib/receiptSharing';
 import { isMoneyReturned, rowStatus } from '../../lib/transactionStatus';
+import ReceiptHeadline from '../../components/ui/ReceiptHeadline';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.90;
@@ -921,29 +922,10 @@ function HomeScreenContent({ navigation }: any) {
                 collapsable={false}
                 className="w-full items-center bg-white dark:bg-zinc-900 p-1 rounded-2xl"
               >
-                {/* Big Green Badge */}
-                <View className="w-20 h-20 rounded-full bg-signal/15 items-center justify-center mb-3">
-                  <View
-                    className="w-14 h-14 rounded-full bg-signal items-center justify-center"
-                    style={{
-                      shadowColor: '#00C896',
-                      shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: 0.35,
-                      shadowRadius: 10,
-                      elevation: 8,
-                    }}
-                  >
-                    <Check color="#000" size={28} strokeWidth={3.5} />
-                  </View>
-                </View>
-
-                {/* Enlarged Title & Amount */}
-                <Text className="text-slate-900 dark:text-white font-inter-bold text-2xl text-center mb-1 tracking-tight">
-                  Payment Successful!
-                </Text>
-                <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-3xl mb-4">
-                  ₦{selectedTx?.amount ? Number(selectedTx.amount).toLocaleString() : '0'}
-                </Text>
+                {/* Headline follows the real status. This said "Payment
+                    Successful!" under a green tick for every transaction,
+                    including payments that never went through. */}
+                <ReceiptHeadline status={selectedTx?.status} amount={Number(selectedTx?.amount ?? 0)} />
 
                 {/* PREPAID ELECTRICITY TOKEN CARD */}
                 {selectedTx?.token && (

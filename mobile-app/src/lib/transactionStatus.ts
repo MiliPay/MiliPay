@@ -231,7 +231,9 @@ export function rowStatus(
     case null:
       return null;
     case 'payment_failed':
-      return { label: 'Declined', tone: 'fail' };
+      // Not "Declined": this also covers a customer abandoning the payment
+      // page, and Mono refusing to start it. Neither is the bank.
+      return { label: 'Payment failed', tone: 'fail' };
     case 'fulfilment_failed':
       return { label: 'Failed', tone: 'fail' };
     case 'refund_failed':

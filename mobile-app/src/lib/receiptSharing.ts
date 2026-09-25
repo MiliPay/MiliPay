@@ -3,6 +3,7 @@ import * as Sharing from 'expo-sharing';
 import { captureRef } from 'react-native-view-shot';
 import { Share, Alert } from 'react-native';
 import { SUPPORT_EMAIL } from './brand';
+import { receiptHeadline } from './receiptHeadline';
 
 export interface ReceiptInfo {
   reference: string;
@@ -31,20 +32,14 @@ export interface ReceiptInfo {
   fee?: number;
 }
 
-/** How a status should be shown, and whether it is good news. */
+/**
+ * How a status should be shown, and whether it is good news. Delegates to
+ * receiptHeadline(), which the in-app receipts use too, so the shared PDF and
+ * the screen can never tell the customer two different things.
+ */
 function presentStatus(status: string): { label: string; tone: 'ok' | 'pending' | 'bad' } {
-  const s = (status || '').toLowerCase();
-  if (s === 'delivered' || s === 'success' || s === 'successful') {
-    return { label: 'Successful', tone: 'ok' };
-  }
-  if (s === 'refunded') return { label: 'Refunded', tone: 'bad' };
-  if (s === 'payment_failed' || s === 'fulfilment_failed' || s === 'failed') {
-    return { label: 'Failed', tone: 'bad' };
-  }
-  if (s === 'refund_failed' || s === 'quarantined') {
-    return { label: 'Needs attention', tone: 'bad' };
-  }
-  return { label: 'In progress', tone: 'pending' };
+  const headline = receiptHeadline(status);
+  return { label: headline.title, tone: headline.tone };
 }
 
 const STATUS_TONES = {

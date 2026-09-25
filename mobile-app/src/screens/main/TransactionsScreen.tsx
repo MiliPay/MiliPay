@@ -10,6 +10,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useAuthStore, useTransactionStore, useBankStore } from '../../store/useStore';
 import { shareReceiptAsPdf, shareReceiptAsImage } from '../../lib/receiptSharing';
 import { isMoneyReturned, rowStatus } from '../../lib/transactionStatus';
+import ReceiptHeadline from '../../components/ui/ReceiptHeadline';
 import { colors } from '../../theme/tokens';
 
 /**
@@ -442,31 +443,10 @@ export default function TransactionsScreen({ navigation }: any) {
                 collapsable={false}
                 className="w-full bg-white dark:bg-zinc-900 items-center p-2 rounded-2xl"
               >
-                {/* Brand / Green Badge */}
-                <View className="w-20 h-20 rounded-full bg-signal/15 items-center justify-center mb-3">
-                  <View
-                    className="w-14 h-14 rounded-full bg-signal items-center justify-center"
-                    style={{
-                      shadowColor: '#00C896',
-                      shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: 0.35,
-                      shadowRadius: 8,
-                      elevation: 6,
-                    }}
-                  >
-                    <Check color="#000" size={28} strokeWidth={3.5} />
-                  </View>
-                </View>
-
-                <View className="px-3 py-1 rounded-full bg-signal/15 mb-2">
-                  <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-xs uppercase tracking-wider">
-                    Transaction Successful
-                  </Text>
-                </View>
-
-                <Text className="text-slate-900 dark:text-white font-inter-bold text-3xl mb-4">
-                  -₦{selectedTx ? Number(selectedTx.amount).toLocaleString() : '0'}
-                </Text>
+                {/* Headline follows the real status. This said "Transaction
+                    Successful" with a debit sign for every transaction,
+                    including payments that never went through. */}
+                <ReceiptHeadline status={selectedTx?.status} amount={Number(selectedTx?.amount ?? 0)} />
 
                 {/* STS Token card if electricity */}
                 {selectedTx?.token && (
