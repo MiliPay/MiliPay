@@ -284,6 +284,13 @@ const MONO_EVENTS: Record<string, TransactionStatus> = {
   "mono.events.payment.successful": "paid",
 
   "direct_debit.payment_failed": "payment_failed",
+  // DirectPay's other two endings. Neither moved money, and "abandoned"
+  // matched nothing at all before — the transaction would have sat at
+  // `initiated` until the stuck alarm. Named rather than left to the
+  // substring net below.
+  // https://docs.mono.co/docs/payments/onetime/webhook-events
+  "direct_debit.payment_cancelled": "payment_failed",
+  "direct_debit.payment_abandoned": "payment_failed",
   "events.mandates.debit.failed": "payment_failed",
   "events.mandates.rejected": "payment_failed",
   "events.mandate.action.cancel": "payment_failed",

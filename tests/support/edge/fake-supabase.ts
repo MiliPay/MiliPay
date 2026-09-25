@@ -86,6 +86,17 @@ class Query implements PromiseLike<Result> {
     if (this.mode === "insert") {
       const failure = this.db.failInsertInto.get(this.table);
       if (failure) throw Object.assign(new Error(failure.message), { __result: failure });
+      // A unique index, enforced the way Postgres reports it: code 23505.
+      const key = this.db.uniqueKeys.get(this.table);
+      if (key) {
+        for (const row of this.inserted) {
+          const clash = rows.some((existing) => key.every((col) => existing[col] === row[col]));
+          if (clash) {
+            const error = { message: "duplicate key value violates unique constraint", code: "23505" };
+            throw Object.assign(new Error(error.message), { __result: error });
+          }
+        }
+      }
       for (const row of this.inserted) rows.push({ id: `${this.table}-${rows.length + 1}`, ...row });
       return this.inserted;
     }
@@ -133,8 +144,11 @@ export class FakeSupabase {
   /** Make an insert into this table fail with this error. */
   readonly failInsertInto = new Map<string, { message: string; code?: string }>();
   readonly rpcCalls: { name: string; args: unknown }[] = [];
+  /** Columns that together must be unique per table, like a unique index. */
+  readonly uniqueKeys = new Map<string, string[]>();
 
-  constructor(seed: Record<string, Row[]> = {}) {
+  constructor(seed: Record<string, Row[]> = {}, unique: Record<string, string[]> = {}) {
+    for (const [name, columns] of Object.entries(unique)) this.uniqueKeys.set(name, columns);
     for (const [name, rows] of Object.entries(seed)) {
       this.tables.set(name, rows.map((r) => ({ ...r })));
     }

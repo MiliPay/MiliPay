@@ -76,28 +76,8 @@ serve(async (req) => {
   const admin = adminClient();
   const eventId = await webhookEventId(payload, rawBody);
   const eventType = String(payload.event ?? payload.type ?? "");
-  const data = (payload.data ?? {}) as Record<string, unknown>;
-
-  /**
-   * Mono calls it `reference_number`, not `reference`.
-   *
-   * This read `data.reference` only, which Mono never sends on a debit event.
-   * Every webhook therefore fell through to "ignored:no_reference": the
-   * transaction stayed at `initiated`, never reached `paid`, and nothing was
-   * ever fulfilled. The whole rail was silently open-circuit.
-   *
-   * Confirmed against Mono's Direct Debit webhook reference, which shows
-   * data.reference_number carrying the value we sent as `reference` on the
-   * debit. The other spellings are kept because DirectPay and Direct Debit are
-   * different product lines at Mono and do not word this identically.
-   */
-  const reference = String(
-    data.reference_number ??
-      data.reference ??
-      data.referenceNumber ??
-      payload.reference ??
-      "",
-  ).trim();
+  const payment = paymentFields(payload);
+  const reference = payment.reference;
 
   // Idempotency. The unique index on (provider, event_id) is what actually
   // enforces this; the insert failing IS the duplicate check, so there is no
@@ -143,7 +123,7 @@ serve(async (req) => {
 
   const { data: tx, error: txError } = await admin
     .from("transactions")
-    .select("id, reference, status, amount, user_id")
+    .select("id, reference, status, amount, user_id, mono_payment_id")
     .eq("reference", reference)
     .maybeSingle();
 
@@ -166,13 +146,20 @@ serve(async (req) => {
   }
 
   if (target === "payment_failed") {
+    // DirectPay's cancelled and abandoned are the customer walking away, not
+    // the bank saying no; the record should say which.
+    const reason = /abandon/.test(eventType)
+      ? "customer abandoned the payment"
+      : /cancel/.test(eventType)
+      ? "payment cancelled"
+      : "bank declined";
     await transitionTransaction(admin, {
       reference,
       from: "initiated",
       to: "payment_failed",
-      reason: "bank declined",
+      reason,
       actor: "mono-webhook",
-      metadata: { eventType },
+      metadata: { eventType, monoStatus: payment.status, monoTransactionId: payment.id },
     });
     return finish("payment_failed");
   }
@@ -198,7 +185,7 @@ serve(async (req) => {
       to: "quarantined",
       reason: `partial collection (${eventType})`,
       actor: "mono-webhook",
-      metadata: { eventType, paidAmount: data.amount ?? null },
+      metadata: { eventType, paidAmountKobo: payment.amountKobo ?? null },
     });
     return finish("quarantined:partial_debit");
   }
@@ -210,13 +197,30 @@ serve(async (req) => {
     return finish(`ignored:unhandled_target_${target}`);
   }
 
+  // A success EVENT whose payment object says something else is two
+  // contradictory answers. Money is not spent on a contradiction: a person
+  // looks. (Absent status is not a contradiction — the mandate shape may not
+  // carry one.)
+  if (payment.status !== null && !["successful", "success", "paid"].includes(payment.status)) {
+    console.error(
+      `[mono-webhook] STATUS CONTRADICTION on ${reference}: event ${eventType}, object status ${payment.status}`,
+    );
+    await transitionTransaction(admin, {
+      reference,
+      from: "initiated",
+      to: "quarantined",
+      reason: `success event but payment status "${payment.status}"`,
+      actor: "mono-webhook",
+      metadata: { eventType, monoStatus: payment.status, monoTransactionId: payment.id },
+    });
+    return finish("quarantined:status_contradiction");
+  }
+
   // Before anything is spent, the amount the bank actually took must equal the
   // amount we priced.
   let paidNaira: number | null = null;
   try {
-    paidNaira = data.amount === undefined || data.amount === null
-      ? null
-      : koboToNaira(data.amount as number);
+    paidNaira = payment.amountKobo === null ? null : koboToNaira(payment.amountKobo);
   } catch {
     paidNaira = null;
   }
@@ -244,11 +248,16 @@ serve(async (req) => {
     to: "paid",
     actor: "mono-webhook",
     patch: {
-      mono_payment_id: typeof data.id === "string" ? data.id : null,
+      // The id vtu-service stored when it initiated the payment is what a
+      // refund is sent against, so it is never overwritten — this used to
+      // write `data.id ?? null`, which on a DirectPay event (id nested under
+      // data.object) replaced it with null and would have failed every refund.
+      // Only a row with no id yet takes the webhook's.
+      ...(tx.mono_payment_id ? {} : payment.id ? { mono_payment_id: payment.id } : {}),
       payment_provider: "mono",
       payment_reference: reference,
     },
-    metadata: { eventType, paidAmount: paidNaira },
+    metadata: { eventType, paidAmount: paidNaira, monoTransactionId: payment.id },
   });
 
   if (!moved.ok) {
@@ -272,6 +281,70 @@ serve(async (req) => {
 
   return finish("paid");
 });
+
+interface PaymentFields {
+  /** The reference WE sent when initiating — how the transaction is found. */
+  reference: string;
+  /** Kobo, as Mono sends it. */
+  amountKobo: number | null;
+  /** Mono's own id for this payment (txd_… on DirectPay). */
+  id: string | null;
+  /** DirectPay's status on data.object, lower-cased; null for other shapes. */
+  status: string | null;
+}
+
+/**
+ * Where the payment lives depends on the product.
+ *
+ * DirectPay — the mode this MVP runs on — nests it under data.object:
+ *
+ *   { "event": "direct_debit.payment_successful", "event_id": "…",
+ *     "data": { "type": "onetime-debit",
+ *               "object": { "id": "txd_…", "reference": "…", "amount": 20000,
+ *                           "status": "successful", … } } }
+ *
+ * https://docs.mono.co/docs/payments/onetime/webhook-events
+ *
+ * This used to read data.reference_number / data.reference and data.amount —
+ * the mandate (Direct Debit) shape. On a DirectPay event none of those exist,
+ * so every payment fell through to "ignored:no_reference" and was answered
+ * 200: Mono stopped retrying, the transaction stayed `initiated`, the customer
+ * had paid and nothing was delivered. The flat shape is still read, as the
+ * fallback, so mandate mode keeps working.
+ */
+function paymentFields(payload: Record<string, unknown>): PaymentFields {
+  const data = isRecord(payload.data) ? payload.data : {};
+  const object = isRecord(data.object) ? data.object : {};
+
+  const first = (...values: unknown[]): unknown =>
+    values.find((v) => v !== undefined && v !== null && String(v).trim() !== "");
+
+  const reference = first(
+    object.reference,
+    object.reference_number,
+    data.reference_number,
+    data.reference,
+    data.referenceNumber,
+    payload.reference,
+  );
+  const amount = first(object.amount, data.amount);
+  const id = first(object.id, data.id);
+  // Only DirectPay's documented object status. The mandate shape's status
+  // vocabulary is not documented, and guessing at it would quarantine good
+  // payments.
+  const status = first(object.status);
+
+  return {
+    reference: reference === undefined ? "" : String(reference).trim(),
+    amountKobo: typeof amount === "number" && Number.isFinite(amount) ? amount : null,
+    id: typeof id === "string" ? id : null,
+    status: typeof status === "string" ? status.trim().toLowerCase() : null,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 /**
  * Calls vtu-service's internal fulfil action with the service role.

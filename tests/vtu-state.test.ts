@@ -124,6 +124,17 @@ describe("Mono webhook events", () => {
     expect(statusForMonoEvent("events.mandates.expired")).toBe("payment_failed");
   });
 
+  it("maps every DirectPay ending by name", () => {
+    // https://docs.mono.co/docs/payments/onetime/webhook-events
+    expect(statusForMonoEvent("direct_debit.payment_successful")).toBe("paid");
+    expect(statusForMonoEvent("direct_debit.payment_failed")).toBe("payment_failed");
+    expect(statusForMonoEvent("direct_debit.payment_cancelled")).toBe("payment_failed");
+    // Matched nothing before, so the transaction sat at initiated.
+    expect(statusForMonoEvent("direct_debit.payment_abandoned")).toBe("payment_failed");
+    // A connection event carries no payment outcome.
+    expect(statusForMonoEvent("mono.events.account_connected")).toBeNull();
+  });
+
   it("does not treat a PARTIAL debit as payment", () => {
     // The old heuristic saw "successful" in the name and returned paid. The
     // amount check downstream would have caught it, but by luck.
