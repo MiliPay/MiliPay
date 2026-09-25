@@ -56,9 +56,11 @@ const COPY: Partial<Record<TransactionStatus, Copy>> = {
         ? `${naira(c.amountNgn)} ${c.serviceLabel} to ${c.beneficiary} was delivered.`
         : `${naira(c.amountNgn)} ${c.serviceLabel} was delivered.`,
   },
+  // Not "declined": this also fires when the customer abandons the payment
+  // page or Mono refuses to start it, and neither is the bank.
   payment_failed: {
-    title: "Payment declined",
-    body: (c) => `Your bank declined ${naira(c.amountNgn)} for ${c.serviceLabel}. Nothing was charged.`,
+    title: "Payment didn't go through",
+    body: (c) => `Your ${naira(c.amountNgn)} payment for ${c.serviceLabel} didn't go through. Nothing was charged.`,
   },
   fulfilment_failed: {
     title: "We could not complete this",

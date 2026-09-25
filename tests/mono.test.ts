@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { initiateDebit, isMonoConfigured, refundPayment } from "../supabase/functions/_shared/mono";
+import {
+  MonoError,
+  initiateDebit,
+  isMonoConfigured,
+  refundPayment,
+  toApiError,
+} from "../supabase/functions/_shared/mono";
 
 /**
  * Which Mono key moves money.
@@ -99,5 +105,36 @@ describe("payments use the PAYMENTS app's key", () => {
   it("refuses to call Mono at all with no key", async () => {
     await expect(initiateDebit(DEBIT)).rejects.toThrow("not configured");
     expect(sent).toHaveLength(0);
+  });
+});
+
+describe("what the customer is told when Mono refuses to start a payment", () => {
+  const FALLBACK = "This payment couldn't be started. Nothing was charged — please try again later.";
+
+  it("a refusal — like 'no access to DirectPay' — is 'not started', never 'your bank declined'", () => {
+    // The first sandbox purchase: Mono said the business had no DirectPay
+    // access, and the customer was told their bank had declined it.
+    const err = toApiError(
+      new MonoError("Your business does not have access to DirectPay", false, "403"),
+      FALLBACK,
+    );
+    expect(err.message).toBe(FALLBACK);
+    expect(err.code).toBe("PAYMENT_NOT_STARTED");
+    expect(err.status).toBe(502);
+    expect(err.message).not.toMatch(/bank (declined|rejected)/i);
+  });
+
+  it("a timeout or outage is 'briefly unavailable', and does not blame the bank either", () => {
+    const err = toApiError(new MonoError("Mono timed out", true), FALLBACK);
+    expect(err.code).toBe("PAYMENT_UNAVAILABLE");
+    expect(err.status).toBe(503);
+    expect(err.message).toMatch(/nothing was charged/i);
+    expect(err.message).not.toMatch(/your bank/i);
+  });
+
+  it("an unexpected error gets the same honest fallback", () => {
+    const err = toApiError(new Error("boom"), FALLBACK);
+    expect(err.message).toBe(FALLBACK);
+    expect(err.code).toBe("PAYMENT_NOT_STARTED");
   });
 });

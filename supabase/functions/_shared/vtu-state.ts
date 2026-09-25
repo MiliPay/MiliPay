@@ -405,7 +405,10 @@ export function isStuck(status: TransactionStatus, ageSeconds: number): boolean 
  */
 export const CUSTOMER_STATUS_COPY: Record<TransactionStatus, string> = {
   initiated: "Confirming with your bank…",
-  payment_failed: "Your bank declined this payment. Nothing was charged.",
+  // Covers a bank declining, the customer abandoning or cancelling, and Mono
+  // refusing to start the payment at all. Only the first is the bank, so the
+  // copy blames nobody.
+  payment_failed: "This payment didn't go through. Nothing was charged.",
   paid: "Payment confirmed",
   fulfilling: "Sending…",
   fulfilment_pending: "Confirming with the network. This can take a minute.",

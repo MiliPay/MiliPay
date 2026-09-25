@@ -1035,6 +1035,6 @@ serve(handler(async (req) => {
       reference, from: "initiated", to: "payment_failed",
       reason: err instanceof Error ? err.message : "debit failed", actor: "vtu-service",
     });
-    throw toApiError(err, "Your bank declined this payment. Nothing was charged.");
+    throw toApiError(err, "This payment couldn't be started. Nothing was charged — please try again later.");
   }
 }));

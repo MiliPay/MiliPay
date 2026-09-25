@@ -354,16 +354,26 @@ export async function createMandate(request: MandateRequest): Promise<MandateRes
 }
 
 /** Maps a MonoError onto the customer-facing shape without leaking provider detail. */
+/**
+ * What the customer is told when Mono refuses to START a payment.
+ *
+ * Never "your bank declined". At this point no bank has seen anything: a
+ * refusal here is Mono or our own configuration — the first sandbox purchase
+ * met "Your business does not have access to DirectPay" and the customer was
+ * told their bank had declined it. Mono's real reason is kept on the
+ * transaction's failure_reason, where staff can read it; the customer gets
+ * the truth, which is that the payment did not start and nothing was taken.
+ */
 export function toApiError(err: unknown, fallback: string): ApiError {
   if (err instanceof ApiError) return err;
   if (err instanceof MonoError) {
     return new ApiError(
       err.retryable
-        ? "Your bank could not be reached. Nothing was charged — please try again."
+        ? "Payments are briefly unavailable. Nothing was charged — please try again shortly."
         : fallback,
-      err.retryable ? 503 : 402,
-      err.retryable ? "PAYMENT_UNAVAILABLE" : "PAYMENT_DECLINED",
+      err.retryable ? 503 : 502,
+      err.retryable ? "PAYMENT_UNAVAILABLE" : "PAYMENT_NOT_STARTED",
     );
   }
-  return new ApiError(fallback, 502, "PAYMENT_FAILED");
+  return new ApiError(fallback, 502, "PAYMENT_NOT_STARTED");
 }

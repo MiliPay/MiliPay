@@ -44,7 +44,7 @@ export interface TransactionSnapshot {
  */
 export const STATUS_COPY: Record<TransactionStatus, string> = {
   initiated: 'Confirming with your bank…',
-  payment_failed: 'Your bank declined this payment. Nothing was charged.',
+  payment_failed: "This payment didn't go through. Nothing was charged.",
   paid: 'Payment confirmed',
   fulfilling: 'Sending…',
   fulfilment_pending: 'Confirming with the network. This can take a minute.',

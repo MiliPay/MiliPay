@@ -38,6 +38,7 @@ import { useAuthStore, useBankStore, useTransactionStore } from '../../store/use
 import { colors } from '../../theme/tokens';
 import { shareReceiptAsPdf, shareReceiptAsImage } from '../../lib/receiptSharing';
 import { supabase } from '../../lib/supabase';
+import { paymentAccountView } from '../../lib/paymentAccounts';
 import {
   fetchDynamicVariations,
   fetchElectricityProviders,
@@ -248,9 +249,26 @@ export default function QuickServiceScreen({ route, navigation }: any) {
 
   const user = useAuthStore((state) => state.user);
   const linkedAccounts = useBankStore((s) => s.linkedAccounts);
+  const accountsLoading = useBankStore((s) => s.isLoading);
+  const accountsError = useBankStore((s) => s.error);
+  const fetchAccounts = useBankStore((s) => s.fetchAccounts);
   const activeBankIndex = useBankStore((s) => s.activeBankIndex);
   const setActiveBankIndex = useBankStore((s) => s.setActiveBankIndex);
   const [selectedBankIndex, setSelectedBankIndex] = useState<number>(activeBankIndex || 0);
+
+  // Read the accounts on arrival rather than trusting whatever the home
+  // screen last loaded. Opening this screen first — after a reload, say — used
+  // to leave the list empty, and a bank linked or unlinked since would show
+  // stale. It is one small query.
+  useEffect(() => {
+    if (user?.id) void fetchAccounts(user.id);
+  }, [user?.id, fetchAccounts]);
+
+  const accountView = paymentAccountView({
+    count: linkedAccounts.length,
+    isLoading: accountsLoading,
+    error: accountsError,
+  });
 
   useEffect(() => {
     if (activeBankIndex >= 0 && activeBankIndex < linkedAccounts.length) {
@@ -699,10 +717,20 @@ export default function QuickServiceScreen({ route, navigation }: any) {
   // Validation
   const validateForm = (): boolean => {
     if (!activeAccount) {
-      Alert.alert(
-        'Link a bank account first',
-        'MiliPay pays for this straight from your bank, so there needs to be an account linked before you can buy anything.',
-      );
+      // Only claim there is no bank when a load has actually said so.
+      if (accountView === 'loading') {
+        Alert.alert('One moment', 'Your bank accounts are still loading.');
+      } else if (accountView === 'error') {
+        Alert.alert(
+          "Couldn't load your bank accounts",
+          'Check your connection and tap the payment account to try again.',
+        );
+      } else {
+        Alert.alert(
+          'Link a bank account first',
+          'MiliPay pays for this straight from your bank, so there needs to be an account linked before you can buy anything.',
+        );
+      }
       return false;
     }
 
@@ -1627,7 +1655,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
               </View>
             </View>
 
-            {linkedAccounts.length > 1 ? (
+            {accountView === 'list' ? (
               <View className="gap-2">
                 {linkedAccounts.map((acc, idx) => {
                   const isChosen = idx === selectedBankIndex;
@@ -1677,6 +1705,36 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                   );
                 })}
               </View>
+            ) : accountView === 'loading' ? (
+              <View className="flex-row items-center">
+                <ActivityIndicator size="small" color={colors.status.warn} />
+                <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs ml-3">
+                  Loading your bank accounts…
+                </Text>
+              </View>
+            ) : accountView === 'error' ? (
+              // Not "no bank": the accounts could not be READ. Saying none
+              // are linked would send the customer to link one they have.
+              <Pressable
+                onPress={() => {
+                  if (user?.id) void fetchAccounts(user.id);
+                }}
+                className="flex-row items-center justify-between active:opacity-70"
+              >
+                <View className="flex-row items-center flex-1">
+                  <View className="w-10 h-10 rounded-full bg-status-warn/15 items-center justify-center mr-3">
+                    <AlertTriangle color={colors.status.warn} size={20} />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-slate-900 dark:text-white font-inter-bold text-sm">
+                      Couldn't load your bank accounts
+                    </Text>
+                    <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">
+                      Tap to try again.
+                    </Text>
+                  </View>
+                </View>
+              </Pressable>
             ) : (
               <View className="flex-row items-center justify-between">
                 <View className="flex-row items-center flex-1">

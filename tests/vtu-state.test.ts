@@ -332,7 +332,10 @@ describe("what the customer is told", () => {
     }
   });
 
-  it("tells a customer whose bank declined that nothing was charged", () => {
+  it("tells a customer whose payment failed that nothing was charged — without blaming the bank", () => {
     expect(CUSTOMER_STATUS_COPY.payment_failed).toMatch(/nothing was charged/i);
+    // payment_failed also covers abandoning or cancelling, and Mono refusing
+    // to start the payment. None of those is the bank.
+    expect(CUSTOMER_STATUS_COPY.payment_failed).not.toMatch(/bank (declined|rejected)/i);
   });
 });

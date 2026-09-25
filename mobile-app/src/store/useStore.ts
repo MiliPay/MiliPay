@@ -576,21 +576,17 @@ export const useBankStore = create<BankState>((set, get) => ({
         throw new Error(data.error || "Unknown Edge Function Error");
       }
 
-      // balance arrives already normalised to Naira by the Edge Function.
-      const naira = Number(data.account.balance) || 0;
-      const newAccount: LinkedAccount = {
-        id: data.account.id,
-        bankName: data.account.bank_name,
-        accountName: data.account.account_name,
-        accountNumber: data.account.account_number,
-        balanceNgn: naira,
-        balance: formatNaira(naira),
-      };
-
-      set(state => ({
-        linkedAccounts: [...state.linkedAccounts, newAccount],
-        isLoading: false
-      }));
+      // Re-read the list from the server instead of appending the new account
+      // to it. Linking can switch an older link OFF on the server — a re-link
+      // of the same bank does — and appending kept that dead account in the
+      // list, where it could be chosen and the purchase refused with "That
+      // bank account is not linked to your profile".
+      const userId = sessionData.session?.user?.id;
+      if (userId) {
+        await get().fetchAccounts(userId);
+      } else {
+        set({ isLoading: false });
+      }
     } catch (err: any) {
       console.error("Error linking mono account:", err);
       set({ error: err.message, isLoading: false });
