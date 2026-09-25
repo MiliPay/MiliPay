@@ -18,29 +18,43 @@ import { roundNaira } from "../_shared/money.ts";
 import {
   CUSTOMER_STATUS_COPY,
   statusForIndeterminateFulfilment,
-  statusForProviderStatus,
+  statusForVtpassResponse,
   type TransactionStatus,
 } from "../_shared/vtu-state.ts";
 import { enqueueRefund, transitionTransaction } from "../_shared/transactions.ts";
-import * as bigisub from "../_shared/bigisub.ts";
-import type { CableProvider, PlanType, Variation } from "../_shared/bigisub.ts";
+// BigiSub is PARKED, not deleted: supabase/functions/_shared/bigisub.ts is
+// still in the repo, but nothing live imports it and
+// tests/gateway-isolation.test.ts fails if anything starts to. It was parked
+// because no BigiSub purchase endpoint accepts a client-supplied reference, so
+// an uncertain call can never be resolved by machine.
+import * as vtpass from "../_shared/vtpass.ts";
+import type { Variation } from "../_shared/vtpass.ts";
 
 /**
  * Quick services: airtime, data, electricity and cable.
  *
- * BigiSub is the single fulfilment gateway — VTPass is gone. Mono moves the
- * customer's money. Those are two separate pots, and the order between them is
- * the whole design:
+ * VTPass is the fulfilment gateway; Mono moves the customer's money. Those are
+ * two separate pots, and the order between them is the whole design:
  *
  *   1. price it here — the client never says what it pays
- *   2. check OUR BigiSub wallet, before the customer's bank is touched
+ *   2. check OUR VTPass wallet, before the customer's bank is touched
  *   3. write the transaction as `initiated` — before any money moves
  *   4. Mono debits the customer's chosen bank account
  *   5. ... webhook confirms ... -> `paid`
- *   6. only now spend our own BigiSub balance
+ *   6. only now spend our own VTPass balance
+ *
+ * Step 6 is reachable ONLY from `paid`, and fulfilTransaction enforces that by
+ * reading the row's status itself rather than trusting its caller. That is the
+ * invariant the whole file exists to protect: irreversible value is never
+ * dispensed before the money is confirmed, because airtime cannot be un-sold.
  *
  * Steps 4 and 5 are why a purchase is no longer one blocking request. The
  * customer's part ends at the fingerprint; the app follows the reference live.
+ *
+ * The same code runs against both faces of both providers. Which face is
+ * decided by MILIPAY_ENVIRONMENT and enforced by environment.ts — there is no
+ * separate sandbox code path, and no stubbed provider, because a rail proved
+ * against a mock is not proved at all.
  */
 
 // ─────────────────────────────────────────────────────────────
@@ -96,22 +110,21 @@ const settingsSchema = z.object({
   airtime_surcharge_percent: z.number().min(0).max(100).optional(),
 });
 
-const PLAN_TYPES = ["SME", "GIFTING", "DataTransfer", "SME2", "CGIFTING", "DataCOUPON", "SNS"] as const;
-
 const purchaseSchema = z.object({
   serviceType: z.enum(["airtime", "data", "power", "cable"]),
   provider: z.string().min(2).max(32),
   destination: z.string().min(3).max(32),
   customerPhone: z.string().max(20).optional(),
   variationCode: z.string().max(64).optional(),
-  /** Legacy shorthand from the app: sme -> SME, direct -> GIFTING. */
-  dataCategory: z.enum(["sme", "direct"]).optional(),
-  planType: z.enum(PLAN_TYPES).optional(),
+  // No dataCategory / planType. Those were BigiSub's plan shelves; VTPass has
+  // one data catalogue per network and variationCode identifies the bundle.
+  // An older app that still sends them is unaffected: z.object strips keys it
+  // does not declare rather than rejecting them.
   meterType: z.enum(["prepaid", "postpaid"]).default("prepaid"),
   /**
-   * Required for power and cable: BigiSub's pay/purchase endpoints demand the
-   * verified customer name, so the client must call verify_meter or
-   * verify_cable first.
+   * Required for power and cable. The customer must have seen whose meter or
+   * card they are crediting while a typo was still free to fix; the purchase
+   * path re-verifies server-side regardless.
    */
   customerName: z.string().max(200).optional(),
   customerAddress: z.string().max(400).optional(),
@@ -152,26 +165,35 @@ async function rateLimit(admin: SupabaseClient, key: string, limit: number, wind
   }
 }
 
-function planTypeFor(input: { planType?: PlanType; dataCategory?: "sme" | "direct" }): PlanType {
-  if (input.planType) return input.planType;
-  return input.dataCategory === "direct" ? "GIFTING" : "SME";
+/**
+ * MiliPay's provider id -> the VTPass serviceID that delivers it.
+ *
+ * Refuses rather than guessing. A provider with no mapping must produce a
+ * clear 400 here, not a request to a serviceID VTPass has never heard of.
+ */
+function requireServiceId(serviceType: string, provider: string): string {
+  const serviceId = vtpass.resolveServiceId(serviceType, provider);
+  if (!serviceId) {
+    throw new ApiError(
+      `${String(provider).toUpperCase()} is not available for ${serviceType}.`,
+      400,
+      "UNSUPPORTED_PROVIDER",
+    );
+  }
+  return serviceId;
 }
 
-function requireNetwork(provider: string): number {
-  const id = bigisub.networkId(provider);
-  if (id === null) {
-    throw new ApiError(`${provider.toUpperCase()} is not a supported network.`, 400, "UNSUPPORTED_NETWORK");
-  }
-  return id;
-}
-
-function requireCable(provider: string): CableProvider {
-  const value = String(provider).toLowerCase().trim();
-  if (!(bigisub.CABLE_PROVIDERS as readonly string[]).includes(value)) {
-    throw new ApiError(`${provider.toUpperCase()} is not a supported TV provider.`, 400, "UNSUPPORTED_PROVIDER");
-  }
-  return value as CableProvider;
-}
+/**
+ * Mono will not debit less than this.
+ *
+ * Their floor, not ours — enforced here so a customer is told before they
+ * authorise rather than after, when the debit comes back rejected and the
+ * transaction has to be unwound. Our own ₦50 minimum still applies on top for
+ * anything Mono would accept.
+ *
+ * https://docs.mono.co/docs/payments/direct-debit/debit-an-account
+ */
+const MONO_MINIMUM_DEBIT_NGN = 200;
 
 // ─────────────────────────────────────────────────────────────
 // Server-side pricing: the client never decides what it pays
@@ -180,9 +202,11 @@ function requireCable(provider: string): CableProvider {
 interface Priced {
   /** what the customer is charged */
   amount: number;
-  /** what BigiSub takes from our wallet */
+  /** what VTPass takes from our wallet */
   baseAmount: number;
-  /** BigiSub's own charge, where it levies one */
+  /** A biller's own charge, where one is levied separately. VTPass does not
+   *  break one out, so this is 0 today; the column stays because the ledger
+   *  distinguishes it from fee_amount, which is MiliPay margin. */
   serviceCharge: number;
   planLabel: string;
 }
@@ -201,31 +225,39 @@ async function priceTransaction(input: PurchaseInput, settings: VtuSettings): Pr
     if (!input.amount) throw new ApiError("Amount is required", 400, "AMOUNT_REQUIRED");
     const base = roundNaira(input.amount);
 
-    // The disco's own service charge comes from BigiSub, not from us, and the
-    // customer has to see it before they authorise. Guessing it would mean
-    // charging one figure and being billed another.
-    const providers = await bigisub.listElectricityProviders();
-    const disco = providers.find((p) => p.code === input.provider);
-    if (!disco) {
-      throw new ApiError("That electricity provider is not available.", 400, "UNSUPPORTED_PROVIDER");
-    }
-    if (base < disco.minAmount) {
+    // VTPass has no providers-with-charges endpoint of the kind BigiSub had,
+    // so there is no disco service charge to add here. The biller's own floor
+    // comes back from merchant-verify, which the client has already called —
+    // and which the purchase path re-checks below, because a client-side check
+    // is a courtesy, not a control.
+    const serviceId = requireServiceId("power", input.provider);
+    const verified = await vtpass
+      .verifyMerchant({
+        serviceId,
+        billersCode: input.destination,
+        type: input.meterType,
+      })
+      .catch((err) => {
+        throw new ApiError(
+          err instanceof Error ? err.message : "That meter could not be verified.",
+          400,
+          "VERIFICATION_FAILED",
+        );
+      });
+
+    if (verified.minAmount !== null && base < verified.minAmount) {
       throw new ApiError(
-        `${disco.name} requires at least ₦${disco.minAmount.toLocaleString()}.`,
+        `This meter requires at least ₦${verified.minAmount.toLocaleString()}.`,
         400,
         "BELOW_MINIMUM",
       );
     }
 
-    const serviceCharge = disco.serviceChargeType === "percentage"
-      ? roundNaira(base * (disco.serviceCharge / 100))
-      : disco.serviceCharge;
-
     return {
-      amount: roundNaira(base + serviceCharge + settings.power_convenience_fee_ngn),
+      amount: roundNaira(base + settings.power_convenience_fee_ngn),
       baseAmount: base,
-      serviceCharge,
-      planLabel: `${disco.name} (${input.meterType})`,
+      serviceCharge: 0,
+      planLabel: `${input.provider.toUpperCase()} (${input.meterType})`,
     };
   }
 
@@ -233,12 +265,10 @@ async function priceTransaction(input: PurchaseInput, settings: VtuSettings): Pr
   // browsing; it never prices a purchase.
   if (!input.variationCode) throw new ApiError("A bundle must be selected", 400, "VARIATION_REQUIRED");
 
-  let catalogue: Variation[];
-  if (input.serviceType === "data") {
-    catalogue = await bigisub.listDataPlans(requireNetwork(input.provider), planTypeFor(input), surcharge);
-  } else {
-    catalogue = await bigisub.listCablePlans(requireCable(input.provider), surcharge);
-  }
+  const catalogue: Variation[] = await vtpass.listVariations(
+    requireServiceId(input.serviceType, input.provider),
+    surcharge,
+  );
 
   const chosen = catalogue.find((v) => v.variation_code === input.variationCode);
   if (!chosen) {
@@ -261,7 +291,10 @@ function merchantTitle(input: PurchaseInput, planLabel: string): string {
   const provider = input.provider.toUpperCase();
   switch (input.serviceType) {
     case "data":
-      return `${provider} Data (${planTypeFor(input)})`;
+      // No plan-shelf suffix any more. SME/GIFTING was BigiSub's vocabulary;
+      // VTPass has one data catalogue per network and the variation name
+      // already says what the bundle is.
+      return `${provider} ${planLabel}`;
     case "power":
       return `${planLabel}`;
     case "cable":
@@ -279,7 +312,7 @@ async function cacheCatalogue(admin: SupabaseClient, id: string, serviceId: stri
   try {
     await admin.from("provider_catalogue_cache").upsert({
       id,
-      provider: "bigisub",
+      provider: "vtpass",
       service_id: serviceId,
       payload,
       fetched_at: new Date().toISOString(),
@@ -306,6 +339,7 @@ async function cachedCatalogue(admin: SupabaseClient, id: string) {
 interface TransactionRow {
   id: string;
   reference: string;
+  customer_id: string | null;
   status: TransactionStatus;
   amount: number;
   base_amount: number | null;
@@ -316,6 +350,30 @@ interface TransactionRow {
   merchant_name: string | null;
   operator_transaction_id: string | null;
   initiated_at: string | null;
+  created_at: string | null;
+}
+
+/**
+ * The timestamp a transaction's VTPass request_id is built from.
+ *
+ * initiated_at first, because that is what the purchase used; created_at as
+ * the backstop because it is NOT NULL with a default, so it always exists on a
+ * row that exists. Returning null is a refusal, not a fallback to "now" —
+ * see requestId() in vtpass.ts for why "now" would be worse than failing.
+ */
+function issuedAtFor(tx: { initiated_at: string | null; created_at?: string | null }): string | null {
+  return tx.initiated_at ?? tx.created_at ?? null;
+}
+
+/** The paying customer's own phone. customers.phone is NOT NULL. */
+async function customerPhone(admin: SupabaseClient, customerId: string | null): Promise<string> {
+  if (!customerId) return "";
+  const { data } = await admin
+    .from("customers")
+    .select("phone")
+    .eq("id", customerId)
+    .maybeSingle();
+  return typeof data?.phone === "string" ? data.phone : "";
 }
 
 async function settle(
@@ -360,7 +418,7 @@ async function fulfilTransaction(admin: SupabaseClient, reference: string): Prom
   const { data } = await admin
     .from("transactions")
     .select(
-      "id, reference, status, amount, base_amount, service_type, provider, beneficiary, variation_code, merchant_name, operator_transaction_id, initiated_at",
+      "id, reference, customer_id, status, amount, base_amount, service_type, provider, beneficiary, variation_code, merchant_name, operator_transaction_id, initiated_at, created_at",
     )
     .eq("reference", reference)
     .maybeSingle();
@@ -379,69 +437,79 @@ async function fulfilTransaction(admin: SupabaseClient, reference: string): Prom
   });
   if (!moved.ok) return tx.status; // another worker got there first
 
-  const phone = bigisub.normalizeNigerianPhone(tx.beneficiary ?? "");
+  const isTelecom = tx.service_type === "airtime" || tx.service_type === "data";
+  // Airtime and data: the beneficiary IS a phone. Power and cable: the
+  // beneficiary is a meter or smartcard, and VTPass wants the CUSTOMER's phone
+  // alongside it — that is where a prepaid token is texted. This used to
+  // normalise the meter number and send that as the phone.
+  const phone = isTelecom
+    ? vtpass.normalizeNigerianPhone(tx.beneficiary ?? "")
+    : vtpass.normalizeNigerianPhone(await customerPhone(admin, tx.customer_id));
   const base = Number(tx.base_amount ?? tx.amount);
+  const serviceId = vtpass.resolveServiceId(tx.service_type ?? "", tx.provider ?? "");
+
+  if (!serviceId) {
+    return await settle(admin, tx, "fulfilment_failed", {}, "unsupported service or provider");
+  }
+
+  // The request_id — our only idempotency key at VTPass — is derived from this.
+  // initiated_at is nullable in the schema, so created_at (NOT NULL, defaulted)
+  // is the backstop. Without a stable timestamp every retry and every requery
+  // would build a DIFFERENT id, which means no deduplication at the gateway and
+  // a requery asking about a purchase VTPass has never heard of.
+  const issuedAt = issuedAtFor(tx);
+  if (!issuedAt) {
+    // fulfilment_failed, not quarantined: we are already in `fulfilling`, and
+    // fulfilling -> quarantined is not a legal transition, so quarantining
+    // here would strand the row in `fulfilling` for ever. It is also the right
+    // answer — VTPass was never called, so nothing was dispensed and the
+    // honest exit is to give the money back, which settle() queues.
+    console.error(`[vtu] no timestamp on ${reference}; cannot build a stable request_id`);
+    return await settle(admin, tx, "fulfilment_failed", {}, "no stable gateway reference available");
+  }
 
   try {
-    let result: bigisub.Fulfilment;
+    // One call for all four services. VTPass distinguishes them by serviceID
+    // and variation_code rather than by endpoint, so there is no switch here
+    // and no way for a new service type to silently take a wrong branch.
+    const result = await vtpass.pay({
+      serviceType: tx.service_type ?? "",
+      serviceId,
+      reference: tx.reference,
+      // Airtime and data are delivered to a phone; power and cable to a meter
+      // or card, with the customer's phone carried alongside.
+      billersCode: isTelecom ? phone : (tx.beneficiary ?? ""),
+      phone,
+      baseAmount: base,
+      variationCode: tx.variation_code ?? undefined,
+      meterType: tx.service_type === "power" ? (tx.variation_code ?? "prepaid") : undefined,
+      issuedAt,
+    });
 
-    switch (tx.service_type) {
-      case "airtime":
-        result = await bigisub.purchaseAirtime({
-          network: requireNetwork(tx.provider ?? ""),
-          phone,
-          amount: base,
-        });
-        break;
-      case "data":
-        result = await bigisub.purchaseData({
-          network: requireNetwork(tx.provider ?? ""),
-          planId: Number(tx.variation_code),
-          phone: phone,
-        });
-        break;
-      case "cable":
-        result = await bigisub.purchaseCable({
-          cableType: requireCable(tx.provider ?? ""),
-          cardNo: tx.beneficiary ?? "",
-          phone,
-          amount: base,
-          customerName: tx.merchant_name ?? "MiliPay customer",
-        });
-        break;
-      case "power":
-        result = await bigisub.payElectricity({
-          company: tx.provider ?? "",
-          meterNo: tx.beneficiary ?? "",
-          meterType: (tx.variation_code as "prepaid" | "postpaid") ?? "prepaid",
-          phone,
-          amount: base,
-          customerName: tx.merchant_name ?? "MiliPay customer",
-        });
-        break;
-      default:
-        return await settle(admin, tx, "fulfilment_failed", {}, "unsupported service type");
-    }
+    // Code 000 alone is NOT delivered — it means the request was accepted. The
+    // outcome is the status field, and statusForVtpassResponse reads both.
+    const status = statusForVtpassResponse(result.providerCode, result.providerStatus);
 
-    return await settle(admin, tx, statusForProviderStatus(result.providerStatus), {
+    return await settle(admin, tx, status, {
       operator_reference: result.operatorReference,
-      operator_transaction_id: result.tranxId,
+      operator_transaction_id: result.operatorReference,
       token: result.token ?? null,
       units: result.units ?? null,
-      service_charge: result.serviceCharge ?? null,
-    });
+    }, `vtpass code ${result.providerCode}, status ${result.providerStatus ?? "none"}`);
   } catch (err) {
-    const indeterminate = err instanceof bigisub.FulfilmentError && err.indeterminate;
+    const indeterminate = err instanceof vtpass.FulfilmentError && err.indeterminate;
 
-    // THE IMPORTANT BRANCH. An indeterminate call is NOT a failure: BigiSub may
-    // have fulfilled and we simply did not hear. There is no idempotency key
-    // on their purchase endpoints, so this can never be retried — it is left
-    // pending, with no transaction id, for a human to resolve against their
-    // dashboard. Declaring failure here would refund a customer who was in
-    // fact credited.
+    // THE IMPORTANT BRANCH. An indeterminate call is NOT a failure: VTPass may
+    // have fulfilled and we simply did not hear. Declaring failure here would
+    // refund a customer who was in fact credited.
+    //
+    // Unlike BigiSub, this is always resolvable by machine. The request_id is
+    // derived from the reference and initiated_at, so requery() can ask about
+    // this exact purchase even though we never received a transaction id. What
+    // must NOT happen is a second pay() — see rule 3 in vtpass.ts.
     if (indeterminate) {
       console.error(
-        `[vtu] INDETERMINATE FULFILMENT on ${reference} — do not retry, resolve manually: ` +
+        `[vtu] INDETERMINATE FULFILMENT on ${reference} — requery will resolve, DO NOT re-pay: ` +
           (err instanceof Error ? err.message : String(err)),
       );
     }
@@ -456,11 +524,21 @@ async function fulfilTransaction(admin: SupabaseClient, reference: string): Prom
   }
 }
 
-/** Resolves a pending transaction using BigiSub's own transaction id. */
+/**
+ * Resolve a pending transaction by asking VTPass about it directly.
+ *
+ * This is the recovery path for every uncertain purchase, and it is why a
+ * timeout no longer triggers a blind reversal or a blind second purchase.
+ *
+ * It needs no operator transaction id. The request_id is derived from the
+ * reference and initiated_at, which we always have — so a purchase whose call
+ * timed out before returning anything is still resolvable. That was not true
+ * with BigiSub, where no id meant no answer and a human had to go and look.
+ */
 async function requeryTransaction(admin: SupabaseClient, reference: string): Promise<TransactionStatus> {
   const { data } = await admin
     .from("transactions")
-    .select("id, reference, status, amount, operator_transaction_id")
+    .select("id, reference, status, amount, initiated_at, created_at")
     .eq("reference", reference)
     .maybeSingle();
 
@@ -468,18 +546,22 @@ async function requeryTransaction(admin: SupabaseClient, reference: string): Pro
   const tx = data as TransactionRow;
   if (tx.status !== "fulfilment_pending") return tx.status;
 
-  // No transaction id means the purchase call never returned one, which means
-  // we do not know whether it happened. That cannot be resolved from here.
-  if (!tx.operator_transaction_id) return tx.status;
+  const issuedAt = issuedAtFor(tx);
+  if (!issuedAt) {
+    // Nothing to ask about: without the original timestamp we cannot rebuild
+    // the request_id we sent. A human has to resolve this one.
+    console.error(`[vtu] cannot requery ${reference}: no timestamp to rebuild request_id`);
+    return tx.status;
+  }
 
-  let result: bigisub.RequeryResult;
+  let result: vtpass.RequeryResult;
   try {
-    result = await bigisub.requeryTransaction(tx.operator_transaction_id);
+    result = await vtpass.requery(reference, issuedAt);
   } catch {
     return tx.status; // still unknown; the sweep tries again
   }
 
-  const status = statusForProviderStatus(result.status);
+  const status = statusForVtpassResponse(result.providerCode, result.providerStatus);
   if (status === "fulfilment_pending") return status;
 
   await transitionTransaction(admin, {
@@ -487,8 +569,14 @@ async function requeryTransaction(admin: SupabaseClient, reference: string): Pro
     from: "fulfilment_pending",
     to: status,
     actor: "requery",
-    patch: { token: result.token ?? null, units: result.units ?? null },
-    metadata: { providerStatus: result.status },
+    patch: {
+      token: result.token ?? null,
+      units: result.units ?? null,
+      ...(result.operatorReference
+        ? { operator_transaction_id: result.operatorReference }
+        : {}),
+    },
+    metadata: { providerCode: result.providerCode, providerStatus: result.providerStatus },
   });
 
   if (status === "fulfilment_failed") {
@@ -568,29 +656,21 @@ serve(handler(async (req) => {
   }
 
   // ---- Catalogues -------------------------------------------------------
-  if (action === "get_variations" || action === "get_sme_plans") {
+  if (action === "get_variations") {
     const settings = await loadSettings(admin);
-    const serviceType = String(body.serviceType ?? (action === "get_sme_plans" ? "data" : "data"));
+    const serviceType = String(body.serviceType ?? "data");
     const provider = String(body.provider ?? "mtn");
     const surcharge = surchargeFor(serviceType, settings);
+    const serviceId = requireServiceId(serviceType, provider);
 
-    const planType = planTypeFor({
-      planType: body.planType,
-      dataCategory: action === "get_sme_plans" ? "sme" : body.dataCategory,
-    });
-
-    const cacheId = serviceType === "cable"
-      ? `bigisub:cable:${provider}`
-      : `bigisub:data:${provider}:${planType}`;
+    const cacheId = `vtpass:${serviceType}:${serviceId}`;
 
     try {
-      const variations = serviceType === "cable"
-        ? await bigisub.listCablePlans(requireCable(provider), surcharge)
-        : await bigisub.listDataPlans(requireNetwork(provider), planType, surcharge);
+      const variations = await vtpass.listVariations(serviceId, surcharge);
 
       if (variations.length === 0) throw new Error("empty catalogue");
       await cacheCatalogue(admin, cacheId, `${serviceType}:${provider}`, variations);
-      return json({ success: true, provider, planType, surcharge, variations, plans: variations, stale: false });
+      return json({ success: true, provider, surcharge, variations, plans: variations, stale: false });
     } catch (err) {
       if (err instanceof ApiError) throw err;
       // A slow gateway used to be a hard 503, so a customer could not even
@@ -602,7 +682,6 @@ serve(handler(async (req) => {
         return json({
           success: true,
           provider,
-          planType,
           surcharge,
           variations: cached.variations,
           plans: cached.variations,
@@ -619,44 +698,52 @@ serve(handler(async (req) => {
   }
 
   if (action === "get_electricity_providers") {
-    try {
-      return json({ success: true, providers: await bigisub.listElectricityProviders() });
-    } catch {
-      throw new ApiError("Electricity providers are unavailable right now.", 503, "CATALOGUE_UNAVAILABLE");
-    }
+    // VTPass has no providers-with-charges endpoint, so this is the list we
+    // can actually deliver, with no service charge to declare. It is answered
+    // from the service map rather than invented: a disco missing from that map
+    // cannot be paid, so it must not be offered.
+    const providers = Object.entries(vtpass.SERVICE_MAP)
+      .filter(([, m]) => Boolean(m.power))
+      .map(([code]) => ({
+        code,
+        name: code.toUpperCase(),
+        // Zero, not unknown: VTPass levies no separate disco charge on top of
+        // the vend amount. The biller's own floor comes from merchant-verify,
+        // which the client calls before it can pay at all.
+        serviceCharge: 0,
+        serviceChargeType: "fixed",
+        minAmount: 0,
+      }));
+    return json({ success: true, providers });
   }
 
   // ---- Verification (required before power and cable purchases) ---------
-  if (action === "verify_meter") {
+  if (action === "verify_meter" || action === "verify_cable") {
     await rateLimit(admin, `vtu:verify:${caller.id}`, 20, 60);
-    try {
-      const verified = await bigisub.verifyMeter({
-        company: String(body.provider ?? ""),
-        meterNo: String(body.destination ?? ""),
-        meterType: body.meterType === "postpaid" ? "postpaid" : "prepaid",
-      });
-      return json({ success: true, ...verified });
-    } catch (err) {
-      throw new ApiError(
-        err instanceof Error ? err.message : "That meter could not be verified.",
-        400,
-        "VERIFICATION_FAILED",
-      );
-    }
-  }
+    const serviceType = action === "verify_meter" ? "power" : "cable";
+    const serviceId = requireServiceId(serviceType, String(body.provider ?? ""));
 
-  if (action === "verify_cable") {
-    await rateLimit(admin, `vtu:verify:${caller.id}`, 20, 60);
     try {
-      const verified = await bigisub.verifyCable({
-        cableName: requireCable(String(body.provider ?? "")),
-        cardNo: String(body.destination ?? ""),
+      const verified = await vtpass.verifyMerchant({
+        serviceId,
+        billersCode: String(body.destination ?? ""),
+        type: serviceType === "power"
+          ? (body.meterType === "postpaid" ? "postpaid" : "prepaid")
+          : undefined,
       });
-      return json({ success: true, ...verified });
+      return json({
+        success: true,
+        customerName: verified.customerName,
+        customerAddress: verified.customerAddress,
+        minAmount: verified.minAmount,
+        currentBouquet: verified.currentBouquet,
+      });
     } catch (err) {
       if (err instanceof ApiError) throw err;
       throw new ApiError(
-        err instanceof Error ? err.message : "That smartcard could not be verified.",
+        err instanceof Error
+          ? err.message
+          : `That ${serviceType === "power" ? "meter" : "smartcard"} could not be verified.`,
         400,
         "VERIFICATION_FAILED",
       );
@@ -688,16 +775,29 @@ serve(handler(async (req) => {
   }
 
   // ---- Purchase --------------------------------------------------------
+  // Only an explicit "purchase" (or no action at all) may reach the money
+  // path. Anything else used to fall through to here, so a retired action
+  // name — get_sme_plans, say, from an old build — would have been run as a
+  // purchase attempt and failed on validation rather than being refused.
+  if (action !== "purchase") {
+    throw new ApiError(`Unknown action: ${action}`, 400, "UNKNOWN_ACTION");
+  }
+
   const { mode, coherence } = readFulfilmentEnvironment(Deno.env);
 
   if (!coherence.ok) {
     console.error("[vtu] refusing to fulfil:", coherence.reason);
     throw new ApiError("Quick services are misconfigured and have been disabled.", 503, "FULFILMENT_MISCONFIGURED");
   }
+  // `simulated` is deliberately NOT a path through here. It exists for
+  // provider-free testing, and letting it fall through to the real purchase
+  // flow with stubbed responses is exactly the thing that would hollow out
+  // this rail: the MVP proof has to be Mono sandbox plus VTPass sandbox, not
+  // our own idea of what they would have said.
   if (mode !== "live") {
     throw new ApiError(disabledMessage(mode), 503, "FULFILMENT_DISABLED");
   }
-  if (!bigisub.isConfigured()) {
+  if (!vtpass.isConfigured()) {
     throw new ApiError("Quick services are unavailable right now.", 503, "FULFILMENT_UNAVAILABLE");
   }
   if (!isMonoConfigured()) {
@@ -709,8 +809,10 @@ serve(handler(async (req) => {
   const input = parse(purchaseSchema, body);
 
   if ((input.serviceType === "power" || input.serviceType === "cable") && !input.customerName) {
-    // BigiSub's pay/purchase endpoints require the verified name, so skipping
-    // verification would fail at the gateway — after the customer had paid.
+    // Not a gateway requirement under VTPass, but still enforced: the customer
+    // has to have seen whose meter or card they are crediting while the typo
+    // was still free to fix. priceTransaction re-verifies server-side anyway,
+    // because a client-side check is a courtesy rather than a control.
     throw new ApiError(
       "This account needs to be verified before payment.",
       400,
@@ -728,14 +830,29 @@ serve(handler(async (req) => {
   const settings = await loadSettings(admin);
   const priced = await priceTransaction(input, settings);
 
+  // ---- Mono's own floor, checked before anything is written -------------
+  // Mono will not debit under ₦200. Catching it here means the customer is
+  // told before they authorise, rather than having a transaction opened, a
+  // debit rejected and the whole thing unwound behind a spinner.
+  if (priced.amount < MONO_MINIMUM_DEBIT_NGN) {
+    throw new ApiError(
+      `The smallest payment we can take from a bank account is ₦${MONO_MINIMUM_DEBIT_NGN}.`,
+      400,
+      "BELOW_PAYMENT_MINIMUM",
+    );
+  }
+
   // ---- OUR wallet, checked BEFORE the customer's bank ------------------
   // Leg 1 moves the customer's money to us; leg 2 spends our pre-funded
-  // BigiSub balance. Separate pots. An empty wallet means taking the money
-  // and being unable to deliver.
-  const wallet = await bigisub.walletBalance();
-  if (wallet !== null && wallet.balance < priced.baseAmount + priced.serviceCharge) {
+  // VTPass balance. Separate pots. An empty wallet means taking the money and
+  // being unable to deliver.
+  //
+  // In sandbox this reads the sandbox wallet, which is the point: a sandbox
+  // run that drains the test wallet must fail the same way production would.
+  const wallet = await vtpass.walletBalance();
+  if (wallet !== null && wallet < priced.baseAmount) {
     console.error(
-      `[vtu] BIGISUB WALLET TOO LOW: ${wallet.balance} < ${priced.baseAmount + priced.serviceCharge} — refusing sale`,
+      `[vtu] VTPASS WALLET TOO LOW: ${wallet} < ${priced.baseAmount} — refusing sale`,
     );
     throw new ApiError(
       "This service is briefly unavailable. Nothing was charged — please try again shortly.",
@@ -761,7 +878,7 @@ serve(handler(async (req) => {
   const reference = `MP-BIL-${Date.now().toString(36).toUpperCase()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 
   const isTelecom = input.serviceType === "airtime" || input.serviceType === "data";
-  const destination = isTelecom ? bigisub.normalizeNigerianPhone(input.destination) : input.destination;
+  const destination = isTelecom ? vtpass.normalizeNigerianPhone(input.destination) : input.destination;
   const title = merchantTitle(input, priced.planLabel);
   const now = new Date().toISOString();
 
@@ -771,9 +888,17 @@ serve(handler(async (req) => {
       reference,
       user_id: caller.id,
       customer_id: profile.id,
-      // For power and cable this carries the verified account holder, which
-      // BigiSub's own endpoints require back at fulfilment time.
-      merchant_name: input.customerName ?? title,
+      // Always the service label, never a person's name.
+      //
+      // This used to be `input.customerName ?? title`, because BigiSub's pay
+      // endpoints needed the verified account holder read back at fulfilment
+      // time. VTPass does not, so nothing consumes it any more — but the app
+      // and the portals DISPLAY merchant_name as the merchant. The effect was
+      // that an electricity purchase showed up in the customer's history as
+      // "ADEKUNLE OLAITAN" instead of "IKEDC (prepaid)". The verified holder
+      // is preserved on the opening transaction_event below, which is where a
+      // fact about the purchase belongs rather than in a display field.
+      merchant_name: title,
       amount: priced.amount,
       base_amount: priced.baseAmount,
       fee_amount: roundNaira(priced.amount - priced.baseAmount - priced.serviceCharge),
@@ -783,7 +908,7 @@ serve(handler(async (req) => {
       provider: input.provider,
       beneficiary: destination,
       variation_code: input.serviceType === "power" ? input.meterType : input.variationCode ?? null,
-      fulfilment_provider: "bigisub",
+      fulfilment_provider: "vtpass",
       payment_provider: "mono",
       account_used: input.accountId,
       initiated_at: now,
@@ -803,7 +928,15 @@ serve(handler(async (req) => {
     from_status: null,
     to_status: "initiated",
     actor: "vtu-service",
-    metadata: { serviceType: input.serviceType, provider: input.provider, title },
+    metadata: {
+      serviceType: input.serviceType,
+      provider: input.provider,
+      title,
+      // Who the biller said owns this meter or card, at the moment the
+      // customer authorised it. Kept for the audit trail and for receipts.
+      ...(input.customerName ? { verifiedAccountHolder: input.customerName } : {}),
+      ...(input.customerAddress ? { verifiedAddress: input.customerAddress } : {}),
+    },
   });
 
   // ---- Leg 1: ask the bank ---------------------------------------------
@@ -862,7 +995,15 @@ serve(handler(async (req) => {
       reference,
       amount: priced.amount,
       description: title,
-      customer: { name: account.account_name, phone: input.customerPhone ?? null },
+      // Mono's initiate endpoint REQUIRES a customer object carrying either a
+      // Mono customer id or name AND email. This passed name and phone only,
+      // which their validator rejects — so every DirectPay purchase would have
+      // failed at the first call. The profile's email is the one we hold.
+      customer: {
+        name: account.account_name || profile.fullName || "MiliPay customer",
+        email: profile.email ?? null,
+        phone: input.customerPhone ?? null,
+      },
       mandateId,
     });
 

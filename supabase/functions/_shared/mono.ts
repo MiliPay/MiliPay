@@ -23,9 +23,25 @@ import { koboToNaira, nairaToKobo } from "./money.ts";
  * docs/palm-scanner-integration.md's sibling note in the plan. Defaulting to
  * the mode we know exists is the safe way round.
  *
- * ENDPOINT PATHS ARE UNVERIFIED against a live Mono account. They follow the
- * published v2/v3 shapes and are isolated here so correcting one is a
+ * ENDPOINT PATHS were checked against Mono's published API reference in
+ * September 2026 and match: /v2/payments/initiate for DirectPay,
+ * /v3/payments/mandates and /v3/payments/mandates/{id}/debit for Direct Debit.
+ * Amounts are kobo on both, which is why nairaToKobo is applied here and
+ * nowhere else. They remain isolated in this module so correcting one is a
  * one-line change rather than a hunt.
+ *
+ * SANDBOX. Mono has no separate sandbox host — test and live are the same
+ * host, told apart by the key prefix (test_… / live_…), which is why
+ * environment.ts classifies Mono from MONO_SECRET_KEY rather than the URL.
+ * Things that behave differently on test keys, and that the flow has to
+ * tolerate rather than be surprised by:
+ *
+ *   - the account balance is fixed at ₦10,000, and sufficiency is checked
+ *     against it
+ *   - the minimum debit is ₦200, enforced in vtu-service before a transaction
+ *     is ever opened
+ *   - a mandate created through the API is auto-approved, but its
+ *     events.mandates.ready webhook does not arrive for an hour
  */
 
 const ENDPOINTS = {

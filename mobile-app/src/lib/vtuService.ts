@@ -39,13 +39,10 @@ export interface VtuRechargePayload {
   customerPhone?: string;
   variationCode?: string;
   meterType?: 'prepaid' | 'postpaid';
-  dataCategory?: 'sme' | 'direct';
-  /** BigiSub plan shelf. 'sme' / 'direct' above are the legacy shorthand. */
-  planType?: 'SME' | 'GIFTING' | 'DataTransfer' | 'SME2' | 'CGIFTING' | 'DataCOUPON' | 'SNS';
   /**
-   * Electricity and cable only, and required: BigiSub's own endpoints demand
-   * the verified account holder, so the purchase is refused without one rather
-   * than failing at the gateway after the customer has paid.
+   * Electricity and cable only, and required. The customer must have seen
+   * whose meter or card they are crediting while a typo was still free to fix;
+   * the server re-verifies before it prices the purchase either way.
    */
   customerName?: string;
   customerAddress?: string;
@@ -92,14 +89,6 @@ export function normalizeNigerianPhone(phone?: string): string {
   if (clean.startsWith('+234')) return '0' + clean.slice(4);
   if (clean.startsWith('234') && clean.length > 10) return '0' + clean.slice(3);
   return clean;
-}
-
-export function resolveBigisubNetworkId(telco: string): number {
-  const t = (telco || '').toLowerCase().trim();
-  if (t === 'airtel') return 2;
-  if (t === 'glo') return 3;
-  if (t === '9mobile' || t === 'etisalat') return 4;
-  return 1;
 }
 
 /**
@@ -168,28 +157,6 @@ export async function fetchDynamicVariations(
 
   variationsCache.set(cacheKey, { data: data.variations, timestamp: Date.now() });
   return data.variations;
-}
-
-/** Wholesale SME data catalogue (BigiSub). */
-export async function fetchSmeDataPlans(provider: string): Promise<DynamicVariation[]> {
-  const networkId = resolveBigisubNetworkId(provider);
-  const cacheKey = `sme_${networkId}`;
-  const cached = variationsCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-    return cached.data;
-  }
-
-  const { data, error } = await supabase.functions.invoke('vtu-service', {
-    body: { action: 'get_sme_plans', network: networkId, provider },
-  });
-
-  if (error || !data?.success || !Array.isArray(data.plans)) {
-    console.warn('[vtuService] SME plans unavailable', error ?? data);
-    return [];
-  }
-
-  variationsCache.set(cacheKey, { data: data.plans, timestamp: Date.now() });
-  return data.plans;
 }
 
 export interface VtuMargins {
@@ -274,8 +241,6 @@ export async function executeVtuRecharge(
       destination: payload.destination,
       customerPhone: payload.customerPhone,
       variationCode: payload.variationCode,
-      dataCategory: payload.dataCategory,
-      planType: payload.planType,
       customerName: payload.customerName,
       customerAddress: payload.customerAddress,
       meterType: payload.meterType ?? 'prepaid',
@@ -290,10 +255,9 @@ export async function executeVtuRecharge(
 /**
  * Verify an electricity meter or a TV smartcard.
  *
- * Not optional and not merely a nicety: BigiSub's pay/purchase endpoints
- * require the account holder's name exactly as their own verify call returned
- * it. Skipping this means the purchase is rejected by the gateway AFTER the
- * customer's bank has been debited.
+ * Not optional and not merely a nicety: it returns the biller's own minimum,
+ * which we would otherwise be guessing at, and the server refuses to price a
+ * power or cable purchase without it.
  *
  * It also lets the customer catch their own typo — they see whose meter they
  * are about to credit before any money moves.
@@ -317,7 +281,7 @@ export async function verifyBillAccount(args: {
   });
 
   // Same trap as unwrap() above: on a non-2xx, `data` is null and the reason
-  // BigiSub gave lives in the unread response body. Reading it is the
+  // the provider gave lives in the unread response body. Reading it is the
   // difference between "That account could not be verified" and "Meter number
   // not found on IKEDC".
   if (error) {

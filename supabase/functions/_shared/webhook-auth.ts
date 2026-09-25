@@ -119,21 +119,38 @@ export async function verifyWebhookSignature(input: VerifyInput): Promise<Verifi
 }
 
 /**
- * Pulls a stable event id out of a provider payload so a replay can be
- * recognised. Falls back to a hash of the body: a provider that sends no id at
- * all still must not be replayable.
+ * Pulls a stable EVENT id out of a provider payload so a replay can be
+ * recognised.
+ *
+ * A REFERENCE IS NOT AN EVENT ID, and this used to treat it as one. That is a
+ * silent, total failure of the payment rail, not a nuisance:
+ *
+ *   1. Mono sends `payment_processing` for reference X. We store an idempotency
+ *      row keyed on X, map the event to nothing, and correctly ignore it.
+ *   2. Mono then sends `payment_successful` for the same reference X.
+ *   3. The unique index rejects it as a duplicate. We answer 200.
+ *
+ * The transaction never leaves `initiated`, the customer's money is gone,
+ * nothing is ever delivered, and Mono is told everything went fine. DirectPay
+ * — the mode this MVP runs on — sends exactly that pair, so this was reachable
+ * on the very first sandbox purchase.
+ *
+ * The fallback is a hash of the body, which differs between two events about
+ * the same transaction and matches for a true byte-identical replay. A retry
+ * whose body differs only by a timestamp will slip past this index, which is
+ * why the state machine refuses to re-apply a status a transaction has already
+ * left — the two together are what make a replay safe.
  */
 export async function webhookEventId(
   payload: Record<string, unknown>,
   rawBody: string,
 ): Promise<string> {
-  for (const key of ["id", "event_id", "eventId", "reference", "_id"]) {
+  // ENVELOPE ONLY. Anything inside `data` describes the RESOURCE — the
+  // payment, the mandate, the transaction — and is therefore the same on every
+  // event about it, which is the precise mistake described above. Mono puts
+  // its per-event id at the top level as `event_id`.
+  for (const key of ["id", "event_id", "eventId", "_id"]) {
     const value = payload?.[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  const data = payload?.data as Record<string, unknown> | undefined;
-  for (const key of ["id", "reference", "_id"]) {
-    const value = data?.[key];
     if (typeof value === "string" && value.trim()) return value.trim();
   }
   return `sha256:${await sha256Hex(rawBody)}`;

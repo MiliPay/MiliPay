@@ -70,7 +70,7 @@ a shared React package, and a Supabase backend (Postgres + RLS + Deno Edge Funct
 | POS terminal registry, blacklist, cascade delete | **Built** | `SECURITY DEFINER` RPC preserves transaction history |
 | Support ticketing (two-tier) | **Built** | Ticket IDs minted only on resolve or escalate |
 | KYC tiers, daily caps, PIN challenge | **Built** | Server-enforced in Edge Functions; client cannot bypass |
-| Bill payments / airtime (VTU) | **Built** | VTPass + BigiSub, server-side pricing, atomic debit with reversal |
+| Bill payments / airtime (VTU) | **Built** | VTPass fulfilment, Mono DirectPay collection, server-side pricing, refund queue |
 | Bank account linking | **Built** | Mono account auth, max 3 active accounts per customer |
 | Transaction ledger | **Built** | Monthly range partitions, auto-created by trigger |
 | Palm capture (client) | **Partial** | Bridge contract + simulation gate exist; **no native bridge in this repo** |
@@ -108,7 +108,7 @@ flowchart TB
     subgraph External ["External services"]
         Matcher["Palm 1:N matcher<br/>NOT IN THIS REPO"]
         Mono["Mono<br/>(account linking + name lookup)"]
-        VTU["VTPass / BigiSub<br/>(airtime, data, power, cable)"]
+        VTU["VTPass<br/>(airtime, data, power, cable)"]
     end
 
     FP08PV -.-> AgentPortal
@@ -257,21 +257,44 @@ The app holds **no operator credentials**. `src/lib/vtuService.ts` is a thin cli
 
 ## Bill payments and airtime
 
-Fully implemented and the most complete money flow in the repository.
+Mono DirectPay collects → the Mono webhook confirms → VTPass delivers. Built and covered by the
+unit suite; **not yet proven end to end** against the Mono and VTPass sandboxes.
 
-- **VTPass** — airtime, data, electricity, cable TV.
-- **BigiSub** — wholesale SME data plans.
+- **VTPass** — airtime, data, electricity, cable TV. The only gateway on the
+  purchase, reconciliation and recovery paths.
+- **Mono** — collects the customer's money from their linked bank account.
+  `MONO_PAYMENT_MODE=directpay` (one-off authorisation per payment) is the
+  default; `mandate` is wired for later.
+- **BigiSub** — parked. `supabase/functions/_shared/bigisub.ts` is still in the
+  repository, but nothing live imports it and nothing reads `BIGISUB_*`. It was
+  parked because no BigiSub purchase endpoint accepts a client-supplied
+  reference, so an uncertain call could never be resolved by machine — a human
+  had to check their dashboard. VTPass carries `request_id`, derived from the
+  reference and the transaction's own timestamp, so every pending purchase can
+  be requeried. `tests/gateway-isolation.test.ts` fails if anything on a money
+  path, the mobile app or a portal refers to BigiSub again.
 
 Pricing is resolved **server-side** from the operator catalogue with a configurable margin. The
 client submits what it wants to buy, never what it costs.
 
-Purchase sequence: rate limit → profile load → server-side pricing → idempotency check → tier and
-PIN enforcement → **atomic debit** → fulfil with the operator → **automatic reversal** if
-fulfilment fails. A failed reversal is logged loudly for manual settlement.
+Two separate pots move in a purchase: the customer's bank → MiliPay (Mono), then MiliPay's
+pre-funded VTPass wallet → the operator. **The customer's money is confirmed before ours is
+spent**, because airtime cannot be un-sold.
 
-The debit is a single `UPDATE ... WHERE balance >= amount` inside a `SECURITY DEFINER` RPC, so
-concurrent purchases cannot overdraw the account. Retries reuse a request ID derived from the
-reference, so the operator deduplicates them.
+```
+vtu-service   rate limit → price → ₦200 Mono floor → VTPass wallet check → tier/PIN limits
+              → transaction row written as `initiated` → Mono debit initiated
+mono-webhook  signature verified → replay rejected → amount checked → `paid`
+vtu-service   `paid` → `fulfilling` → one VTPass /pay → delivered | pending | failed
+vtu-reconcile every 2 min: requery pending purchases by request_id
+              every 5 min: retry refunds with backoff (a queue, not a log line)
+              every 15 min: flag anything stuck > 1 h; warn on a low VTPass wallet
+```
+
+A purchase call that times out is **pending, never failed**, and is never paid a second time:
+VTPass may already have delivered, so the reconciler asks it with `requery` instead. A failure
+queues a refund; a paid amount that disagrees with the priced one is quarantined for a person.
+The transaction states are in `supabase/functions/_shared/vtu-state.ts`.
 
 ---
 
@@ -363,8 +386,9 @@ supabase secrets set MONO_SECRET_KEY=... VTPASS_API_KEY=...
 Client-safe: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_ALLOW_BIOMETRIC_SIMULATION`.
 The anon key is public by design and is only as strong as the RLS behind it.
 
-Server-only: the service role key, `PALM_MATCH_*`, `MONO_*`, `VTPASS_*`, `BIGISUB_*`, and
-notification provider keys.
+Server-only: the service role key, `PALM_MATCH_*`, `MONO_*`, `VTPASS_*`, and notification
+provider keys. (`BIGISUB_*` belongs to the parked adapter; nothing live reads it, but if it is
+ever set it is server-only too, and the pre-commit secret scan still blocks it.)
 
 `PALM_MATCH_URL` is **required** for card-present payments. Leaving it unset is safe — the
 endpoint declines every transaction — but nothing will authorise until a matcher is reachable.

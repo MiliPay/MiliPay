@@ -40,7 +40,6 @@ import { shareReceiptAsPdf, shareReceiptAsImage } from '../../lib/receiptSharing
 import { supabase } from '../../lib/supabase';
 import {
   fetchDynamicVariations,
-  fetchSmeDataPlans,
   fetchElectricityProviders,
   getActiveVtuMargins,
   executeVtuRecharge,
@@ -50,6 +49,12 @@ import {
 } from '../../lib/vtuService';
 import { ConfirmIdentitySheet } from '../../components/ui/ConfirmIdentitySheet';
 import { NetworkLogo } from '../../components/ui/NetworkLogo';
+import {
+  IS_SANDBOX,
+  sandboxMeterCases,
+  sandboxPhoneCases,
+  sandboxSmartcardCases,
+} from '../../lib/environment';
 import { PurchaseProgressSheet } from '../../components/ui/PurchaseProgressSheet';
 import {
   watchTransaction,
@@ -90,7 +95,18 @@ const CABLE_PROVIDERS = [
   { id: 'startimes', name: 'StarTimes' },
 ];
 
-const AIRTIME_PRESETS = [100, 200, 500, 1000, 2000, 5000];
+/**
+ * Mono will not debit a bank account for less than this. Their floor, not
+ * ours, and mirrored by MONO_MINIMUM_DEBIT_NGN in the vtu-service Edge
+ * Function, which is where it is actually enforced.
+ *
+ * https://docs.mono.co/docs/payments/direct-debit/debit-an-account
+ */
+const MONO_MINIMUM_DEBIT_NGN = 200;
+
+// ₦100 is gone from the presets: Mono would reject it, so offering it as a
+// one-tap choice was offering a button that cannot work.
+const AIRTIME_PRESETS = [200, 500, 1000, 2000, 5000, 10000];
 const POWER_PRESETS = [1000, 2000, 5000, 10000, 20000];
 
 // Telco Prefix Auto-detection
@@ -110,6 +126,49 @@ function detectTelcoFromPrefix(phone: string): string | null {
   if (nineMobilePrefixes.includes(prefix)) return '9mobile';
   return null;
 }
+
+/**
+ * The VTPass sandbox's test inputs, offered as chips.
+ *
+ * Renders NOTHING unless this build declares itself sandbox. IS_SANDBOX is a
+ * compile-time constant inlined by Metro, so in a production bundle the guard
+ * below is `false === true` and every chip is dead code that never ships —
+ * there is no runtime flag, and no server response, that can bring them back.
+ *
+ * They exist because the VTPass sandbox fails ANY value outside its fixed
+ * test list, so without them the first thing anyone testing does is type a
+ * real number and watch it fail for reasons that look like our bug.
+ */
+const SandboxChips = ({
+  cases,
+  onPick,
+}: {
+  cases: { label: string; value: string }[];
+  onPick: (value: string) => void;
+}) => {
+  if (!IS_SANDBOX || cases.length === 0) return null;
+  return (
+    <View className="flex-row flex-wrap items-center mt-2 -mb-1">
+      <Text className="text-amber-600 dark:text-amber-400 font-inter-bold text-[9px] uppercase tracking-wider mr-2 mb-1.5">
+        Sandbox
+      </Text>
+      {cases.map((c) => (
+        <Pressable
+          key={c.value}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            onPick(c.value);
+          }}
+          className="bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 rounded-full mr-1.5 mb-1.5 active:opacity-60"
+        >
+          <Text className="text-amber-700 dark:text-amber-300 font-inter-bold text-[10px]">
+            {c.label}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+};
 
 /** A catalogue that came back with nothing in it, said out loud. */
 const CatalogueEmpty = ({ title, body }: { title: string; body: string }) => (
@@ -212,7 +271,11 @@ export default function QuickServiceScreen({ route, navigation }: any) {
 
   // Data bundle state
   const [selectedDataPlan, setSelectedDataPlan] = useState<any>(null);
-  const [dataCategory, setDataCategory] = useState<'sme' | 'direct'>('sme');
+  // The SME / Direct toggle is gone. Those were BigiSub's two plan shelves;
+  // VTPass publishes ONE data catalogue per network, so both sides of the
+  // toggle fetched the same list while the UI promised "Save 60%" for picking
+  // one of them. A choice that changes nothing, sold as a discount, is worse
+  // than no choice at all.
 
   // Power state
   const [selectedDisco, setSelectedDisco] = useState<string>('ikedc');
@@ -240,7 +303,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
    * Tracked separately from the map being non-empty, and deliberately so.
    *
    * The disco codes in DISCOS below are ours; the ones in this map come from
-   * BigiSub. If the two ever disagree, "we have no entry for this disco" must
+   * the gateway. If the two ever disagree, "we have no entry for this disco" must
    * not be confused with "we are still loading" — the first would otherwise
    * disable the Pay button for ever with no explanation. Loaded-but-absent
    * means we show what we know and let the server, which looks the charge up
@@ -269,8 +332,9 @@ export default function QuickServiceScreen({ route, navigation }: any) {
   const [progressTitle, setProgressTitle] = useState('');
   const stopWatchingRef = useRef<(() => void) | null>(null);
 
-  // Electricity and cable cannot be paid without the verified account holder;
-  // BigiSub's own endpoints require it.
+  // Electricity and cable cannot be paid without the verified account holder:
+  // the server refuses to price either without one, and it is what lets the
+  // customer catch a typo while it is still free.
   const [verifiedName, setVerifiedName] = useState<string | null>(null);
   const [verifiedAddress, setVerifiedAddress] = useState<string | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
@@ -388,11 +452,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
       setDynamicDataPlans([]);
       setSelectedDataPlan(null);
 
-      const fetcher = dataCategory === 'sme'
-        ? fetchSmeDataPlans(selectedTelco)
-        : fetchDynamicVariations('data', selectedTelco);
-
-      fetcher
+      fetchDynamicVariations('data', selectedTelco)
         .then((plans) => {
           if (!isMounted) return;
           setDynamicDataPlans(plans);
@@ -417,7 +477,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
     return () => {
       isMounted = false;
     };
-  }, [selectedTelco, serviceType, dataCategory]);
+  }, [selectedTelco, serviceType]);
 
   /**
    * Clear any confirmed account holder as soon as the number it belonged to is
@@ -482,8 +542,8 @@ export default function QuickServiceScreen({ route, navigation }: any) {
    *
    * Margins are cheap and apply to every tab, so they load once on mount. The
    * disco list is only fetched when electricity is actually opened — it is a
-   * live call to BigiSub and there is no reason to make it for someone buying
-   * airtime.
+   * live call to the gateway and there is no reason to make it for someone
+   * buying airtime.
    */
   useEffect(() => {
     let cancelled = false;
@@ -558,7 +618,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
    *
    * It did not agree before. Electricity was the bad one: the screen showed
    * the meter amount while the server charged that PLUS the disco's own
-   * service charge — a number that only exists in BigiSub's provider list —
+   * service charge — a number that only exists in the provider's own list —
    * and the confirmation sheet stated the fee was "₦0.00 (FREE)" underneath
    * it. For data and cable the surcharge is already inside the catalogue
    * price, so the total was right while the fee line was still wrong.
@@ -703,6 +763,17 @@ export default function QuickServiceScreen({ route, navigation }: any) {
       return false;
     }
 
+    // Mono's own floor, not ours. The server refuses below this too; catching
+    // it here means the customer is told now rather than after a fingerprint,
+    // a transaction opened and a debit rejected behind a spinner.
+    if (breakdown.total < MONO_MINIMUM_DEBIT_NGN) {
+      Alert.alert(
+        'A little more than that',
+        `The smallest payment we can take from a bank account is ₦${MONO_MINIMUM_DEBIT_NGN}.`,
+      );
+      return false;
+    }
+
     if (isPriceSettling) {
       Alert.alert(
         'One moment',
@@ -720,11 +791,10 @@ export default function QuickServiceScreen({ route, navigation }: any) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     // Electricity and cable are verified BEFORE the confirmation sheet, not
-    // after payment. Two reasons: BigiSub's own pay endpoints require the
-    // account holder's name exactly as their verify call returned it, so
-    // skipping it means the purchase is rejected after the customer's bank has
-    // already been debited — and it lets the customer catch their own typo by
-    // seeing whose meter they are about to credit.
+    // after payment. Two reasons: the server refuses to price either without
+    // a verified holder, so skipping it means the purchase is rejected — and
+    // it lets the customer catch their own typo by seeing whose meter they are
+    // about to credit, while fixing it is still free.
     if (serviceType === 'power' || serviceType === 'cable') {
       const verified = await runVerification();
       if (!verified) return;
@@ -831,9 +901,9 @@ export default function QuickServiceScreen({ route, navigation }: any) {
         customerPhone: user?.phone || recipientNumber || undefined,
         variationCode,
         meterType: serviceType === 'power' ? meterType : undefined,
-        dataCategory: serviceType === 'data' ? dataCategory : undefined,
-        // Required by BigiSub for these two, and gathered by runVerification
-        // before the customer ever reached the fingerprint.
+
+        // Required by the server for these two, and gathered by
+        // runVerification before the customer ever reached the fingerprint.
         customerName: verifiedName ?? undefined,
         customerAddress: verifiedAddress ?? undefined,
         accountId: activeAccount?.id || undefined,
@@ -1116,7 +1186,9 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                   ) : null}
                 </View>
 
-                <View className="flex-row items-center h-14 px-4 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-700">
+                <SandboxChips cases={sandboxPhoneCases()} onPick={setRecipientNumber} />
+
+                <View className="flex-row items-center h-14 px-4 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-700 mt-2">
                   <Smartphone color={isDark ? '#71717a' : '#94a3b8'} size={20} className="mr-2" />
                   <TextInput
                     value={recipientNumber}
@@ -1181,86 +1253,21 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                 </View>
               )}
 
-              {/* DATA: bundle picker — SME (wholesale) or direct (retail) */}
+              {/* DATA: bundle picker. One catalogue per network — VTPass has no plan shelves. */}
               {serviceType === 'data' && (
                 <View className="bg-white dark:bg-zinc-900 rounded-2xl p-4 mb-4 border border-slate-200 dark:border-zinc-800">
-                  {/* Category Segmented Toggle */}
-                  <View className="flex-row bg-slate-100 dark:bg-zinc-800/90 p-1 rounded-xl mb-3.5 border border-slate-200/50 dark:border-zinc-700/50">
-                    <Pressable
-                      onPress={() => {
-                        if (dataCategory !== 'sme') {
-                          Haptics.selectionAsync();
-                          setDataCategory('sme');
-                        }
-                      }}
-                      className={`flex-1 py-2 rounded-lg flex-row items-center justify-center ${
-                        dataCategory === 'sme'
-                          ? 'bg-white dark:bg-zinc-700 shadow-sm'
-                          : ''
-                      }`}
-                    >
-                      <Text
-                        className={`text-xs font-inter-bold ${
-                          dataCategory === 'sme'
-                            ? 'text-signal-dim dark:text-signal-bright'
-                            : 'text-slate-500 dark:text-zinc-400'
-                        }`}
-                      >
-                        SME Data (Budget)
-                      </Text>
-                      <View className="ml-1.5 bg-signal/15 px-1.5 py-0.5 rounded">
-                        <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-[9px]">
-                          Save 60%
-                        </Text>
-                      </View>
-                    </Pressable>
-
-                    <Pressable
-                      onPress={() => {
-                        if (dataCategory !== 'direct') {
-                          Haptics.selectionAsync();
-                          setDataCategory('direct');
-                        }
-                      }}
-                      className={`flex-1 py-2 rounded-lg flex-row items-center justify-center ${
-                        dataCategory === 'direct'
-                          ? 'bg-white dark:bg-zinc-700 shadow-sm'
-                          : ''
-                      }`}
-                    >
-                      <Text
-                        className={`text-xs font-inter-bold ${
-                          dataCategory === 'direct'
-                            ? 'text-signal-dim dark:text-signal-bright'
-                            : 'text-slate-500 dark:text-zinc-400'
-                        }`}
-                      >
-                        Direct Data (Official)
-                      </Text>
-                      <View className="ml-1.5 bg-slate-200 dark:bg-zinc-600 px-1.5 py-0.5 rounded">
-                        <Text className="text-slate-600 dark:text-zinc-300 font-inter-bold text-[9px]">
-                          Official
-                        </Text>
-                      </View>
-                    </Pressable>
-                  </View>
 
                   <View className="flex-row items-center justify-between mb-3">
                     <Text className="text-slate-500 dark:text-zinc-400 font-inter-semibold text-xs uppercase tracking-wider">
-                      Select {dataCategory === 'sme' ? 'SME Data' : 'Official Data'} ({selectedTelco.toUpperCase()})
+                      Select a bundle ({selectedTelco.toUpperCase()})
                     </Text>
-                    <View className="bg-signal/10 px-2 py-0.5 rounded-full">
-                      <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-[10px]">
-                        {dataCategory === 'sme' ? 'Wholesale SME' : 'Direct Retail'}
-                      </Text>
-                    </View>
                   </View>
 
                   {isLoadingVariations ? (
                     <View className="py-8 items-center justify-center">
                       <ActivityIndicator color={colors.signal.base} size="small" />
                       <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs mt-2">
-                        Loading {selectedTelco.toUpperCase()} {dataCategory === 'sme' ? 'SME bundles' : 'data plans'}…
+                        Loading {selectedTelco.toUpperCase()} bundles…
                       </Text>
                     </View>
                   ) : dynamicDataPlans.length === 0 ? (
@@ -1269,12 +1276,8 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                     // a network does not carry the selected category, and
                     // whenever the lookup fails, since both return [].
                     <CatalogueEmpty
-                      title={`No ${dataCategory === 'sme' ? 'SME' : 'direct'} bundles for ${selectedTelco.toUpperCase()}`}
-                      body={
-                        dataCategory === 'sme'
-                          ? 'This network may not offer SME bundles. Try Direct instead.'
-                          : 'We could not load this catalogue. Check your connection and try again.'
-                      }
+                      title={`No bundles for ${selectedTelco.toUpperCase()}`}
+                      body="We could not load this catalogue. Check your connection and try again."
                     />
                   ) : (
                     <View className="space-y-2.5">
@@ -1311,7 +1314,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                                 </Text>
                                 <View className="bg-signal/10 px-1.5 py-0.5 rounded">
                                   <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-[9px]">
-                                    {dataCategory === 'sme' ? 'SME Instant' : 'Instant'}
+                                    Instant
                                   </Text>
                                 </View>
                               </View>
@@ -1407,6 +1410,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                     Meter Number
                   </Text>
                 </View>
+                <SandboxChips cases={sandboxMeterCases()} onPick={setMeterNumber} />
                 <View className="flex-row items-center h-14 px-4 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-700 mb-2">
                   <Lightbulb color={isDark ? '#71717a' : '#94a3b8'} size={20} className="mr-2" />
                   <TextInput
@@ -1517,6 +1521,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                     Smartcard / IUC Number
                   </Text>
                 </View>
+                <SandboxChips cases={sandboxSmartcardCases()} onPick={setSmartcardNumber} />
                 <View className="flex-row items-center h-14 px-4 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-700 mb-2">
                   <Tv color={isDark ? '#71717a' : '#94a3b8'} size={20} className="mr-2" />
                   <TextInput
@@ -1693,7 +1698,7 @@ export default function QuickServiceScreen({ route, navigation }: any) {
 
           {/* Pay Action Button */}
           {/*
-            Verification is a live call to BigiSub that takes a second or two,
+            Verification is a live call to the gateway that takes a second or two,
             and it runs BEFORE the confirmation sheet for electricity and
             cable. `isVerifying` was being set the whole time and rendered
             nowhere, so the button sat there looking dead and inviting a second
@@ -1777,14 +1782,6 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                   {getServiceTitle()}
                 </Text>
               </View>
-              {serviceType === 'data' && (
-                <View className="flex-row justify-between mb-2">
-                  <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">Plan Type</Text>
-                  <Text className="text-slate-900 dark:text-white font-inter-semibold text-xs">
-                    {dataCategory === 'sme' ? 'SME Data (Budget)' : 'Direct Data (Official)'}
-                  </Text>
-                </View>
-              )}
               <View className="flex-row justify-between mb-2">
                 <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">Beneficiary</Text>
                 <Text className="text-slate-900 dark:text-white font-inter-semibold text-xs">

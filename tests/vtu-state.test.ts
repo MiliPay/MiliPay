@@ -16,7 +16,7 @@ import {
   canRetryPurchase,
   statusForIndeterminateFulfilment,
   statusForMonoEvent,
-  statusForProviderStatus,
+  statusForVtpassResponse,
   type TransactionStatus,
 } from "../supabase/functions/_shared/vtu-state";
 
@@ -85,59 +85,64 @@ describe("transitions", () => {
   });
 });
 
-describe("BigiSub provider statuses", () => {
-  it("reads the three states BigiSub actually reports", () => {
-    // Their OpenAPI spec enumerates exactly: successful | failed | processing.
-    expect(statusForProviderStatus("successful")).toBe("delivered");
-    expect(statusForProviderStatus("failed")).toBe("fulfilment_failed");
-    expect(statusForProviderStatus("processing")).toBe("fulfilment_pending");
-  });
-
-  it("does not treat 'processing' as success", () => {
-    // Treating an in-flight transaction as delivered is how a customer is
-    // charged for airtime the operator later failed to send.
-    expect(statusForProviderStatus("processing")).not.toBe("delivered");
-    expect(statusForProviderStatus("pending")).not.toBe("delivered");
-  });
-
-  it("treats an unknown or empty status as PENDING, not failed", () => {
-    // Not knowing is not failure. Declaring failure triggers a refund, and
-    // refunding something that was in fact delivered costs us the value.
-    for (const junk of ["", "  ", "weird", "ok", undefined, null]) {
-      expect(statusForProviderStatus(junk as string), String(junk)).toBe("fulfilment_pending");
-    }
-  });
-
-  it("is case and whitespace insensitive", () => {
-    expect(statusForProviderStatus("  SUCCESSFUL ")).toBe("delivered");
-    expect(statusForProviderStatus("Failed")).toBe("fulfilment_failed");
-  });
-
-  it("does not treat an indeterminate call as a failure", () => {
-    // A timeout or 5xx means BigiSub may well have fulfilled and we did not
-    // hear. Calling it failure refunds the customer AND leaves them credited.
+describe("an unanswered purchase call (live, VTPass)", () => {
+  it("is pending, never failed", () => {
+    // A timeout, a no-response or an unreadable body means VTPass may well
+    // have delivered and we did not hear. Calling it failure refunds the
+    // customer AND leaves them credited. requery() resolves it instead.
     expect(statusForIndeterminateFulfilment()).toBe("fulfilment_pending");
   });
 });
 
-describe("purchase retries", () => {
-  it("never permits one", () => {
-    // BigiSub accepts no idempotency key and no client reference on any
-    // purchase endpoint, and has no transaction-list endpoint. A second call
-    // is a second purchase: charged once, credited twice, at our cost.
+describe("purchase retries (live, VTPass)", () => {
+  it("never permits one — the recovery is requery", () => {
+    // VTPass does dedupe on request_id, so a replay is safe — but it returns
+    // code 014 rather than the original result, so it tells us nothing. An
+    // uncertain purchase is always resolved by requery(), never a second
+    // pay(). (Under BigiSub the reason was worse: no idempotency key at all,
+    // so a replay was a genuine second purchase.)
     expect(canRetryPurchase()).toBe(false);
   });
 });
 
 describe("Mono webhook events", () => {
-  it("advances to paid only on an explicit success", () => {
-    expect(statusForMonoEvent("directpay.payment_successful")).toBe("paid");
-    expect(statusForMonoEvent("direct_debit.payment_succeeded")).toBe("paid");
+  // Names taken from Mono's Direct Debit webhook reference, not invented:
+  // https://docs.mono.co/docs/payments/direct-debit/webhook-events
+
+  it("advances to paid on Mono's real success events", () => {
+    expect(statusForMonoEvent("events.mandates.debit.successful")).toBe("paid");
+    expect(statusForMonoEvent("events.mandates.debit_attempt.successful")).toBe("paid");
   });
 
-  it("marks explicit failures", () => {
-    expect(statusForMonoEvent("directpay.payment_failed")).toBe("payment_failed");
-    expect(statusForMonoEvent("mandate.cancelled")).toBe("payment_failed");
+  it("marks Mono's real failure events", () => {
+    expect(statusForMonoEvent("events.mandates.debit.failed")).toBe("payment_failed");
+    // Both of these fell through the old substring heuristic and were ignored:
+    // "rejected" contains none of failed/declined/cancelled, and "cancel" is
+    // not "cancelled".
+    expect(statusForMonoEvent("events.mandates.rejected")).toBe("payment_failed");
+    expect(statusForMonoEvent("events.mandate.action.cancel")).toBe("payment_failed");
+    expect(statusForMonoEvent("events.mandates.expired")).toBe("payment_failed");
+  });
+
+  it("does not treat a PARTIAL debit as payment", () => {
+    // The old heuristic saw "successful" in the name and returned paid. The
+    // amount check downstream would have caught it, but by luck.
+    expect(statusForMonoEvent("events.mandates.debit.partial_debit_successful")).toBe(
+      "quarantined",
+    );
+  });
+
+  it("ignores the lifecycle events that carry no state change for us", () => {
+    for (const event of [
+      "events.mandates.debit.processing",
+      "events.mandates.created",
+      "events.mandates.approved",
+      "events.mandates.ready",
+      "events.mandate.action.pause",
+      "events.mandate.action.reinstate",
+    ]) {
+      expect(statusForMonoEvent(event), event).toBeNull();
+    }
   });
 
   it("ignores an event it does not understand rather than guessing", () => {
@@ -145,6 +150,96 @@ describe("Mono webhook events", () => {
     expect(statusForMonoEvent("account.updated")).toBeNull();
     expect(statusForMonoEvent("")).toBeNull();
     expect(statusForMonoEvent(undefined)).toBeNull();
+  });
+});
+
+describe("VTPass responses", () => {
+  // Codes from https://vtpass.com/documentation/response-codes/
+
+  it("does NOT read code 000 as delivered on its own", () => {
+    // 000 is "TRANSACTION PROCESSED" — the request was accepted. The outcome
+    // lives in content.transactions.status. Reading 000 as success is how a
+    // customer is told they have airtime VTPass later failed to send.
+    expect(statusForVtpassResponse("000", "pending")).toBe("fulfilment_pending");
+    expect(statusForVtpassResponse("000", "initiated")).toBe("fulfilment_pending");
+    expect(statusForVtpassResponse("000", undefined)).toBe("fulfilment_pending");
+    expect(statusForVtpassResponse("000", "delivered")).toBe("delivered");
+  });
+
+  it("treats the processing codes as pending", () => {
+    expect(statusForVtpassResponse("099", undefined)).toBe("fulfilment_pending");
+    expect(statusForVtpassResponse("089", "delivered")).toBe("fulfilment_pending");
+    expect(statusForVtpassResponse("001", undefined)).toBe("fulfilment_pending");
+  });
+
+  it("reads the status on 001 (TRANSACTION QUERY), which reports the current state", () => {
+    // Forcing 001 to pending would leave a requery that says "delivered"
+    // waiting for a person to resolve by hand.
+    expect(statusForVtpassResponse("001", "delivered")).toBe("delivered");
+    expect(statusForVtpassResponse("001", "failed")).toBe("fulfilment_failed");
+    expect(statusForVtpassResponse("001", "pending")).toBe("fulfilment_pending");
+  });
+
+  it("does not refund on 015 or 085 — 'not found' and 'bad id' are not 'failed'", () => {
+    // Even when a status is attached: neither code vouches for it.
+    for (const code of ["015", "085"]) {
+      expect(statusForVtpassResponse(code, undefined), code).toBe("fulfilment_pending");
+      expect(statusForVtpassResponse(code, "failed"), code).toBe("fulfilment_pending");
+    }
+  });
+
+  it("treats a duplicate request_id as pending, never failed", () => {
+    // 014 means this id was already submitted — so the FIRST submission may
+    // well have delivered. Calling it failed would refund a credited customer.
+    expect(statusForVtpassResponse("014", undefined)).toBe("fulfilment_pending");
+    expect(statusForVtpassResponse("019", undefined)).toBe("fulfilment_pending");
+  });
+
+  it("treats an unreachable biller as pending rather than failed", () => {
+    expect(statusForVtpassResponse("030", undefined)).toBe("fulfilment_pending");
+    expect(statusForVtpassResponse("083", undefined)).toBe("fulfilment_pending");
+  });
+
+  it("fails on the codes that are definite declines", () => {
+    for (const code of ["016", "040", "091", "010", "013", "017", "018", "087"]) {
+      expect(statusForVtpassResponse(code, undefined), code).toBe("fulfilment_failed");
+    }
+  });
+
+  it("lets the status override a resolved code", () => {
+    expect(statusForVtpassResponse("044", "delivered")).toBe("delivered");
+    expect(statusForVtpassResponse("000", "failed")).toBe("fulfilment_failed");
+    expect(statusForVtpassResponse("000", "reversed")).toBe("fulfilment_failed");
+  });
+
+  it("calls an unrecognised code pending, because guessing costs money", () => {
+    for (const code of ["", "zzz", "12345", undefined, null]) {
+      expect(statusForVtpassResponse(code as string, undefined), String(code)).toBe(
+        "fulfilment_pending",
+      );
+    }
+  });
+
+  it("calls an accepted request with an unknown or empty status pending, not failed", () => {
+    // Not knowing is not failure. Declaring failure triggers a refund, and
+    // refunding something that was in fact delivered costs us the value.
+    for (const status of ["", "  ", "weird", "ok", undefined, null]) {
+      expect(statusForVtpassResponse("000", status as string), String(status)).toBe(
+        "fulfilment_pending",
+      );
+    }
+  });
+
+  it("does not treat an in-flight status as delivered", () => {
+    for (const status of ["initiated", "pending", "processing"]) {
+      expect(statusForVtpassResponse("000", status), status).toBe("fulfilment_pending");
+    }
+  });
+
+  it("reads the code and the status regardless of case and whitespace", () => {
+    expect(statusForVtpassResponse(" 000 ", "  DELIVERED ")).toBe("delivered");
+    expect(statusForVtpassResponse("000", "Failed")).toBe("fulfilment_failed");
+    expect(statusForVtpassResponse(" 016", undefined)).toBe("fulfilment_failed");
   });
 });
 

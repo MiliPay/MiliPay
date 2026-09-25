@@ -8,10 +8,10 @@ import {
   UNSETTLED_STATES,
   refundBackoffSeconds,
   refundExhausted,
-  statusForProviderStatus,
+  statusForVtpassResponse,
 } from "../_shared/vtu-state.ts";
 import { enqueueRefund, transitionTransaction } from "../_shared/transactions.ts";
-import * as bigisub from "../_shared/bigisub.ts";
+import * as vtpass from "../_shared/vtpass.ts";
 
 /**
  * The sweep that finishes what the happy path could not.
@@ -19,8 +19,9 @@ import * as bigisub from "../_shared/bigisub.ts";
  * Three things go wrong in a payment system and none of them announce
  * themselves:
  *
- *   1. BigiSub said "processing" and never came back. The customer paid and is
- *      waiting. Nothing in the request/response path will ever resolve this.
+ *   1. VTPass said "processing", or said nothing at all, and never came back.
+ *      The customer paid and is waiting. Nothing in the request/response path
+ *      will ever resolve this.
  *   2. A refund failed. Previously that was a console.error and the money
  *      simply stayed gone.
  *   3. A transaction got stuck between states — a crash, a lost webhook — and
@@ -73,17 +74,27 @@ async function authorised(req: Request, admin: SupabaseClient): Promise<boolean>
 }
 
 // ─────────────────────────────────────────────────────────────
-// 1. Requery — ask BigiSub what actually happened
+// 1. Requery — ask VTPass what actually happened
 // ─────────────────────────────────────────────────────────────
 
+/**
+ * NOTE THE MISSING FILTER. This used to require operator_transaction_id to be
+ * non-null, because BigiSub's requery was keyed on an id that only arrives in
+ * a response — so a purchase whose call timed out had no id, could never be
+ * asked about, and sat pending until a human went to look.
+ *
+ * Those are precisely the transactions that most need resolving, and under
+ * VTPass they are resolvable: the request_id is derived from the reference and
+ * the transaction's own timestamp, both of which we always hold. Restoring
+ * that filter would silently reinstate the blind spot.
+ */
 async function sweepRequery(admin: SupabaseClient) {
   const cutoff = new Date(Date.now() - REQUERY_AFTER_SECONDS * 1000).toISOString();
 
   const { data: rows } = await admin
     .from("transactions")
-    .select("id, reference, amount, operator_transaction_id, updated_at")
+    .select("id, reference, amount, initiated_at, created_at, updated_at")
     .eq("status", "fulfilment_pending")
-    .not("operator_transaction_id", "is", null)
     .lt("updated_at", cutoff)
     .order("updated_at", { ascending: true })
     .limit(BATCH);
@@ -93,13 +104,22 @@ async function sweepRequery(admin: SupabaseClient) {
 
   for (const row of rows ?? []) {
     try {
-      const result = await bigisub.requeryTransaction(row.operator_transaction_id as string);
-      const status = statusForProviderStatus(result.status);
+      // initiated_at is nullable; created_at is not. Without one of them the
+      // request_id cannot be rebuilt and there is nothing to ask.
+      const issuedAt = (row.initiated_at ?? row.created_at) as string | null;
+      if (!issuedAt) {
+        console.error(`[reconcile] no timestamp for ${row.reference}; cannot rebuild request_id`);
+        stillPending++;
+        continue;
+      }
+
+      const result = await vtpass.requery(row.reference as string, issuedAt);
+      const status = statusForVtpassResponse(result.providerCode, result.providerStatus);
 
       if (status === "fulfilment_pending") {
         stillPending++;
         // Touch updated_at so the next sweep does not re-pick this one
-        // immediately and hammer BigiSub with the same question.
+        // immediately and hammer VTPass with the same question.
         await admin
           .from("transactions")
           .update({ updated_at: new Date().toISOString() })
@@ -112,8 +132,14 @@ async function sweepRequery(admin: SupabaseClient) {
         from: "fulfilment_pending",
         to: status,
         actor: "reconcile",
-        patch: { token: result.token ?? null, units: result.units ?? null },
-        metadata: { providerStatus: result.status },
+        patch: {
+          token: result.token ?? null,
+          units: result.units ?? null,
+          ...(result.operatorReference
+            ? { operator_transaction_id: result.operatorReference }
+            : {}),
+        },
+        metadata: { providerCode: result.providerCode, providerStatus: result.providerStatus },
       });
 
       if (status === "fulfilment_failed") {
@@ -269,21 +295,25 @@ async function sweepStuck(admin: SupabaseClient) {
 // ─────────────────────────────────────────────────────────────
 
 async function checkWallet() {
-  const floor = Number(Deno.env.get("BIGISUB_WALLET_FLOOR") ?? "20000");
-  const wallet = await bigisub.walletBalance();
+  // VTPass's own setting only. This briefly fell back to BIGISUB_WALLET_FLOOR,
+  // which let a parked provider's configuration decide when the live
+  // gateway's wallet is "low" — the wrong provider steering the alarm.
+  const floor = Number(Deno.env.get("VTPASS_WALLET_FLOOR") ?? "20000");
+  const balance = await vtpass.walletBalance();
 
-  if (wallet === null) {
+  // null is "unknown", not "empty". Reporting a slow gateway as a low wallet
+  // would raise an alarm every time VTPass is briefly unreachable.
+  if (balance === null) {
     return { balance: null, low: false, note: "balance unavailable" };
   }
-  if (wallet.balance < floor) {
+  if (balance < floor) {
     // Every sale is refused once this runs out, so it wants to be noticed
-    // before that rather than after.
-    console.error(
-      `[reconcile] BIGISUB WALLET LOW: ${wallet.balance} below floor ${floor}. ` +
-        `Fund ${wallet.bankName ?? "the reserved account"} ${wallet.reservedAccountNumber ?? ""}`.trim(),
-    );
+    // before that rather than after. In sandbox this watches the sandbox
+    // wallet, which is the point: a test run that drains it must fail the same
+    // way production would.
+    console.error(`[reconcile] VTPASS WALLET LOW: ${balance} below floor ${floor}`);
   }
-  return { balance: wallet.balance, low: wallet.balance < floor, floor };
+  return { balance, low: balance < floor, floor };
 }
 
 // ─────────────────────────────────────────────────────────────

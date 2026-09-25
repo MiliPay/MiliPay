@@ -15,8 +15,8 @@ import { formatNaira } from "../../lib/utils/format";
  * Quick-services operations.
  *
  * This page exists because the sweep deliberately refuses to guess. When a
- * purchase cannot be resolved automatically — BigiSub never answered, a refund
- * keeps failing, a webhook disagreed with the price we charged — the money is
+ * purchase cannot be resolved automatically — VTPass keeps saying pending, a
+ * refund keeps failing, a webhook disagreed with the price we charged — the money is
  * sitting with us and somebody has to decide. Without somewhere to see that,
  * the queues fill silently and the first anyone hears is a complaint.
  *
@@ -254,9 +254,12 @@ export function OperationsPage() {
           <Tile
             label="Unresolvable"
             value={queues.pendingUnresolvable}
-            // No BigiSub transaction id means requery has nothing to ask
-            // about. These only move when a person looks them up.
-            hint="no operator id — resolve by hand"
+            // Under VTPass every pending transaction CAN be requeried — the
+            // request_id comes from the reference and the transaction's own
+            // timestamp. So this is no longer "requery has nothing to ask";
+            // it is "requery has been asking for half an hour and VTPass
+            // still will not say", which is what actually needs a person.
+            hint="pending > 30 min — requery is stuck"
             tone={queues.pendingUnresolvable > 0 ? "bad" : "neutral"}
           />
           <Tile label="Refunds open" value={queues.refundsOpen} tone={queues.refundsOpen > 0 ? "warn" : "neutral"} />
@@ -294,8 +297,12 @@ export function OperationsPage() {
                     </td>
                     <td className="px-4 py-3 text-ink-muted">
                       {t.service_type ?? "—"} {t.provider ? `· ${t.provider}` : ""}
-                      {!t.operator_transaction_id ? (
-                        <span className="ml-2 text-status-fail text-xs">no operator id</span>
+                      {/* Shown when present, for looking the purchase up on
+                          the VTPass dashboard. Its ABSENCE is not flagged: a
+                          purchase whose call timed out has none, and requery
+                          resolves it by request_id regardless. */}
+                      {t.operator_transaction_id ? (
+                        <span className="ml-2 font-mono text-xs">VTPass {t.operator_transaction_id}</span>
                       ) : null}
                     </td>
                     <td className="px-4 py-3 text-right text-ink">{formatNaira(Number(t.amount))}</td>
@@ -325,7 +332,7 @@ export function OperationsPage() {
           </div>
           <p className="text-xs text-ink-muted mt-2">
             Both actions are recorded against your name in the transaction's history.
-            Check BigiSub's dashboard before marking anything delivered.
+            Check the VTPass dashboard before marking anything delivered.
           </p>
         </section>
       ) : null}

@@ -159,8 +159,38 @@ describe("webhookEventId", () => {
     expect(await webhookEventId({ event_id: "evt_456" }, "{}")).toBe("evt_456");
   });
 
-  it("looks inside data when the envelope has no id", async () => {
-    expect(await webhookEventId({ data: { id: "PAY_789" } }, "{}")).toBe("PAY_789");
+  it("NEVER uses a reference or a resource id as the event id", async () => {
+    // Both identify the TRANSACTION, so they are identical on every event
+    // about it. Using one as the idempotency key means the second event —
+    // the one that says the money arrived — is rejected as a duplicate, the
+    // transaction never leaves `initiated`, and the provider is told 200.
+    // DirectPay sends processing-then-successful, so this was reachable on
+    // the first real purchase.
+    const processing = JSON.stringify({
+      event: "direct_debit.payment_processing",
+      data: { id: "PAY_1", reference: "MP-BIL-XYZ", status: "processing" },
+    });
+    const successful = JSON.stringify({
+      event: "direct_debit.payment_successful",
+      data: { id: "PAY_1", reference: "MP-BIL-XYZ", status: "successful" },
+    });
+
+    const a = await webhookEventId(JSON.parse(processing), processing);
+    const b = await webhookEventId(JSON.parse(successful), successful);
+
+    expect(a).not.toBe("MP-BIL-XYZ");
+    expect(a).not.toBe("PAY_1");
+    // Two different events about one transaction must get two different ids.
+    expect(a).not.toBe(b);
+  });
+
+  it("uses the envelope's own per-event id when the provider sends one", async () => {
+    const body = JSON.stringify({
+      event_id: "evt_abc",
+      event: "direct_debit.payment_successful",
+      data: { id: "PAY_1", reference: "MP-BIL-XYZ" },
+    });
+    expect(await webhookEventId(JSON.parse(body), body)).toBe("evt_abc");
   });
 
   it("falls back to a body hash so an id-less provider is still not replayable", async () => {

@@ -77,7 +77,27 @@ serve(async (req) => {
   const eventId = await webhookEventId(payload, rawBody);
   const eventType = String(payload.event ?? payload.type ?? "");
   const data = (payload.data ?? {}) as Record<string, unknown>;
-  const reference = String(data.reference ?? payload.reference ?? "");
+
+  /**
+   * Mono calls it `reference_number`, not `reference`.
+   *
+   * This read `data.reference` only, which Mono never sends on a debit event.
+   * Every webhook therefore fell through to "ignored:no_reference": the
+   * transaction stayed at `initiated`, never reached `paid`, and nothing was
+   * ever fulfilled. The whole rail was silently open-circuit.
+   *
+   * Confirmed against Mono's Direct Debit webhook reference, which shows
+   * data.reference_number carrying the value we sent as `reference` on the
+   * debit. The other spellings are kept because DirectPay and Direct Debit are
+   * different product lines at Mono and do not word this identically.
+   */
+  const reference = String(
+    data.reference_number ??
+      data.reference ??
+      data.referenceNumber ??
+      payload.reference ??
+      "",
+  ).trim();
 
   // Idempotency. The unique index on (provider, event_id) is what actually
   // enforces this; the insert failing IS the duplicate check, so there is no
@@ -157,8 +177,41 @@ serve(async (req) => {
     return finish("payment_failed");
   }
 
-  // target === "paid". Before anything is spent, the amount the bank actually
-  // took must equal the amount we priced.
+  /**
+   * A PARTIAL collection is not payment, and this branch is what makes that
+   * true rather than accidental.
+   *
+   * statusForMonoEvent maps partial_debit_successful to `quarantined`, but
+   * this handler used to check only for payment_failed and then comment
+   * "target === paid" — so a partial debit fell into the paid path and was
+   * caught, if at all, by the amount comparison below. That works only while
+   * the partial amount differs from what we priced. A sweep that collected the
+   * full amount but was still labelled partial would have been marked paid and
+   * FULFILLED: full value dispensed against a collection Mono had not
+   * finished. Named and handled here so it does not depend on luck.
+   */
+  if (target === "quarantined") {
+    console.error(`[mono-webhook] PARTIAL DEBIT on ${reference} — quarantining, not fulfilling`);
+    await transitionTransaction(admin, {
+      reference,
+      from: "initiated",
+      to: "quarantined",
+      reason: `partial collection (${eventType})`,
+      actor: "mono-webhook",
+      metadata: { eventType, paidAmount: data.amount ?? null },
+    });
+    return finish("quarantined:partial_debit");
+  }
+
+  if (target !== "paid") {
+    // Anything else the mapping might grow. Advancing on a status this handler
+    // has not been taught is how value gets dispensed by accident.
+    console.error(`[mono-webhook] unhandled target ${target} for ${reference}`);
+    return finish(`ignored:unhandled_target_${target}`);
+  }
+
+  // Before anything is spent, the amount the bank actually took must equal the
+  // amount we priced.
   let paidNaira: number | null = null;
   try {
     paidNaira = data.amount === undefined || data.amount === null

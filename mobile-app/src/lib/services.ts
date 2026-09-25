@@ -60,9 +60,8 @@ export const SERVICE_TILES: ServiceTile[] = [
   { key: 'power', label: 'Electricity', icon: Lightbulb, service: 'power', group: 'bills' },
   { key: 'cable', label: 'Cable TV', icon: Tv, service: 'cable', group: 'bills' },
 
-  // Planned. No provider is wired to any of these yet: BigiSub, which is now
-  // the only gateway, covers airtime, data, cable and electricity and nothing
-  // more.
+  // Planned. No provider is wired to any of these yet: VTPass, the gateway,
+  // covers airtime, data, cable and electricity and nothing more.
   { key: 'internet', label: 'Internet', icon: Globe, service: null, group: 'bills' },
   { key: 'water', label: 'Water', icon: Droplet, service: null, group: 'bills' },
   { key: 'taxes', label: 'Taxes', icon: Landmark, service: null, group: 'bills' },

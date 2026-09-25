@@ -44,3 +44,14 @@ api_url = "http://localhost:54321"
 
 [analytics]
 enabled = false
+
+# JWT verification per function. Pinned here because a plain
+# `supabase functions deploy` defaults it ON, and these two are called by
+# things that hold no Supabase session: Mono (authenticated by
+# MONO_WEBHOOK_SECRET) and pg_cron (authenticated by the Vault-held
+# reconcile_secret). Turning it on would 401 every webhook and every sweep.
+[functions.mono-webhook]
+verify_jwt = false
+
+[functions.vtu-reconcile]
+verify_jwt = false

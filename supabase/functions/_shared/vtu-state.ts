@@ -108,31 +108,113 @@ export function assertTransition(
 // ─────────────────────────────────────────────────────────────
 
 /**
- * BigiSub's own vocabulary, from their OpenAPI spec: every purchase and
- * requery reports one of "successful" | "failed" | "processing".
+ * VTPass reports an outcome in TWO fields, and reading only one is wrong.
  *
- * "processing" is NOT success. Treating an in-flight transaction as delivered
- * is how a customer is charged for airtime the operator later failed to send,
- * and how nobody ever finds out.
+ * `code` says whether the REQUEST was accepted. `000` is "TRANSACTION
+ * PROCESSED", not "delivered" — the actual outcome is in
+ * content.transactions.status, one of initiated / pending / delivered. Reading
+ * 000 as success is how a customer is told they have airtime that VTPass later
+ * failed to send.
+ *
+ * So the code is checked first for the things only it can say (declines, a
+ * flat wallet, a duplicate), and the status decides the rest.
+ *
+ * This is the ONLY gateway mapper. There used to be a second, single-argument
+ * one for BigiSub's status words; handed a VTPass response it would have read
+ * every code as unknown and answered "pending" for ever. It had no caller and
+ * was removed, and tests/gateway-isolation.test.ts fails if it comes back.
+ *
+ * Codes from https://vtpass.com/documentation/response-codes/
  */
-export function statusForProviderStatus(status: string | undefined | null): TransactionStatus {
+export function statusForVtpassResponse(
+  code: string | undefined | null,
+  status: string | undefined | null,
+): TransactionStatus {
+  const value = String(code ?? "").trim();
+
+  switch (value) {
+    // Still working. Requery resolves it; the sweep will.
+    case "099": // TRANSACTION IS PROCESSING
+    case "089": // REQUEST IS PROCESSING
+      return "fulfilment_pending";
+
+    // 015 INVALID REQUEST ID: VTPass has no record of this request_id. On a
+    // requery that usually means the purchase never reached them — but "we
+    // cannot find it" is not "it failed", and refunding something that did
+    // land costs us the value. Pending, so it surfaces for a person after 30
+    // minutes rather than being refunded blind.
+    case "015":
+    // 085 IMPROPER REQUEST ID: the id's date part was rejected. We cannot
+    // tell from here whether that was the purchase or a later requery of an
+    // older id, so the same reasoning applies.
+    case "085":
+      return "fulfilment_pending";
+
+    // 014 means this request_id was already submitted, so the FIRST submission
+    // may well have delivered. Pending, never failed — see vtpass.ts rule 3.
+    case "014":
+      return "fulfilment_pending";
+
+    case "016": // TRANSACTION FAILED
+    case "040": // TRANSACTION REVERSAL
+    case "091": // TRANSACTION NOT PROCESSED
+    case "010": // invalid variation code
+    case "011": // invalid arguments
+    case "012": // product does not exist
+    case "013": // below minimum
+    case "017": // above maximum
+    case "018": // LOW WALLET BALANCE — ours, and the customer must be refunded
+    case "021": // account locked
+    case "022": // account suspended
+    case "023": // api access not enabled
+    case "024": // account inactive
+    case "027": // ip not whitelisted
+    case "028": // product not whitelisted
+    case "034": // service suspended
+    case "035": // service inactive
+    case "087": // invalid credentials
+      return "fulfilment_failed";
+
+    // 019 is a suspected duplicate inside 30 seconds. We cannot tell from here
+    // whether the first one landed, so it is pending rather than failed.
+    case "019":
+      return "fulfilment_pending";
+
+    // 030 BILLER NOT REACHABLE and 083 SYSTEM ERROR are VTPass telling us it
+    // could not reach the operator. It may still have. Pending.
+    case "030":
+    case "083":
+      return "fulfilment_pending";
+
+    case "000": // TRANSACTION PROCESSED — the status field decides
+    case "044": // TRANSACTION RESOLVED
+    // 001 TRANSACTION QUERY is "the current status of a given transaction",
+    // so its status field is the answer. It used to be forced to pending,
+    // which would have left a requery reporting 001 + delivered pending until
+    // a person resolved by hand what VTPass had already said.
+    case "001":
+      break;
+
+    default:
+      // An unrecognised code is not a licence to guess. Unknown is pending,
+      // because declaring failure triggers a refund and refunding something
+      // that was delivered costs us the value.
+      return "fulfilment_pending";
+  }
+
   switch (String(status ?? "").trim().toLowerCase()) {
+    case "delivered":
     case "successful":
     case "success":
-    case "delivered":
       return "delivered";
-    case "processing":
-    case "pending":
-    case "initiated":
-      return "fulfilment_pending";
     case "failed":
     case "reversed":
     case "cancelled":
       return "fulfilment_failed";
+    case "initiated":
+    case "pending":
+    case "processing":
     default:
-      // An empty or unrecognised status means we do not know. Not knowing is
-      // pending, never failure — declaring failure triggers a refund, and
-      // refunding something that was actually delivered costs us the value.
       return "fulfilment_pending";
   }
 }
@@ -141,8 +223,8 @@ export function statusForProviderStatus(status: string | undefined | null): Tran
  * The outcome when a purchase call did not return cleanly — a timeout, a 5xx,
  * an unreadable body.
  *
- * This is pending, not failure, and the distinction is expensive. BigiSub may
- * well have fulfilled; we simply did not hear. Calling it a failure would
+ * This is pending, not failure, and the distinction is expensive. The gateway
+ * may well have fulfilled; we simply did not hear. Calling it a failure would
  * refund the customer AND leave them credited, at MiliPay's cost.
  */
 export function statusForIndeterminateFulfilment(): TransactionStatus {
@@ -150,13 +232,18 @@ export function statusForIndeterminateFulfilment(): TransactionStatus {
 }
 
 /**
- * Whether a purchase call may be repeated. It may not — ever.
+ * Whether a purchase call may be repeated. It may not.
  *
- * BigiSub accepts no idempotency key and no client-supplied reference on any
- * purchase endpoint, and offers no way to list transactions. So a second call
- * is a second independent purchase: the customer is charged once and credited
- * twice. The only safe resolution for an uncertain purchase is requery, and
- * requery needs a transaction id we only get from a response that arrived.
+ * The reason changed when VTPass replaced BigiSub, but the answer did not.
+ *
+ * With BigiSub the danger was real duplication: no idempotency key on any
+ * purchase endpoint, so a second call was a second independent purchase and
+ * the customer was charged once and credited twice.
+ *
+ * VTPass does carry an idempotency key, so a replay is SAFE — but it is also
+ * pointless: replaying a used request_id returns code 014 rather than the
+ * original result, so it tells us nothing we did not already know. The
+ * resolution for an uncertain purchase is requery() either way.
  *
  * A function rather than a constant so the call sites read as a decision
  * someone made, not an oversight.
@@ -169,8 +256,70 @@ export function canRetryPurchase(): false {
 // Mono webhook -> state
 // ─────────────────────────────────────────────────────────────
 
+/**
+ * Mono's real event names, taken from their Direct Debit webhook reference
+ * rather than guessed at:
+ * https://docs.mono.co/docs/payments/direct-debit/webhook-events
+ *
+ * This was substring matching, which got three things wrong against the actual
+ * vocabulary. `events.mandates.rejected` contains none of "failed", "declined"
+ * or "cancelled", so a bank rejecting a mandate was silently ignored.
+ * `events.mandate.action.cancel` is "cancel", not "cancelled", so it was
+ * ignored too. And `partial_debit_successful` contains "successful", so a
+ * PARTIAL collection mapped to fully paid — the amount check downstream would
+ * have quarantined it, but by luck rather than design.
+ */
+const MONO_EVENTS: Record<string, TransactionStatus> = {
+  // The customer's money arrived. This is the event that authorises MiliPay
+  // to spend its own.
+  "events.mandates.debit.successful": "paid",
+  "events.mandates.debit_attempt.successful": "paid",
+
+  // DirectPay — the one-off mode the sandbox MVP runs on. Mono names this
+  // event `direct_debit.payment_successful` even for a one-time payment,
+  // which reads like a Direct Debit event and is not one. Listed explicitly
+  // so nobody "tidies it up" later on the assumption it is a duplicate.
+  "direct_debit.payment_successful": "paid",
+  "payment.successful": "paid",
+  "mono.events.payment.successful": "paid",
+
+  "direct_debit.payment_failed": "payment_failed",
+  "events.mandates.debit.failed": "payment_failed",
+  "events.mandates.rejected": "payment_failed",
+  "events.mandate.action.cancel": "payment_failed",
+  "events.mandates.expired": "payment_failed",
+  "payment.failed": "payment_failed",
+  "mono.events.payment.failed": "payment_failed",
+
+  // A partial collection is NOT payment. The amount check would catch it, but
+  // it is named here so the decision is explicit rather than incidental.
+  "events.mandates.debit.partial_debit_successful": "quarantined",
+};
+
 export function statusForMonoEvent(eventType: string | undefined | null): TransactionStatus | null {
   const value = String(eventType ?? "").trim().toLowerCase();
+  if (!value) return null;
+
+  const mapped = MONO_EVENTS[value];
+  if (mapped) return mapped;
+
+  // Events that are real but carry no state change for us:
+  // debit.processing, mandates.created, mandates.approved, mandates.ready.
+  // Falling through to the heuristic below would misread some of them, so
+  // they are named and ignored.
+  if (
+    value.includes("processing") ||
+    value.includes("created") ||
+    value.includes("approved") ||
+    value.includes("ready") ||
+    value.includes("pause") ||
+    value.includes("reinstate")
+  ) {
+    return null;
+  }
+
+  // A conservative net for event names Mono adds later. Kept deliberately
+  // narrow: anything it does not recognise is ignored, not guessed.
   if (value.includes("failed") || value.includes("declined") || value.includes("cancelled")) {
     return "payment_failed";
   }

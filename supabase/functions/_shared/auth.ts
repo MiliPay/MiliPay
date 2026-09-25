@@ -118,6 +118,9 @@ export async function requireStaffRole(
  */
 export interface CustomerProfile {
   id: string;
+  /** Mono's payment-initiate endpoint requires a name and an email. */
+  fullName: string | null;
+  email: string | null;
   kycTier: number;
   pinThreshold: number;
   /** Customer's own cap, or null to use the tier default. Never above the tier. */
@@ -134,7 +137,7 @@ export async function loadCustomerProfile(
 ): Promise<CustomerProfile | null> {
   const { data: customer } = await admin
     .from("customers")
-    .select("id, kyc_tier, pin_threshold, single_limit, daily_limit, status")
+    .select("id, first_name, last_name, email, kyc_tier, pin_threshold, single_limit, daily_limit, status")
     .eq("auth_user_id", authUserId)
     .maybeSingle();
 
@@ -146,8 +149,17 @@ export async function loadCustomerProfile(
         "ACCOUNT_NOT_ACTIVE",
       );
     }
+    const fullName = [customer.first_name, customer.last_name]
+      .filter((part) => typeof part === "string" && part.trim())
+      .join(" ")
+      .trim();
+
     return {
       id: customer.id,
+      fullName: fullName || null,
+      email: typeof customer.email === "string" && customer.email.trim()
+        ? customer.email.trim()
+        : null,
       kycTier: Number(customer.kyc_tier) || 2,
       pinThreshold: Number(customer.pin_threshold) || 10_000,
       singleLimit: optionalAmount(customer.single_limit),

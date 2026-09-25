@@ -222,6 +222,16 @@ export default function SettingsScreen({ navigation }: any) {
       Alert.alert('Not available here', 'Notifications need a real device.');
       return;
     }
+    if (result.reason === 'expo-go') {
+      // Expo removed Android push from Expo Go in SDK 53. Saying "check your
+      // phone settings" here would send someone to a screen where there is
+      // nothing to find.
+      Alert.alert(
+        'Not available in Expo Go',
+        'Payment alerts need the installed MiliPay app. Everything else works here.',
+      );
+      return;
+    }
     Alert.alert(
       'Turn on payment alerts',
       'Allow notifications for MiliPay in your phone settings and we will tell you when a payment is confirmed, delivered, or fails.',
