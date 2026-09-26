@@ -13,7 +13,15 @@ import {
 } from "../_shared/auth.ts";
 import { enforceTransactionLimits } from "../_shared/limits.ts";
 import { disabledMessage, readFulfilmentEnvironment } from "../_shared/environment.ts";
-import { initiateDebit, isMonoConfigured, monoPaymentMode, toApiError } from "../_shared/mono.ts";
+import {
+  MonoError,
+  initiateDebit,
+  isMonoConfigured,
+  monoPaymentMode,
+  paymentsAppTag,
+  toApiError,
+} from "../_shared/mono.ts";
+import { choosePaymentRoute, committedUnderMandate, type PaymentRoute } from "../_shared/quick-pay.ts";
 import { roundNaira } from "../_shared/money.ts";
 import {
   CUSTOMER_STATUS_COPY,
@@ -194,6 +202,55 @@ function requireServiceId(serviceType: string, provider: string): string {
  * https://docs.mono.co/docs/payments/direct-debit/debit-an-account
  */
 const MONO_MINIMUM_DEBIT_NGN = 200;
+
+/**
+ * Quick pay or DirectPay, for this account and this amount.
+ *
+ * The rule itself is choosePaymentRoute (quick-pay.ts, zero imports, tested
+ * directly). This only gathers its inputs: whether quick pay is switched on
+ * at all (MONO_PAYMENT_MODE=mandate), the account's active mandate, and what
+ * has already been taken or is in flight under it.
+ */
+async function paymentRouteFor(
+  admin: SupabaseClient,
+  linkedAccountId: string,
+  amount: number,
+): Promise<PaymentRoute> {
+  if (monoPaymentMode() !== "mandate") {
+    return choosePaymentRoute({ mandatesEnabled: false, mandate: null, committed: 0, amount });
+  }
+
+  const { data: mandate } = await admin
+    .from("mono_mandates")
+    .select("mono_mandate_id, status, max_per_debit, max_total, expires_at")
+    .eq("linked_account_id", linkedAccountId)
+    .eq("status", "active")
+    .maybeSingle();
+
+  let committed = 0;
+  if (mandate?.mono_mandate_id) {
+    const { data: rows } = await admin
+      .from("transactions")
+      .select("status, amount")
+      .eq("mono_mandate_id", mandate.mono_mandate_id);
+    committed = committedUnderMandate((rows ?? []) as { status: string; amount: unknown }[]);
+  }
+
+  return choosePaymentRoute({
+    mandatesEnabled: true,
+    mandate: mandate
+      ? {
+        mono_mandate_id: mandate.mono_mandate_id ?? null,
+        status: String(mandate.status),
+        max_per_debit: mandate.max_per_debit == null ? null : Number(mandate.max_per_debit),
+        max_total: mandate.max_total == null ? null : Number(mandate.max_total),
+        expires_at: mandate.expires_at ?? null,
+      }
+      : null,
+    committed,
+    amount,
+  });
+}
 
 // ─────────────────────────────────────────────────────────────
 // Server-side pricing: the client never decides what it pays
@@ -942,7 +999,7 @@ serve(handler(async (req) => {
   // ---- Leg 1: ask the bank ---------------------------------------------
   const { data: account } = await admin
     .from("linked_accounts")
-    .select("id, account_name")
+    .select("id, account_name, mono_account_id, mono_app_tag")
     .eq("id", input.accountId)
     .eq("user_id", caller.id)
     .eq("is_active", true)
@@ -956,39 +1013,28 @@ serve(handler(async (req) => {
     throw new ApiError("That bank account is not linked to your profile.", 403, "ACCOUNT_NOT_FOUND");
   }
 
-  let mandateId: string | null = null;
-  if (monoPaymentMode() === "mandate") {
-    const { data: mandate } = await admin
-      .from("mono_mandates")
-      .select("mono_mandate_id, max_per_debit")
-      .eq("linked_account_id", account.id)
-      .eq("status", "active")
-      .maybeSingle();
+  // Quick pay when this account has a working mandate with room for this
+  // amount; Mono's page otherwise. Never a refusal — see quick-pay.ts.
+  const route = await paymentRouteFor(admin, account.id as string, priced.amount);
+  const mandateId = route.route === "mandate" ? route.mandateId : null;
 
-    if (!mandate) {
-      await transitionTransaction(admin, {
-        reference, from: "initiated", to: "payment_failed",
-        reason: "no active mandate", actor: "vtu-service",
-      });
-      throw new ApiError(
-        "This account needs to be re-authorised before it can be used to pay.",
-        402,
-        "MANDATE_REQUIRED",
-      );
-    }
-    if (mandate.max_per_debit !== null && priced.amount > Number(mandate.max_per_debit)) {
-      await transitionTransaction(admin, {
-        reference, from: "initiated", to: "payment_failed",
-        reason: "above mandate ceiling", actor: "vtu-service",
-      });
-      throw new ApiError(
-        `This is above the limit your bank approved for this account (₦${Number(mandate.max_per_debit).toLocaleString()}).`,
-        402,
-        "MANDATE_LIMIT",
-      );
-    }
-    mandateId = mandate.mono_mandate_id;
+  if (mandateId) {
+    // Recorded BEFORE the debit, so a purchase in flight already counts
+    // against the allowance when the next one is judged.
+    await admin.from("transactions").update({ mono_mandate_id: mandateId }).eq("reference", reference);
   }
+
+  // DirectPay can skip Mono's bank picker and bank login when handed the
+  // linked account — but Mono only accepts an account linked through the app
+  // taking the payment. The tag says which app linked it; without a match the
+  // customer picks their bank on Mono's page, as before. (mono-app-tag.ts)
+  const preselectAccount =
+    !mandateId &&
+    typeof account.mono_account_id === "string" &&
+    typeof account.mono_app_tag === "string" &&
+    account.mono_app_tag === (await paymentsAppTag())
+      ? account.mono_account_id
+      : null;
 
   try {
     const debit = await initiateDebit({
@@ -1005,6 +1051,7 @@ serve(handler(async (req) => {
         phone: input.customerPhone ?? null,
       },
       mandateId,
+      accountId: preselectAccount,
     });
 
     await admin
@@ -1025,12 +1072,45 @@ serve(handler(async (req) => {
       provider: input.provider,
       beneficiary: input.destination,
       merchantTitle: title,
-      // Present only in one-off DirectPay mode, where the customer must
-      // authorise this specific payment at their bank.
+      // "mandate" is quick pay: nothing more for the customer to do.
+      paymentRoute: route.route,
+      // Present only for DirectPay, where the customer must authorise this
+      // specific payment at their bank.
       authorisationUrl: debit.authorisationUrl,
       timestamp: now,
     });
   } catch (err) {
+    if (mandateId && err instanceof MonoError && err.retryable) {
+      /**
+       * A quick-pay debit whose answer we never heard. NOT a failure.
+       *
+       * Unlike starting a DirectPay payment, a mandate debit moves money the
+       * moment Mono accepts it — a timeout or a 5xx can mean the customer was
+       * charged and we missed the reply. This used to fall through to
+       * payment_failed and "nothing was charged"; Mono's success webhook would
+       * then find the purchase already failed, be ignored, and the customer
+       * would be charged with nothing delivered and no refund. It stays
+       * `initiated`, the customer is told we are confirming, and the webhook
+       * settles it — or the stuck sweep puts it in front of a person.
+       */
+      console.error(`[vtu] quick-pay debit outcome unknown for ${reference}: ${err.message}`);
+      return json({
+        success: true,
+        reference,
+        status: "initiated",
+        message: CUSTOMER_STATUS_COPY.initiated,
+        amount: priced.amount,
+        baseAmount: priced.baseAmount,
+        serviceCharge: priced.serviceCharge,
+        serviceType: input.serviceType,
+        provider: input.provider,
+        beneficiary: input.destination,
+        merchantTitle: title,
+        paymentRoute: "mandate",
+        authorisationUrl: null,
+        timestamp: now,
+      });
+    }
     await transitionTransaction(admin, {
       reference, from: "initiated", to: "payment_failed",
       reason: err instanceof Error ? err.message : "debit failed", actor: "vtu-service",

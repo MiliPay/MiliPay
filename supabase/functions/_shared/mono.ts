@@ -1,5 +1,6 @@
 import { ApiError } from "./auth.ts";
 import { monoPaymentsSecret } from "./environment.ts";
+import { monoAppTag } from "./mono-app-tag.ts";
 import { koboToNaira, nairaToKobo } from "./money.ts";
 
 /**
@@ -9,27 +10,29 @@ import { koboToNaira, nairaToKobo } from "./money.ts";
  * and MiliPay references; the kobo conversion, the endpoint shapes and the
  * credential all stop here.
  *
- * Two ways to debit, chosen by MONO_PAYMENT_MODE:
+ * Two ways to debit:
  *
- *   directpay  one-off. The customer authorises this specific payment in
- *              Mono's widget. Always available, but it means a bank login for
- *              every purchase.
- *   mandate    the customer authorises once, when they link the account, and
- *              subsequent purchases debit against that standing mandate. This
- *              is what makes "fingerprint and it's done" possible while still
- *              moving real money per transaction and holding no float.
+ *   directpay  one-off. The customer authorises this specific payment on
+ *              Mono's page. Always the fallback, but it means a trip to the
+ *              bank for every purchase.
+ *   mandate    "quick pay". The customer authorises once (see quick-pay.ts)
+ *              and later purchases debit against that standing mandate —
+ *              fingerprint and done, still real money per transaction, no
+ *              float held.
  *
- * Mandate is the intended mode. It is not the default, because whether it is
- * enabled on the MiliPay Mono account is unconfirmed — see
- * docs/palm-scanner-integration.md's sibling note in the plan. Defaulting to
- * the mode we know exists is the safe way round.
+ * Which one a purchase uses is decided per purchase by vtu-service, from the
+ * account's mandate: initiateDebit debits a mandate when it is handed one and
+ * starts a DirectPay payment when it is not. MONO_PAYMENT_MODE only says
+ * whether quick pay is allowed at all — `mandate` allows it, anything else
+ * (the default) keeps every purchase on DirectPay. It stays off by default
+ * because Direct Debit is a product Mono has to enable on the account.
  *
- * ENDPOINT PATHS were checked against Mono's published API reference in
- * September 2026 and match: /v2/payments/initiate for DirectPay,
- * /v3/payments/mandates and /v3/payments/mandates/{id}/debit for Direct Debit.
- * Amounts are kobo on both, which is why nairaToKobo is applied here and
- * nowhere else. They remain isolated in this module so correcting one is a
- * one-line change rather than a hunt.
+ * ENDPOINT PATHS AND BODIES were checked against Mono's published reference
+ * in September 2026: /v2/payments/initiate for DirectPay and for starting a
+ * mandate (type recurring-debit), /v2/customers, /v3/payments/mandates/{id}/
+ * debit and /cancel. Amounts are kobo throughout, which is why nairaToKobo is
+ * applied here and nowhere else. They stay isolated in this module so
+ * correcting one is a one-line change rather than a hunt.
  *
  * SANDBOX. Mono has no separate sandbox host — test and live are the same
  * host, told apart by the key prefix (test_… / live_…), which is why
@@ -56,8 +59,9 @@ import { koboToNaira, nairaToKobo } from "./money.ts";
 const ENDPOINTS = {
   initiatePayment: "/v2/payments/initiate",
   verifyPayment: "/v2/payments/verify",
-  createMandate: "/v3/payments/mandates",
   debitMandate: "/v3/payments/mandates/:id/debit",
+  cancelMandate: "/v3/payments/mandates/:id/cancel",
+  createCustomer: "/v2/customers",
   refund: "/v2/payments/refund",
 } as const;
 
@@ -74,6 +78,11 @@ export class MonoError extends Error {
 
 export type MonoPaymentMode = "directpay" | "mandate";
 
+/**
+ * `mandate` allows quick pay; anything else keeps every purchase on DirectPay.
+ * Even under `mandate`, an account without an active mandate pays by
+ * DirectPay — see choosePaymentRoute in quick-pay.ts.
+ */
 export function monoPaymentMode(): MonoPaymentMode {
   return String(Deno.env.get("MONO_PAYMENT_MODE") ?? "").trim().toLowerCase() === "mandate"
     ? "mandate"
@@ -98,10 +107,33 @@ export function isMonoConfigured(): boolean {
   return secretKey().trim().length > 0;
 }
 
-interface CallOptions {
-  method?: "GET" | "POST";
+/** Which Mono app takes payments — see mono-app-tag.ts. */
+export function paymentsAppTag(): Promise<string | null> {
+  return monoAppTag(secretKey());
+}
+
+/**
+ * Where Mono sends the customer when they finish on its page.
+ *
+ * The app's own scheme by default, so a built app reopens itself. Mono's docs
+ * only ever show https examples; if Mono refuses a custom scheme, setting
+ * MONO_REDIRECT_URL to an https page fixes it without a code change.
+ */
+export function monoRedirectUrl(): string {
+  const configured = (Deno.env.get("MONO_REDIRECT_URL") ?? "").trim();
+  return configured || "milipay://payment-complete";
+}
+
+export interface CallOptions {
+  method?: "GET" | "POST" | "PATCH";
   body?: Record<string, unknown>;
   timeoutMs?: number;
+  /**
+   * Defaults to the payments key. Only mono-connect.ts passes another — the
+   * Connect app's, to read an account linked through it. This module itself
+   * never reads MONO_SECRET_KEY.
+   */
+  key?: string;
 }
 
 /**
@@ -113,8 +145,8 @@ interface CallOptions {
  * did not hear the answer. The caller's job is to leave the transaction
  * unsettled and let reconciliation find out, not to guess.
  */
-async function call<T>(path: string, opts: CallOptions = {}): Promise<T> {
-  const key = secretKey();
+export async function call<T>(path: string, opts: CallOptions = {}): Promise<T> {
+  const key = opts.key ?? secretKey();
   if (!key) {
     throw new MonoError("Mono is not configured", false, "NOT_CONFIGURED");
   }
@@ -173,28 +205,43 @@ export interface DebitRequest {
   amount: number;
   description: string;
   customer: { name: string; email?: string | null; phone?: string | null };
-  /** Mandate mode only. */
+  /**
+   * Quick pay: debit this mandate, with no customer interaction. Absent means
+   * a DirectPay payment the customer approves on Mono's page.
+   */
   mandateId?: string | null;
-  /** DirectPay mode only: where Mono sends the customer afterwards. */
-  redirectUrl?: string | null;
+  /**
+   * DirectPay only: the linked account's Mono id, so Mono's page skips the
+   * bank picker and the bank login and asks only for the approval. Mono
+   * accepts only an account linked through the SAME app — the caller checks
+   * that (see mono-app-tag.ts) and passes null when it cannot be sure.
+   * https://docs.mono.co/docs/payments/onetime/integration-guide
+   */
+  accountId?: string | null;
 }
 
 export interface DebitResult {
   monoPaymentId: string;
-  /** Present in directpay mode: the customer must visit this to authorise. */
+  /** Present for DirectPay: the customer must visit this to authorise. */
   authorisationUrl: string | null;
   /** What Mono said right now. The webhook is what we actually act on. */
   providerStatus: string | null;
 }
 
+/**
+ * Debits the customer: under a mandate when given one, DirectPay otherwise.
+ *
+ * THE TWO FAIL DIFFERENTLY, and the caller must treat them differently.
+ * Starting a DirectPay payment moves nothing — the customer has not approved
+ * it yet — so any error means nothing was charged. A MANDATE debit moves
+ * money the moment Mono accepts it, so a timeout or a 5xx does NOT mean
+ * nothing was charged: Mono may have debited and we missed the answer. Only a
+ * definite refusal (a non-retryable 4xx) proves the money did not move.
+ */
 export async function initiateDebit(request: DebitRequest): Promise<DebitResult> {
   const amountKobo = nairaToKobo(request.amount);
-  const mode = monoPaymentMode();
 
-  if (mode === "mandate") {
-    if (!request.mandateId) {
-      throw new MonoError("No active mandate for this account", false, "NO_MANDATE");
-    }
+  if (request.mandateId) {
     const payload = await call<{ data?: Record<string, unknown> }>(
       ENDPOINTS.debitMandate.replace(":id", encodeURIComponent(request.mandateId)),
       {
@@ -206,8 +253,12 @@ export async function initiateDebit(request: DebitRequest): Promise<DebitResult>
       },
     );
     const data = payload.data ?? {};
+    // Mono's debit response names its own reference `reference_number`, and
+    // the debit webhooks carry the same field — so it is kept, and the
+    // webhook can find this transaction by it if our reference is not echoed.
+    // https://docs.mono.co/docs/payments/direct-debit/debit-an-account
     return {
-      monoPaymentId: String(data.id ?? data.reference ?? request.reference),
+      monoPaymentId: String(data.reference_number ?? data.id ?? data.reference ?? request.reference),
       authorisationUrl: null,
       providerStatus: typeof data.status === "string" ? data.status : null,
     };
@@ -219,7 +270,8 @@ export async function initiateDebit(request: DebitRequest): Promise<DebitResult>
       type: "onetime-debit",
       description: request.description,
       reference: request.reference,
-      redirect_url: request.redirectUrl ?? undefined,
+      redirect_url: monoRedirectUrl(),
+      ...(request.accountId ? { account: request.accountId } : {}),
       customer: {
         name: request.customer.name,
         email: request.customer.email ?? undefined,
@@ -309,48 +361,108 @@ export async function refundPayment(request: RefundRequest): Promise<{ ok: boole
 // Mandates
 // ─────────────────────────────────────────────────────────────
 
+/**
+ * A Mono customer — the person a mandate is signed by.
+ *
+ * All six fields are required by Mono, and the BVN must be the account
+ * holder's. The BVN goes to Mono and nowhere else: it is never logged, and
+ * only the id Mono returns is kept.
+ * https://docs.mono.co/docs/payments/direct-debit/integration-guide-create-customers
+ */
+export interface MonoCustomerRequest {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  address: string;
+  bvn: string;
+}
+
+export async function createMonoCustomer(request: MonoCustomerRequest): Promise<string> {
+  const payload = await call<{ data?: Record<string, unknown> }>(ENDPOINTS.createCustomer, {
+    body: {
+      identity: { type: "bvn", number: request.bvn },
+      email: request.email,
+      first_name: request.firstName,
+      last_name: request.lastName,
+      address: request.address,
+      phone: request.phone,
+    },
+  });
+  const id = payload.data?.id;
+  if (typeof id !== "string" || !id) {
+    throw new MonoError("Mono did not return a customer id", false, "NO_CUSTOMER_ID");
+  }
+  return id;
+}
+
 export interface MandateRequest {
+  /** MiliPay's reference for this setup. Mono echoes it on the mandate's events. */
   reference: string;
-  customer: { name: string; email?: string | null; phone?: string | null };
-  /** Naira ceiling per debit, as approved by the bank. */
-  maxPerDebit: number;
+  /** Mono's customer id, from createMonoCustomer. */
+  monoCustomerId: string;
+  /** Naira. The TOTAL MiliPay may take over the mandate's life. */
+  allowance: number;
+  accountNumber: string;
+  bankCode: string;
   description: string;
-  startDate?: string;
-  endDate?: string;
+  /** YYYY-MM-DD, from mandateWindow(). */
+  startDate: string;
+  endDate: string;
 }
 
 export interface MandateResult {
-  mandateId: string;
-  status: string;
-  authorisationUrl: string | null;
+  /** Mono's mandate id (mmc_…) when it returns one at initiation. */
+  mandateId: string | null;
+  /** Mono's page, where the customer approves and is shown where to send ₦50. */
+  authorisationUrl: string;
 }
 
-export async function createMandate(request: MandateRequest): Promise<MandateResult> {
-  const payload = await call<{ data?: Record<string, unknown> }>(ENDPOINTS.createMandate, {
+/**
+ * Starts a quick-pay mandate: a variable e-mandate, so each purchase can be a
+ * different amount up to the total.
+ *
+ * This moves no money. It returns Mono's page, which walks the customer
+ * through the ₦50 authorisation transfer; the mandate becomes usable only
+ * when events.mandates.ready arrives.
+ * https://docs.mono.co/api/direct-debit/mandate/initiate-mandate-authorisation
+ */
+export async function initiateMandate(request: MandateRequest): Promise<MandateResult> {
+  const payload = await call<{ data?: Record<string, unknown> }>(ENDPOINTS.initiatePayment, {
     body: {
+      amount: nairaToKobo(request.allowance),
       type: "recurring-debit",
-      reference: request.reference,
-      amount: nairaToKobo(request.maxPerDebit),
+      method: "mandate",
+      mandate_type: "emandate",
+      debit_type: "variable",
+      account_number: request.accountNumber,
+      bank_code: request.bankCode,
       description: request.description,
+      reference: request.reference,
+      redirect_url: monoRedirectUrl(),
+      customer: { id: request.monoCustomerId },
       start_date: request.startDate,
       end_date: request.endDate,
-      customer: {
-        name: request.customer.name,
-        email: request.customer.email ?? undefined,
-        phone: request.customer.phone ?? undefined,
-      },
     },
   });
 
   const data = payload.data ?? {};
-  const id = data.id ?? data.mandate_id;
-  if (!id) throw new MonoError("Mono did not return a mandate id", false, "NO_MANDATE_ID");
+  const url = data.mono_url;
+  if (typeof url !== "string" || !url) {
+    throw new MonoError("Mono did not return an authorisation link", false, "NO_MANDATE_URL");
+  }
+  const id = data.mandate_id ?? data.id;
+  return { mandateId: typeof id === "string" && id ? id : null, authorisationUrl: url };
+}
 
-  return {
-    mandateId: String(id),
-    status: String(data.status ?? "pending"),
-    authorisationUrl: typeof data.mono_url === "string" ? data.mono_url : null,
-  };
+/**
+ * Cancels a mandate at Mono, so the customer's bank stops honouring it.
+ * https://docs.mono.co/api/direct-debit/mandate/cancel-mandate
+ */
+export async function cancelMandate(mandateId: string): Promise<void> {
+  await call(ENDPOINTS.cancelMandate.replace(":id", encodeURIComponent(mandateId)), {
+    method: "PATCH",
+  });
 }
 
 /** Maps a MonoError onto the customer-facing shape without leaking provider detail. */

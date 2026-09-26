@@ -11,6 +11,13 @@ import {
   statusForMonoEvent,
 } from "../_shared/vtu-state.ts";
 import { transitionTransaction } from "../_shared/transactions.ts";
+import {
+  isMandateLifecycleEvent,
+  mandateAccountMatches,
+  mandateChangeFor,
+  type MandateStatus,
+} from "../_shared/quick-pay.ts";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 /**
  * Mono payment confirmation.
@@ -92,14 +99,38 @@ serve(async (req) => {
   });
 
   if (dupeError) {
-    if ((dupeError as { code?: string }).code === "23505") {
+    if ((dupeError as { code?: string }).code !== "23505") {
+      console.error("[mono-webhook] could not record event", dupeError);
+      // Refusing here would make Mono retry, and the retry would hit the same
+      // problem. Carrying on without the idempotency record is worse. Ask for a
+      // retry and let it settle.
+      return respond(503, { error: "temporarily unavailable" });
+    }
+
+    /**
+     * Seen before — but was it FINISHED?
+     *
+     * This used to answer every repeat with "duplicate", which silently threw
+     * away the retry this handler itself asks for: a delivery that hit a
+     * database hiccup after recording the event answered 503 so Mono would try
+     * again, and the retry was then dropped as a duplicate. A successful
+     * payment lost that way left the customer charged and the purchase stuck.
+     *
+     * A delivery that never reached finish() is processed again. That is safe
+     * because nothing below acts twice: every transaction and mandate change is
+     * conditional on the state it was read in, so a second pass that races the
+     * first finds the row already moved and does nothing.
+     */
+    const { data: seen } = await admin
+      .from("webhook_events")
+      .select("processed_at")
+      .eq("provider", "mono")
+      .eq("event_id", eventId)
+      .maybeSingle();
+    if (!seen || seen.processed_at) {
       return respond(200, { ok: true, duplicate: true });
     }
-    console.error("[mono-webhook] could not record event", dupeError);
-    // Refusing here would make Mono retry, and the retry would hit the same
-    // problem. Carrying on without the idempotency record is worse. Ask for a
-    // retry and let it settle.
-    return respond(503, { error: "temporarily unavailable" });
+    console.error(`[mono-webhook] reprocessing unfinished delivery ${eventId}`);
   }
 
   const finish = async (result: string, status = 200, extra: Record<string, unknown> = {}) => {
@@ -111,6 +142,14 @@ serve(async (req) => {
     return respond(status, { ok: status === 200, result, ...extra });
   };
 
+  // A mandate being approved, activated, rejected or cancelled is not a
+  // payment, and is never looked up as one. See quick-pay.ts.
+  if (isMandateLifecycleEvent(eventType)) {
+    const outcome = await applyMandateEvent(admin, eventType, payload);
+    if (outcome === null) return respond(503, { error: "temporarily unavailable" });
+    return finish(outcome);
+  }
+
   const target = statusForMonoEvent(eventType);
   if (!target) {
     // An event we do not understand must never advance a transaction.
@@ -121,11 +160,24 @@ serve(async (req) => {
     return finish("ignored:no_reference");
   }
 
-  const { data: tx, error: txError } = await admin
+  const TX_COLUMNS = "id, reference, status, amount, user_id, mono_payment_id";
+  let { data: tx, error: txError } = await admin
     .from("transactions")
-    .select("id, reference, status, amount, user_id, mono_payment_id")
+    .select(TX_COLUMNS)
     .eq("reference", reference)
     .maybeSingle();
+
+  // A quick-pay debit's events carry Mono's reference_number, which Mono's
+  // docs do not promise is ours. vtu-service stored the one Mono's debit
+  // response gave back as mono_payment_id, so that finds it when ours was not
+  // echoed. Only for a mandate debit: DirectPay always echoes our reference.
+  if (!txError && !tx && isRecord(payload.data) && typeof payload.data.mandate === "string") {
+    ({ data: tx, error: txError } = await admin
+      .from("transactions")
+      .select(TX_COLUMNS)
+      .eq("mono_payment_id", reference)
+      .maybeSingle());
+  }
 
   if (txError) {
     console.error("[mono-webhook] lookup failed", txError);
@@ -139,6 +191,10 @@ serve(async (req) => {
     console.error(`[mono-webhook] no transaction for reference ${reference}`);
     return finish("ignored:unknown_reference");
   }
+
+  // OUR reference from here on. It equals the event's for DirectPay; for a
+  // quick-pay debit found by Mono's reference_number, it does not.
+  const txReference = String(tx.reference);
 
   if (tx.status !== "initiated") {
     // Advance only. A terminal or already-advanced transaction is left alone.
@@ -154,7 +210,7 @@ serve(async (req) => {
       ? "payment cancelled"
       : "bank declined";
     await transitionTransaction(admin, {
-      reference,
+      reference: txReference,
       from: "initiated",
       to: "payment_failed",
       reason,
@@ -178,9 +234,9 @@ serve(async (req) => {
    * finished. Named and handled here so it does not depend on luck.
    */
   if (target === "quarantined") {
-    console.error(`[mono-webhook] PARTIAL DEBIT on ${reference} — quarantining, not fulfilling`);
+    console.error(`[mono-webhook] PARTIAL DEBIT on ${txReference} — quarantining, not fulfilling`);
     await transitionTransaction(admin, {
-      reference,
+      reference: txReference,
       from: "initiated",
       to: "quarantined",
       reason: `partial collection (${eventType})`,
@@ -193,7 +249,7 @@ serve(async (req) => {
   if (target !== "paid") {
     // Anything else the mapping might grow. Advancing on a status this handler
     // has not been taught is how value gets dispensed by accident.
-    console.error(`[mono-webhook] unhandled target ${target} for ${reference}`);
+    console.error(`[mono-webhook] unhandled target ${target} for ${txReference}`);
     return finish(`ignored:unhandled_target_${target}`);
   }
 
@@ -203,10 +259,10 @@ serve(async (req) => {
   // carry one.)
   if (payment.status !== null && !["successful", "success", "paid"].includes(payment.status)) {
     console.error(
-      `[mono-webhook] STATUS CONTRADICTION on ${reference}: event ${eventType}, object status ${payment.status}`,
+      `[mono-webhook] STATUS CONTRADICTION on ${txReference}: event ${eventType}, object status ${payment.status}`,
     );
     await transitionTransaction(admin, {
-      reference,
+      reference: txReference,
       from: "initiated",
       to: "quarantined",
       reason: `success event but payment status "${payment.status}"`,
@@ -229,10 +285,10 @@ serve(async (req) => {
     // Not a rounding question: the request we think we made is not the one
     // that was paid. Quarantine rather than fulfil.
     console.error(
-      `[mono-webhook] AMOUNT MISMATCH on ${reference}: priced ${tx.amount}, paid ${paidNaira}`,
+      `[mono-webhook] AMOUNT MISMATCH on ${txReference}: priced ${tx.amount}, paid ${paidNaira}`,
     );
     await transitionTransaction(admin, {
-      reference,
+      reference: txReference,
       from: "initiated",
       to: "quarantined",
       reason: `amount mismatch: priced ${tx.amount}, paid ${paidNaira}`,
@@ -243,7 +299,7 @@ serve(async (req) => {
   }
 
   const moved = await transitionTransaction(admin, {
-    reference,
+    reference: txReference,
     from: "initiated",
     to: "paid",
     actor: "mono-webhook",
@@ -255,7 +311,7 @@ serve(async (req) => {
       // Only a row with no id yet takes the webhook's.
       ...(tx.mono_payment_id ? {} : payment.id ? { mono_payment_id: payment.id } : {}),
       payment_provider: "mono",
-      payment_reference: reference,
+      payment_reference: txReference,
     },
     metadata: { eventType, paidAmount: paidNaira, monoTransactionId: payment.id },
   });
@@ -271,7 +327,7 @@ serve(async (req) => {
   // rules about which gateway serves which network live in one place. It runs
   // after the response where the runtime supports it, because Mono wants a
   // fast 200 and a slow webhook gets retried.
-  const fulfil = triggerFulfilment(reference);
+  const fulfil = triggerFulfilment(txReference);
   const runtime = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime;
   if (runtime?.waitUntil) {
     runtime.waitUntil(fulfil);
@@ -344,6 +400,105 @@ function paymentFields(payload: Record<string, unknown>): PaymentFields {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * A quick-pay mandate's lifecycle: approved, ready, rejected, cancelled…
+ *
+ * Moves no money, but `ready` is what turns on fingerprint-only purchases for
+ * an account, so it gets the same care as a payment: found only by the id or
+ * reference we recorded at setup (never created from an event), advanced
+ * only forward (mandateChangeFor), conditional on the state it was read in,
+ * and refused outright when Mono says it was set up on a different account
+ * from the one the customer chose.
+ *
+ * Returns the outcome to record, or null to ask Mono to retry.
+ *
+ * Payload shapes: https://docs.mono.co/docs/payments/direct-debit/webhook-events
+ * — data.id on most events, data.mandate on events.mandate.action.*.
+ */
+async function applyMandateEvent(
+  admin: SupabaseClient,
+  eventType: string,
+  payload: Record<string, unknown>,
+): Promise<string | null> {
+  const data = isRecord(payload.data) ? payload.data : {};
+  const text = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const mandateId = text(data.id) ?? text(data.mandate);
+  const setupReference = text(data.reference);
+
+  const COLUMNS = "id, status, mono_mandate_id, linked_account_id";
+  let row: Record<string, unknown> | null = null;
+  if (mandateId) {
+    const { data: found, error } = await admin
+      .from("mono_mandates").select(COLUMNS).eq("mono_mandate_id", mandateId).maybeSingle();
+    if (error) return null;
+    row = found;
+  }
+  if (!row && setupReference) {
+    const { data: found, error } = await admin
+      .from("mono_mandates").select(COLUMNS).eq("reference", setupReference).maybeSingle();
+    if (error) return null;
+    row = found;
+  }
+  if (!row) {
+    console.error(`[mono-webhook] ${eventType} for a mandate we did not set up (${mandateId ?? setupReference})`);
+    return "ignored:unknown_mandate";
+  }
+
+  const current = String(row.status) as MandateStatus;
+  const now = new Date().toISOString();
+  const patch: Record<string, unknown> = { updated_at: now };
+  if (!row.mono_mandate_id && mandateId) patch.mono_mandate_id = mandateId;
+
+  // The account check, while there is still something to refuse.
+  if (current === "pending" && row.linked_account_id) {
+    const { data: account } = await admin
+      .from("linked_accounts").select("account_number").eq("id", row.linked_account_id).maybeSingle();
+    if (!mandateAccountMatches(account?.account_number as string | undefined, data.account_number)) {
+      console.error(`[mono-webhook] MANDATE ON THE WRONG ACCOUNT: ${mandateId ?? setupReference} — refusing it`);
+      const { data: moved } = await admin
+        .from("mono_mandates")
+        .update({ ...patch, status: "rejected", failure_reason: "set up on a different account from the one chosen" })
+        .eq("id", row.id)
+        .eq("status", current)
+        .select("id");
+      return moved?.length ? "mandate:rejected_wrong_account" : "ignored:mandate_race";
+    }
+  }
+
+  const change = mandateChangeFor(current, eventType, data);
+  if (!change) {
+    if (patch.mono_mandate_id) {
+      await admin.from("mono_mandates").update(patch).eq("id", row.id);
+    }
+    return `ignored:mandate_${eventType.split(".").pop()}_while_${current}`;
+  }
+
+  patch.status = change.to;
+  if (change.stamp) patch[change.stamp] = now;
+  if (change.to === "rejected") {
+    patch.failure_reason = text(data.message) ?? "the bank did not approve it";
+  }
+
+  const { data: moved, error } = await admin
+    .from("mono_mandates")
+    .update(patch)
+    .eq("id", row.id)
+    .eq("status", current)
+    .select("id");
+
+  if (error) {
+    if ((error as { code?: string }).code === "23505") {
+      // One active mandate per account is a unique index. Two becoming ready
+      // at once is not something to guess about.
+      console.error(`[mono-webhook] second active mandate refused for account ${row.linked_account_id}`);
+      return "ignored:mandate_conflict";
+    }
+    console.error("[mono-webhook] mandate update failed", error);
+    return null;
+  }
+  return moved?.length ? `mandate:${change.to}` : "ignored:mandate_race";
 }
 
 /**

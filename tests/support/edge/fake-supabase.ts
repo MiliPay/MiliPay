@@ -1,7 +1,8 @@
 /**
  * An in-memory stand-in for the parts of supabase-js the Edge Functions use:
  * from().select/insert/update + eq/is/in/lt/order/limit + maybeSingle/single,
- * and rpc().
+ * rpc() (answered per test through rpcAnswers), and auth.getUser() (tokens
+ * mapped to users through `users`).
  *
  * Deliberately small and deliberately literal. It applies equality filters
  * and patches exactly as written and does nothing clever, so a test failure
@@ -97,8 +98,14 @@ class Query implements PromiseLike<Result> {
           }
         }
       }
-      for (const row of this.inserted) rows.push({ id: `${this.table}-${rows.length + 1}`, ...row });
-      return this.inserted;
+      // Returned as stored, id included, the way insert().select() does.
+      const stored: Row[] = [];
+      for (const row of this.inserted) {
+        const withId = { id: `${this.table}-${rows.length + 1}`, ...row };
+        rows.push(withId);
+        stored.push(withId);
+      }
+      return stored;
     }
 
     const matched = rows.filter((row) => this.filters.every((f) => f(row)));
@@ -146,6 +153,19 @@ export class FakeSupabase {
   readonly rpcCalls: { name: string; args: unknown }[] = [];
   /** Columns that together must be unique per table, like a unique index. */
   readonly uniqueKeys = new Map<string, string[]>();
+  /** What each rpc answers. An rpc with no answer here throws, as before. */
+  readonly rpcAnswers = new Map<string, (args: unknown) => unknown>();
+  /** Bearer token -> user, for requireCaller's auth.getUser(). */
+  readonly users = new Map<string, { id: string; email?: string | null }>();
+
+  readonly auth = {
+    getUser: async (token: string) => {
+      const user = this.users.get(token);
+      return user
+        ? { data: { user }, error: null }
+        : { data: { user: null }, error: { message: "invalid token" } };
+    },
+  };
 
   constructor(seed: Record<string, Row[]> = {}, unique: Record<string, string[]> = {}) {
     for (const [name, columns] of Object.entries(unique)) this.uniqueKeys.set(name, columns);
@@ -165,6 +185,8 @@ export class FakeSupabase {
 
   rpc(name: string, args: unknown): Promise<Result> {
     this.rpcCalls.push({ name, args });
+    const answer = this.rpcAnswers.get(name);
+    if (answer) return Promise.resolve({ data: answer(args), error: null });
     throw new Error(`fake-supabase: rpc ${name} is not implemented`);
   }
 }

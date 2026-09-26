@@ -116,12 +116,19 @@ describe("Mono webhook events", () => {
 
   it("marks Mono's real failure events", () => {
     expect(statusForMonoEvent("events.mandates.debit.failed")).toBe("payment_failed");
-    // Both of these fell through the old substring heuristic and were ignored:
-    // "rejected" contains none of failed/declined/cancelled, and "cancel" is
-    // not "cancelled".
-    expect(statusForMonoEvent("events.mandates.rejected")).toBe("payment_failed");
-    expect(statusForMonoEvent("events.mandate.action.cancel")).toBe("payment_failed");
-    expect(statusForMonoEvent("events.mandates.expired")).toBe("payment_failed");
+  });
+
+  it("does not read a MANDATE's own events as a payment's outcome", () => {
+    // These used to map to payment_failed. They are about the mandate — its
+    // bank rejecting it, the customer cancelling it, it running out — and
+    // their reference is the setup's, never a purchase's. mono-webhook routes
+    // them to the quick-pay rules first (see quick-pay.test.ts); here they
+    // must not advance a transaction, including through the substring net.
+    expect(statusForMonoEvent("events.mandates.rejected")).toBeNull();
+    expect(statusForMonoEvent("events.mandate.action.cancel")).toBeNull();
+    expect(statusForMonoEvent("events.mandates.expired")).toBeNull();
+    expect(statusForMonoEvent("events.mandates.ready")).toBeNull();
+    expect(statusForMonoEvent("events.mandates.approved")).toBeNull();
   });
 
   it("maps every DirectPay ending by name", () => {

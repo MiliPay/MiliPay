@@ -264,10 +264,24 @@ unit suite; **not yet proven end to end** against the Mono and VTPass sandboxes.
   purchase, reconciliation and recovery paths.
 - **Mono** — collects the customer's money from their linked bank account.
   `MONO_PAYMENT_MODE=directpay` (one-off authorisation per payment) is the
-  default; `mandate` is wired for later. Mono fixes each app's product at
-  creation, so this takes **two** Mono apps: a Connect app for bank linking
-  (`MONO_SECRET_KEY`) and a Payments app for DirectPay
-  (`MONO_PAYMENTS_SECRET_KEY`). The webhook is registered on the Payments app.
+  default. Mono fixes each app's product at creation, so this takes **two**
+  Mono apps: a Connect app for bank linking (`MONO_SECRET_KEY`) and a Payments
+  app for DirectPay (`MONO_PAYMENTS_SECRET_KEY`). The webhook is registered on
+  the Payments app.
+- **Quick pay** — Mono Direct Debit mandates, off until
+  `MONO_PAYMENT_MODE=mandate`. A customer approves MiliPay once per account
+  (Settings → Linked Banks; Mono's page asks them to send ₦50 from that
+  account), Mono's `events.mandates.ready` switches it on, and purchases from
+  that account are then fingerprint-only. Per purchase, vtu-service uses the
+  mandate when the account has an active one with allowance left and falls
+  back to DirectPay otherwise — quick pay removes a step, never blocks one.
+  The rules are in `supabase/functions/_shared/quick-pay.ts`; setup, status
+  and switch-off are `supabase/functions/mono-mandate`. **Built against
+  Mono's documentation, not yet run against Mono** — Direct Debit has to be
+  enabled on the Payments app first. Refunds of a quick-pay debit are not yet
+  proven: the refund queue calls Mono's DirectPay refund endpoint, which may
+  not accept a mandate debit. If it does not, the refund exhausts its retries
+  and lands as `refund_failed` for staff to settle — visible, not silent.
 - **BigiSub** — parked. `supabase/functions/_shared/bigisub.ts` is still in the
   repository, but nothing live imports it and nothing reads `BIGISUB_*`. It was
   parked because no BigiSub purchase endpoint accepts a client-supplied

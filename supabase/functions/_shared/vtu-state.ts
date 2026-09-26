@@ -292,9 +292,12 @@ const MONO_EVENTS: Record<string, TransactionStatus> = {
   "direct_debit.payment_cancelled": "payment_failed",
   "direct_debit.payment_abandoned": "payment_failed",
   "events.mandates.debit.failed": "payment_failed",
-  "events.mandates.rejected": "payment_failed",
-  "events.mandate.action.cancel": "payment_failed",
-  "events.mandates.expired": "payment_failed",
+  // Not here: events.mandates.rejected, events.mandate.action.cancel and
+  // events.mandates.expired. They are about the MANDATE, not a payment, and
+  // mono-webhook hands them to the quick-pay rules (isMandateLifecycleEvent)
+  // before this map is ever consulted. Mapping them to payment_failed was a
+  // category error: their reference is a setup's, so they never matched a
+  // purchase anyway.
   "payment.failed": "payment_failed",
   "mono.events.payment.failed": "payment_failed",
 

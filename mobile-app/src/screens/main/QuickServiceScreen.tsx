@@ -39,6 +39,8 @@ import { colors } from '../../theme/tokens';
 import { shareReceiptAsPdf, shareReceiptAsImage } from '../../lib/receiptSharing';
 import { supabase } from '../../lib/supabase';
 import { paymentAccountView } from '../../lib/paymentAccounts';
+import { useQuickPay } from '../../lib/quickPay';
+import { paymentMethodLabel } from '../../lib/quickPayCopy';
 import {
   fetchDynamicVariations,
   fetchElectricityProviders,
@@ -269,6 +271,10 @@ export default function QuickServiceScreen({ route, navigation }: any) {
     isLoading: accountsLoading,
     error: accountsError,
   });
+
+  // Which accounts have quick pay on, for the label and badge only. The
+  // server decides per purchase whether it is actually used.
+  const quickPay = useQuickPay();
 
   useEffect(() => {
     if (activeBankIndex >= 0 && activeBankIndex < linkedAccounts.length) {
@@ -998,8 +1004,8 @@ export default function QuickServiceScreen({ route, navigation }: any) {
       // customer staring at "Confirming with your bank…" for a confirmation
       // that was never going to arrive.
       //
-      // In mandate mode the server returns null here and there is nothing to
-      // open: the standing authorisation is the whole point of that mode.
+      // With quick pay (a mandate) the server returns null here and there is
+      // nothing to open: the standing authorisation is the whole point.
       if (data.authorisationUrl) {
         try {
           const canOpen = await Linking.canOpenURL(data.authorisationUrl);
@@ -1650,7 +1656,9 @@ export default function QuickServiceScreen({ route, navigation }: any) {
               </Text>
               <View className="bg-signal/15 px-2 py-0.5 rounded-full">
                 <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-[10px]">
-                  Mono DirectPay
+                  {/* Only the server's word makes this "Quick pay": until the
+                      bank has activated it, every purchase asks the bank. */}
+                  {paymentMethodLabel(quickPay.forAccount(linkedAccounts[selectedBankIndex]?.id)?.state)}
                 </Text>
               </View>
             </View>
@@ -1692,6 +1700,14 @@ export default function QuickServiceScreen({ route, navigation }: any) {
                           <Text className="text-slate-500 dark:text-zinc-400 font-inter text-xs">
                             •••• {acc.accountNumber.slice(-4)} • Balance: {acc.balance}
                           </Text>
+                          {quickPay.forAccount(acc.id)?.state === 'on' ? (
+                            <View className="flex-row items-center mt-1">
+                              <Zap color="#00C896" size={11} />
+                              <Text className="text-signal-dim dark:text-signal-bright font-inter-semibold text-[10px] ml-1">
+                                Quick pay — fingerprint only
+                              </Text>
+                            </View>
+                          ) : null}
                         </View>
                       </View>
                       <View

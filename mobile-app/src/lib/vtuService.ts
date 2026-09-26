@@ -69,6 +69,11 @@ export interface VtuRechargeResult {
    * `initiated` for ever.
    */
   authorisationUrl?: string | null;
+  /**
+   * How the money is being taken: 'mandate' is quick pay (nothing more for
+   * the customer to do), 'directpay' is an approval at their bank.
+   */
+  paymentRoute?: 'mandate' | 'directpay';
   token?: string | null;
   units?: string | null;
   newBalance?: number;

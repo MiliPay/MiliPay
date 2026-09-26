@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3"
+import { monoAppTag } from "../_shared/mono-app-tag.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -108,6 +109,10 @@ serve(async (req) => {
     const bankName = acct.institution?.name || accountData?.data?.meta?.data_status || 'Unknown Bank';
     const accountNumber = acct.account_number || acct.accountNumber || '0000000000';
     const accountName = acct.name || 'Unknown User';
+    // Quick pay needs the bank code beside the account number; keeping it
+    // here saves asking Mono again later. Spelled both ways in Mono's payloads.
+    const rawBankCode = acct.institution?.bank_code ?? acct.institution?.bankCode;
+    const bankCode = typeof rawBankCode === 'string' && rawBankCode.trim() ? rawBankCode.trim() : null;
 
     // Mono reports balances in kobo. cached_balance is Naira numeric(12,2)
     // per the project currency invariant, so convert at the boundary rather
@@ -129,6 +134,11 @@ serve(async (req) => {
       account_name: accountName,
       cached_balance: balanceNgn,
       balance_as_of: new Date().toISOString(),
+      bank_code: bankCode,
+      // Which Mono app linked it. DirectPay can skip Mono's bank picker only
+      // for an account linked through the app taking the payment, and this is
+      // how vtu-service tells. Not secret: see _shared/mono-app-tag.ts.
+      mono_app_tag: await monoAppTag(monoSecretKey),
     }).select().single();
 
     if (error) {

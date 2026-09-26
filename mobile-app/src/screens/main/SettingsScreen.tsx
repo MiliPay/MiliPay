@@ -33,6 +33,8 @@ import {
 import { useAuthStore, useBankStore } from '../../store/useStore';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { ConfirmIdentitySheet } from '../../components/ui/ConfirmIdentitySheet';
+import { QuickPayPanel } from '../../components/ui/QuickPayPanel';
+import { stopQuickPay, useQuickPay } from '../../lib/quickPay';
 import {
   getBiometricCapability,
   isBiometricUnlockEnabled,
@@ -169,6 +171,10 @@ export default function SettingsScreen({ navigation }: any) {
   const [isBankModalVisible, setIsBankModalVisible] = useState(false);
   const [accountToUnlink, setAccountToUnlink] = useState<any>(null);
   const [isUnlinking, setIsUnlinking] = useState(false);
+  // Read while Linked Banks is open, and again whenever the app returns to
+  // the foreground — which is when quick pay changes: the customer has just
+  // been to Mono's page and their bank app.
+  const quickPay = useQuickPay(isBankModalVisible);
 
   /**
    * Whether the operating system is letting us notify this customer.
@@ -687,8 +693,8 @@ export default function SettingsScreen({ navigation }: any) {
                   </View>
                 ) : (
                   linkedAccounts.map((acc, index) => (
-                    <Pressable 
-                      key={acc.id || index.toString()} 
+                    <React.Fragment key={acc.id || index.toString()}>
+                    <Pressable
                       className={`flex-row items-center justify-between p-5 mb-4 rounded-[28px] border ${isDark ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}
                       style={{
                         shadowColor: '#000',
@@ -729,6 +735,17 @@ export default function SettingsScreen({ navigation }: any) {
                         <Trash2 color="#ef4444" size={20} />
                       </Pressable>
                     </Pressable>
+                    {/* Shown only once quick pay is offered at all. */}
+                    {quickPay.status.available && quickPay.forAccount(acc.id) ? (
+                      <QuickPayPanel
+                        view={quickPay.forAccount(acc.id)!}
+                        allowances={quickPay.status.allowances}
+                        missingDetails={quickPay.status.missingDetails}
+                        onChanged={() => void quickPay.refresh()}
+                        isDark={isDark}
+                      />
+                    ) : null}
+                    </React.Fragment>
                   ))
                 )}
               </ScrollView>
@@ -794,6 +811,13 @@ export default function SettingsScreen({ navigation }: any) {
                       setIsUnlinking(true);
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                       const targetId = accountToUnlink.id;
+                      // A removed account must not keep a standing permission
+                      // to debit it. The server never debits an unlinked
+                      // account either way; this also cancels it at the bank.
+                      const quickPayState = quickPay.forAccount(targetId)?.state;
+                      if (quickPayState && quickPayState !== 'off') {
+                        await stopQuickPay(targetId).catch(() => false);
+                      }
                       await unlinkAccount(targetId);
                       setIsUnlinking(false);
                       setAccountToUnlink(null);

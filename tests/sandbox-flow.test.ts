@@ -211,9 +211,8 @@ describe("every status the Mono mapping can return has a home", () => {
       "events.mandates.debit.successful",
       "events.mandates.debit.failed",
       "events.mandates.debit.partial_debit_successful",
-      "events.mandates.rejected",
-      "events.mandate.action.cancel",
-      "events.mandates.expired",
+      "direct_debit.payment_cancelled",
+      "direct_debit.payment_abandoned",
     ];
 
     for (const event of events) {
