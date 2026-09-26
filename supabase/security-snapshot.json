@@ -143,12 +143,14 @@
         "account_name",
         "account_number",
         "balance_as_of",
+        "bank_code",
         "bank_name",
         "cached_balance",
         "created_at",
         "id",
         "is_active",
         "mono_account_id",
+        "mono_app_tag",
         "user_id"
       ],
       "grantee": "authenticated",
@@ -307,6 +309,54 @@
       "grantee": "authenticated",
       "privilege": "UPDATE",
       "table": "pos_terminals"
+    },
+    {
+      "columns": [
+        "created_at",
+        "customer_id",
+        "device_name",
+        "id",
+        "last_seen_at",
+        "platform",
+        "revoked_at",
+        "token",
+        "user_id"
+      ],
+      "grantee": "authenticated",
+      "privilege": "INSERT",
+      "table": "push_tokens"
+    },
+    {
+      "columns": [
+        "created_at",
+        "customer_id",
+        "device_name",
+        "id",
+        "last_seen_at",
+        "platform",
+        "revoked_at",
+        "token",
+        "user_id"
+      ],
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "push_tokens"
+    },
+    {
+      "columns": [
+        "created_at",
+        "customer_id",
+        "device_name",
+        "id",
+        "last_seen_at",
+        "platform",
+        "revoked_at",
+        "token",
+        "user_id"
+      ],
+      "grantee": "authenticated",
+      "privilege": "UPDATE",
+      "table": "push_tokens"
     },
     {
       "columns": [
@@ -564,6 +614,7 @@
         "initiated_at",
         "merchant_id",
         "merchant_name",
+        "mono_mandate_id",
         "mono_payment_id",
         "operator_reference",
         "operator_transaction_id",
@@ -905,6 +956,16 @@
       "using": "((((auth.jwt() -> 'app_metadata'::text) ->> 'role'::text) = 'agent'::text) AND (registered_by = auth.uid()))"
     },
     {
+      "check": "(auth_user_id = auth.uid())",
+      "command": "UPDATE",
+      "name": "Customers can update their own record",
+      "roles": [
+        "authenticated"
+      ],
+      "table": "customers",
+      "using": "(auth_user_id = auth.uid())"
+    },
+    {
       "check": "",
       "command": "SELECT",
       "name": "Customers can view their own record",
@@ -1093,6 +1154,16 @@
       ],
       "table": "pos_terminals",
       "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE (staff_profiles.id = auth.uid())))"
+    },
+    {
+      "check": "(user_id = auth.uid())",
+      "command": "ALL",
+      "name": "Customers manage their own device tokens",
+      "roles": [
+        "authenticated"
+      ],
+      "table": "push_tokens",
+      "using": "(user_id = auth.uid())"
     },
     {
       "check": "",
@@ -1383,6 +1454,21 @@
     },
     {
       "grantee": "authenticated",
+      "privilege": "INSERT",
+      "table": "push_tokens"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "push_tokens"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "UPDATE",
+      "table": "push_tokens"
+    },
+    {
+      "grantee": "authenticated",
       "privilege": "SELECT",
       "table": "refund_queue"
     },
@@ -1530,6 +1616,11 @@
     },
     {
       "name": "provider_catalogue_cache",
+      "rls_enabled": true,
+      "rls_forced": true
+    },
+    {
+      "name": "push_tokens",
       "rls_enabled": true,
       "rls_forced": true
     },
