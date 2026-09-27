@@ -42,12 +42,51 @@ module.exports = {
           warn: "#FFB454",
           fail: "#FF5C5C",
         },
+
+        // ── The redesign's semantic tokens ─────────────────────────────
+        // One name per role, light and dark both defined in global.css, so a
+        // screen never writes `dark:` for these. Same family as the ledger /
+        // signal palette above (the dark values ARE ledger and signal), which
+        // is why this extends it rather than being a second palette.
+        canvas: "var(--mp-bg)",
+        card: {
+          DEFAULT: "var(--mp-card)",
+          line: "var(--mp-card-line)",
+        },
+        line: "var(--mp-line)",
+        chip: "var(--mp-chip)",
+        field: "var(--mp-input)",
+        fg: {
+          DEFAULT: "var(--mp-text)",
+          muted: "var(--mp-muted)",
+          faint: "var(--mp-faint)",
+        },
+        brand: {
+          DEFAULT: "var(--mp-brand)",
+          text: "var(--mp-brand-text)",
+          soft: "var(--mp-brand-soft)",
+          // Text that sits ON the brand green, in both themes.
+          ink: "#04120E",
+        },
+        warn: {
+          DEFAULT: "var(--mp-warn)",
+          soft: "var(--mp-warn-soft)",
+        },
+        fail: {
+          DEFAULT: "var(--mp-fail)",
+          soft: "var(--mp-fail-soft)",
+        },
+        tabbar: "var(--mp-tab)",
+        sheet: "var(--mp-sheet)",
+        scrim: "var(--mp-scrim)",
       },
       fontFamily: {
         inter: ['Inter_400Regular', 'sans-serif'],
         'inter-medium': ['Inter_500Medium', 'sans-serif'],
         'inter-semibold': ['Inter_600SemiBold', 'sans-serif'],
         'inter-bold': ['Inter_700Bold', 'sans-serif'],
+        // The redesign's headings (tab titles, balances) are 800.
+        'inter-extrabold': ['Inter_800ExtraBold', 'sans-serif'],
         // `font-inter-black` was used in five places and defined in none of
         // them, so it resolved to nothing. Inter_900Black is not loaded in
         // App.tsx either; bold is the heaviest weight the app actually has.

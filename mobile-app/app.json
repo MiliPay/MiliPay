@@ -32,10 +32,10 @@
           "image": "./assets/splash-mark.png",
           "imageWidth": 180,
           "resizeMode": "contain",
-          "backgroundColor": "#FFFFFF",
+          "backgroundColor": "#065F46",
           "dark": {
             "image": "./assets/splash-mark.png",
-            "backgroundColor": "#080C0A"
+            "backgroundColor": "#065F46"
           }
         }
       ],

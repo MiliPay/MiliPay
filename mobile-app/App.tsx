@@ -1,11 +1,20 @@
 import './global.css';
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer, DarkTheme, createNavigationContainerRef } from '@react-navigation/native';
 import AppNavigator from './src/navigation/AppNavigator';
 
 export const navigationRef = createNavigationContainerRef();
-import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
+import {
+  useFonts,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  Inter_800ExtraBold,
+} from '@expo-google-fonts/inter';
+import { AnimatedSplash } from './src/components/ds/AnimatedSplash';
+import { HeartbeatFill } from './src/components/ds/HeartbeatLoader';
 import { SpaceMono_400Regular, SpaceMono_700Bold } from '@expo-google-fonts/space-mono';
 import * as SplashScreen from 'expo-splash-screen';
 import { LogBox } from 'react-native';
@@ -48,6 +57,7 @@ export default function App() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    Inter_800ExtraBold,
     SpaceMono_400Regular,
     SpaceMono_700Bold,
   });
@@ -97,23 +107,39 @@ export default function App() {
     });
   }, []);
 
-  useEffect(() => {
-    // Only dismiss splash screen once BOTH fonts AND auth session restoration are complete
-    if ((fontsLoaded || fontError) && !isLoading) {
-      SplashScreen.hideAsync().catch(() => {});
-    }
-  }, [fontsLoaded, fontError, isLoading]);
+  /**
+   * Start-up, in the redesign's order:
+   *
+   *   1. the native splash (the logo on green) until the fonts are in — the
+   *      animated splash is drawn in Inter, so it cannot start before them
+   *   2. the animated splash, for SPLASH_MS or until tapped, while the saved
+   *      session is restored underneath
+   *   3. if that restore is still going when the splash ends, the heartbeat
+   *      loader; otherwise straight into the app
+   *
+   * The native splash used to wait for the session as well, which is right
+   * with nothing else to show but would now just delay the animated one.
+   */
+  const fontsReady = fontsLoaded || !!fontError;
+  const [splashDone, setSplashDone] = useState(false);
+  const endSplash = useCallback(() => setSplashDone(true), []);
 
-  // Keep native splash screen active while fonts load or auth state is being determined
-  if ((!fontsLoaded && !fontError) || isLoading) {
-    return null;
-  }
+  useEffect(() => {
+    if (fontsReady) SplashScreen.hide();
+  }, [fontsReady]);
+
+  if (!fontsReady) return null;
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer ref={navigationRef} theme={appNavTheme}>
-        <AppNavigator />
-      </NavigationContainer>
+      {isLoading ? (
+        <HeartbeatFill />
+      ) : (
+        <NavigationContainer ref={navigationRef} theme={appNavTheme}>
+          <AppNavigator />
+        </NavigationContainer>
+      )}
+      {!splashDone ? <AnimatedSplash onDone={endSplash} /> : null}
     </SafeAreaProvider>
   );
 }

@@ -34,6 +34,107 @@ export const colors = {
   },
 } as const;
 
+/**
+ * The redesign's semantic colours, for the places a className cannot reach.
+ * Identical to the CSS variables in global.css — keep the two in step. Read
+ * them through useThemeColors() so the active theme is picked for you.
+ * Source: design_handoff_milipay_redesign/README.md, "Design tokens".
+ */
+export interface ThemeColors {
+  bg: string;
+  card: string;
+  cardLine: string;
+  line: string;
+  chip: string;
+  input: string;
+  text: string;
+  muted: string;
+  faint: string;
+  brand: string;
+  brandText: string;
+  brandSoft: string;
+  warn: string;
+  warnSoft: string;
+  fail: string;
+  failSoft: string;
+  tab: string;
+  sheet: string;
+  scrim: string;
+  /** Card shadow. The dark theme has none. */
+  shadow: string | undefined;
+}
+
+export const themeColors: { light: ThemeColors; dark: ThemeColors } = {
+  light: {
+    bg: '#F2F5F4',
+    card: '#FFFFFF',
+    cardLine: '#E9EFEC',
+    line: '#E3EAE7',
+    chip: '#EDF2F0',
+    input: '#F4F7F6',
+    text: '#0B1A15',
+    muted: '#56695F',
+    faint: '#8A9C95',
+    brand: '#00C896',
+    brandText: '#0A6650',
+    brandSoft: 'rgba(0, 200, 150, 0.12)',
+    warn: '#A86400',
+    warnSoft: 'rgba(255, 180, 84, 0.2)',
+    fail: '#D2383E',
+    failSoft: 'rgba(255, 92, 92, 0.12)',
+    tab: '#FFFFFF',
+    sheet: '#FFFFFF',
+    scrim: 'rgba(8, 12, 10, 0.45)',
+    shadow: '0px 1px 2px rgba(10, 40, 30, 0.04), 0px 6px 20px rgba(10, 40, 30, 0.05)',
+  },
+  dark: {
+    bg: '#080C0A',
+    card: '#0F1714',
+    cardLine: '#1A2823',
+    line: '#1E2D27',
+    chip: '#16211D',
+    input: '#16211D',
+    text: '#E8FFF6',
+    muted: '#86B3A4',
+    faint: '#5E8577',
+    brand: '#00C896',
+    brandText: '#33E0B5',
+    brandSoft: 'rgba(0, 200, 150, 0.16)',
+    warn: '#FFB454',
+    warnSoft: 'rgba(255, 180, 84, 0.14)',
+    fail: '#FF5C5C',
+    failSoft: 'rgba(255, 92, 92, 0.14)',
+    tab: '#0B110F',
+    sheet: '#111A17',
+    scrim: 'rgba(0, 0, 0, 0.62)',
+    shadow: undefined,
+  },
+};
+
+/** Fixed colours the redesign uses in both themes. */
+export const brandFixed = {
+  /** Text on the brand green. */
+  onBrand: '#04120E',
+  /** Splash, Palm and Tier hero cards: linear-gradient(145deg, …). */
+  heroGradient: ['#0A7A5A', '#065F46', '#022C22'] as const,
+  heroGradientStops: [0, 0.45, 1] as const,
+  /** Gold tier / "Popular" badge. */
+  gold: ['#F5C24B', '#E0A526'] as const,
+  goldText: '#3A2600',
+} as const;
+
+/**
+ * Service tints: icon colour; the tile is the same colour at 14%. Airtime is
+ * #00C896 in the prototype's SVC constant (the README says #10B981; the
+ * handoff rule is that the HTML wins).
+ */
+export const serviceColors = {
+  airtime: '#00C896',
+  data: '#3B82F6',
+  power: '#F97316',
+  cable: '#A855F7',
+} as const;
+
 /** Type scale. Money uses `data`; everything else uses the body sizes. */
 export const typography = {
   display: { fontFamily: "Inter_700Bold", fontSize: 28, lineHeight: 34 },

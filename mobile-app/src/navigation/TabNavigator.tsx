@@ -1,11 +1,11 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
-import { useColorScheme } from 'nativewind';
-import { Home, Receipt, Settings } from 'lucide-react-native';
 
+import { AppTabBar } from './AppTabBar';
 import HomeScreen from '../screens/main/HomeScreen';
+import PalmScreen from '../screens/main/PalmScreen';
+import RewardsScreen from '../screens/main/RewardsScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
 import TransactionsScreen from '../screens/main/TransactionsScreen';
 import ProfileSettingsScreen from '../screens/main/ProfileSettingsScreen';
@@ -47,66 +47,22 @@ function SettingsStackNavigator() {
   );
 }
 
+/**
+ * The redesign's five tabs: Home · Activity · Palm · Rewards · Me.
+ *
+ * AppTabBar draws the bar (Palm raised in the middle) and hides it on any
+ * pushed screen, which replaces the per-screen `tabBarStyle: display none`
+ * lists this used to keep — lists that had to be updated by hand every time a
+ * screen was added, and were not (Transactions pushed from Home kept the bar).
+ */
 export default function TabNavigator() {
-  const { colorScheme } = useColorScheme();
-  const isDark = colorScheme !== 'light';
-
   return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: isDark ? '#000' : '#fff', 
-          borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', 
-        },
-        tabBarActiveTintColor: '#00C896', 
-        tabBarInactiveTintColor: isDark ? '#6b7280' : '#9ca3af', 
-      }}
-    >
-      <Tab.Screen 
-        name="HomeTab" 
-        component={HomeStackNavigator} 
-        options={({ route }) => {
-          const routeName = getFocusedRouteNameFromRoute(route) ?? '';
-          const shouldHide = ['QuickService', 'AccountLimits', 'ProfileSettings'].includes(routeName);
-          return {
-            tabBarLabel: 'Home',
-            tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
-            tabBarStyle: shouldHide 
-              ? { display: 'none' } 
-              : {
-                  backgroundColor: isDark ? '#000' : '#fff', 
-                  borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', 
-                }
-          };
-        }}
-      />
-      <Tab.Screen
-        name="ActivityTab"
-        component={TransactionsScreen}
-        options={{
-          tabBarLabel: 'Activity',
-          tabBarIcon: ({ color, size }) => <Receipt color={color} size={size} />,
-        }}
-      />
-      <Tab.Screen 
-        name="SettingsTab" 
-        component={SettingsStackNavigator} 
-        options={({ route }) => {
-          const routeName = getFocusedRouteNameFromRoute(route) ?? '';
-          const shouldHide = ['SupportScreen', 'AccountLimits', 'ProfileSettings'].includes(routeName);
-          return {
-            tabBarLabel: 'Settings',
-            tabBarIcon: ({ color, size }) => <Settings color={color} size={size} />,
-            tabBarStyle: shouldHide 
-              ? { display: 'none' } 
-              : {
-                  backgroundColor: isDark ? '#000' : '#fff', 
-                  borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', 
-                }
-          };
-        }}
-      />
+    <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={(props) => <AppTabBar {...props} />}>
+      <Tab.Screen name="HomeTab" component={HomeStackNavigator} />
+      <Tab.Screen name="ActivityTab" component={TransactionsScreen} />
+      <Tab.Screen name="PalmTab" component={PalmScreen} />
+      <Tab.Screen name="RewardsTab" component={RewardsScreen} />
+      <Tab.Screen name="MeTab" component={SettingsStackNavigator} />
     </Tab.Navigator>
   );
 }

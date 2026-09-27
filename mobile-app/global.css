@@ -1,3 +1,59 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+ * The redesign's semantic colours (design_handoff_milipay_redesign/README.md,
+ * "Design tokens"). Each name means the same thing in both themes — `card` is
+ * a card, whatever colour that is today — so a screen is written once and the
+ * theme decides the paint. Tailwind reads these through tailwind.config.js
+ * (`bg-canvas`, `text-fg-muted`, `border-card-line`, …); code that cannot take
+ * a className (icon colours, gradients) reads the same values from
+ * src/theme/tokens.ts, which must stay in step with this file.
+ *
+ * `.dark:root` is the form NativeWind recognises as the dark-mode root under
+ * `darkMode: 'class'`, which is what setColorScheme() drives.
+ */
+:root {
+  --mp-bg: #F2F5F4;
+  --mp-card: #FFFFFF;
+  --mp-card-line: #E9EFEC;
+  --mp-line: #E3EAE7;
+  --mp-chip: #EDF2F0;
+  --mp-input: #F4F7F6;
+  --mp-text: #0B1A15;
+  --mp-muted: #56695F;
+  --mp-faint: #8A9C95;
+  --mp-brand: #00C896;
+  --mp-brand-text: #0A6650;
+  --mp-brand-soft: rgba(0, 200, 150, 0.12);
+  --mp-warn: #A86400;
+  --mp-warn-soft: rgba(255, 180, 84, 0.2);
+  --mp-fail: #D2383E;
+  --mp-fail-soft: rgba(255, 92, 92, 0.12);
+  --mp-tab: #FFFFFF;
+  --mp-sheet: #FFFFFF;
+  --mp-scrim: rgba(8, 12, 10, 0.45);
+}
+
+.dark:root {
+  --mp-bg: #080C0A;
+  --mp-card: #0F1714;
+  --mp-card-line: #1A2823;
+  --mp-line: #1E2D27;
+  --mp-chip: #16211D;
+  --mp-input: #16211D;
+  --mp-text: #E8FFF6;
+  --mp-muted: #86B3A4;
+  --mp-faint: #5E8577;
+  --mp-brand: #00C896;
+  --mp-brand-text: #33E0B5;
+  --mp-brand-soft: rgba(0, 200, 150, 0.16);
+  --mp-warn: #FFB454;
+  --mp-warn-soft: rgba(255, 180, 84, 0.14);
+  --mp-fail: #FF5C5C;
+  --mp-fail-soft: rgba(255, 92, 92, 0.14);
+  --mp-tab: #0B110F;
+  --mp-sheet: #111A17;
+  --mp-scrim: rgba(0, 0, 0, 0.62);
+}

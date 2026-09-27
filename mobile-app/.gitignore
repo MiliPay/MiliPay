@@ -38,3 +38,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Design handoff from the design chat: reference only, not production code.
+design_handoff_milipay_redesign/
