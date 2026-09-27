@@ -135,6 +135,28 @@ export const serviceColors = {
   cable: '#A855F7',
 } as const;
 
+/** Network badges: the redesign's telco circles (TELCOS in the prototype). */
+export const telcoColors = {
+  mtn: { name: 'MTN', short: 'MTN', bg: '#FFCC00', fg: '#111111' },
+  airtel: { name: 'Airtel', short: 'A', bg: '#E40000', fg: '#FFFFFF' },
+  glo: { name: 'Glo', short: 'glo', bg: '#4CAF50', fg: '#FFFFFF' },
+  '9mobile': { name: '9mobile', short: '9m', bg: '#006B3E', fg: '#FFFFFF' },
+} as const;
+
+/**
+ * Linked-bank card faces, by position (the prototype's ACCTS gradients): the
+ * first linked account is green, the second blue, the third plum.
+ */
+export const bankCardThemes = [
+  { gradient: ['#065F46', '#022C22'] as const, accent: '#33E0B5', shadow: 'rgba(6, 95, 70, 0.7)' },
+  { gradient: ['#1E40AF', '#0F172A'] as const, accent: '#60A5FA', shadow: 'rgba(30, 64, 175, 0.7)' },
+  { gradient: ['#831843', '#4A044E'] as const, accent: '#F472B6', shadow: 'rgba(131, 24, 67, 0.7)' },
+] as const;
+
+export function bankCardTheme(index: number) {
+  return bankCardThemes[((index % bankCardThemes.length) + bankCardThemes.length) % bankCardThemes.length];
+}
+
 /** Type scale. Money uses `data`; everything else uses the body sizes. */
 export const typography = {
   display: { fontFamily: "Inter_700Bold", fontSize: 28, lineHeight: 34 },

@@ -85,6 +85,20 @@ beforeEach(() => {
 
   globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input));
+    if (url.host === "sandbox.vtpass.com" && url.pathname.endsWith("/service-variations")) {
+      return json({
+        response_description: "000",
+        content: {
+          ServiceName: "MTN Data",
+          serviceID: "mtn-data",
+          variations: [
+            { variation_code: "mtn-10mb-100", name: "N100 100MB - 24 hrs", variation_amount: "100.00", fixedPrice: "Yes" },
+            { variation_code: "mtn-50mb-200", name: "N200 200MB - 2 days", variation_amount: "200.00", fixedPrice: "Yes" },
+            { variation_code: "mtn-100mb-1000", name: "N1000 1.5GB - 30 days", variation_amount: "1000.00", fixedPrice: "Yes" },
+          ],
+        },
+      });
+    }
     if (url.host === "sandbox.vtpass.com") return json({ code: "1", contents: { balance: 1_000_000 } });
     if (url.host === "api.withmono.com") {
       monoCalls.push({ path: url.pathname, body: init?.body ? JSON.parse(String(init.body)) : {} });
@@ -247,5 +261,45 @@ describe("DirectPay's bank-picker shortcut", () => {
   it("does not, for an account linked before the app was recorded", async () => {
     await buyAirtime();
     expect(monoCalls[0].body).not.toHaveProperty("account");
+  });
+});
+
+describe("the plan list's Popular flag", () => {
+  async function plans(provider = "mtn") {
+    const res = await handler(
+      new Request("https://project.supabase.test/functions/v1/vtu-service", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer tok-1" },
+        body: JSON.stringify({ action: "get_variations", serviceType: "data", provider }),
+      }),
+    );
+    return res.json();
+  }
+  const sold = (code: string, extra: Record<string, unknown> = {}) => ({
+    reference: `r-${Math.random()}`, service_type: "data", provider: "mtn", status: "delivered",
+    variation_code: code, created_at: new Date().toISOString(), ...extra,
+  });
+
+  it("is what customers on that network actually had delivered — most first, at least twice", async () => {
+    db.table("transactions").push(
+      sold("mtn-100mb-1000"), sold("mtn-100mb-1000"), sold("mtn-100mb-1000"),
+      sold("mtn-50mb-200"), sold("mtn-50mb-200"),
+      sold("mtn-10mb-100"), // once: not popular
+      // Failed purchases and other networks do not count.
+      sold("mtn-10mb-100", { status: "payment_failed" }), sold("mtn-10mb-100", { status: "payment_failed" }),
+      sold("mtn-10mb-100", { provider: "airtel" }), sold("mtn-10mb-100", { provider: "airtel" }),
+      // Nor does last year.
+      sold("mtn-10mb-100", { created_at: "2025-01-01T00:00:00Z" }), sold("mtn-10mb-100", { created_at: "2025-01-01T00:00:00Z" }),
+    );
+
+    const body = await plans();
+
+    expect(body.success).toBe(true);
+    expect(body.variations).toHaveLength(3);
+    expect(body.popular).toEqual(["mtn-100mb-1000", "mtn-50mb-200"]);
+  });
+
+  it("is empty with no sales — the app then hides the Hot tab rather than inventing one", async () => {
+    expect((await plans()).popular).toEqual([]);
   });
 });

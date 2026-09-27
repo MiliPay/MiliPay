@@ -13,6 +13,7 @@ import SupportScreen from '../screens/main/SupportScreen';
 import AccountLimitsScreen from '../screens/main/AccountLimitsScreen';
 import PinSetupScreen from '../screens/auth/PinSetupScreen';
 import QuickServiceScreen from '../screens/main/QuickServiceScreen';
+import ReceiptScreen from '../screens/main/ReceiptScreen';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator();
@@ -22,6 +23,9 @@ function HomeStackNavigator() {
     <HomeStack.Navigator screenOptions={{ headerShown: false }}>
       <HomeStack.Screen name="HomeScreen" component={HomeScreen} />
       <HomeStack.Screen name="QuickService" component={QuickServiceScreen} />
+      {/* No swipe-back: a receipt is left with Done or Buy again, never by
+          sliding back into a form that has already been paid. */}
+      <HomeStack.Screen name="Receipt" component={ReceiptScreen} options={{ gestureEnabled: false, animation: 'fade' }} />
       <HomeStack.Screen name="Transactions" component={TransactionsScreen} />
       <HomeStack.Screen name="ProfileSettings" component={ProfileSettingsScreen} />
       <HomeStack.Screen name="AccountLimits" component={AccountLimitsScreen} />

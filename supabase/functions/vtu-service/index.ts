@@ -22,6 +22,7 @@ import {
   toApiError,
 } from "../_shared/mono.ts";
 import { choosePaymentRoute, committedUnderMandate, type PaymentRoute } from "../_shared/quick-pay.ts";
+import { POPULAR_WINDOW_DAYS, mostPopular } from "../_shared/popularity.ts";
 import { roundNaira } from "../_shared/money.ts";
 import {
   CUSTOMER_STATUS_COPY,
@@ -202,6 +203,34 @@ function requireServiceId(serviceType: string, provider: string): string {
  * https://docs.mono.co/docs/payments/direct-debit/debit-an-account
  */
 const MONO_MINIMUM_DEBIT_NGN = 200;
+
+/**
+ * The data plans customers on this network actually bought most in the last
+ * POPULAR_WINDOW_DAYS — the app's "Popular" badge and Hot tab. Read from
+ * delivered purchases only, so a plan is never "popular" for failing a lot.
+ *
+ * Never allowed to break the catalogue: any error means no badges, not no
+ * plans. Only data has a Hot tab in the design.
+ */
+async function popularPlans(admin: SupabaseClient, serviceType: string, provider: string): Promise<string[]> {
+  if (serviceType !== "data") return [];
+  try {
+    const since = new Date(Date.now() - POPULAR_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await admin
+      .from("transactions")
+      .select("variation_code")
+      .eq("service_type", "data")
+      .eq("provider", provider)
+      .eq("status", "delivered")
+      .gte("created_at", since)
+      .limit(2000);
+    if (error || !data) return [];
+    return mostPopular((data as { variation_code: string | null }[]).map((r) => r.variation_code));
+  } catch (err) {
+    console.warn("[vtu] popular plans unavailable", err);
+    return [];
+  }
+}
 
 /**
  * Quick pay or DirectPay, for this account and this amount.
@@ -721,13 +750,14 @@ serve(handler(async (req) => {
     const serviceId = requireServiceId(serviceType, provider);
 
     const cacheId = `vtpass:${serviceType}:${serviceId}`;
+    const popular = await popularPlans(admin, serviceType, provider);
 
     try {
       const variations = await vtpass.listVariations(serviceId, surcharge);
 
       if (variations.length === 0) throw new Error("empty catalogue");
       await cacheCatalogue(admin, cacheId, `${serviceType}:${provider}`, variations);
-      return json({ success: true, provider, surcharge, variations, plans: variations, stale: false });
+      return json({ success: true, provider, surcharge, variations, plans: variations, popular, stale: false });
     } catch (err) {
       if (err instanceof ApiError) throw err;
       // A slow gateway used to be a hard 503, so a customer could not even
@@ -742,6 +772,7 @@ serve(handler(async (req) => {
           surcharge,
           variations: cached.variations,
           plans: cached.variations,
+          popular,
           stale: true,
           fetchedAt: cached.fetchedAt,
         });

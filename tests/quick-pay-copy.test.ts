@@ -124,8 +124,9 @@ describe("the screens use it", () => {
   });
 
   it("the purchase screen no longer calls every payment 'Mono DirectPay'", () => {
-    const src = code("screens/main/QuickServiceScreen.tsx");
-    expect(src).not.toMatch(/Mono DirectPay/);
-    expect(src).toMatch(/paymentMethodLabel\(/);
+    expect(code("screens/main/QuickServiceScreen.tsx")).not.toMatch(/Mono DirectPay/);
+    // The redesign says how the money is taken on the confirm step, under the
+    // account it comes from: "Quick pay" or "Approve at your bank".
+    expect(code("components/purchase/ConfirmPaySheet.tsx")).toMatch(/paymentMethodLabel\(account\.quickPay\)/);
   });
 });

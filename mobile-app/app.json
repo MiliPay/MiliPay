@@ -55,7 +55,13 @@
           "faceIDPermission": "MiliPay uses Face ID to confirm it is you before linking a bank account or approving a payment."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "MiliPay opens your contacts only when you tap the contacts button, so you can pick a number to top up."
+        }
+      ]
     ],
     "extra": {
       "eas": {

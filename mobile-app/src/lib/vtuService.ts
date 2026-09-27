@@ -57,7 +57,11 @@ export interface VtuRechargeResult {
   success: boolean;
   reference?: string;
   operatorReference?: string;
+  /** What the customer is charged, fees included. */
   amount?: number;
+  /** The value bought (airtime, meter amount, plan) before fees. */
+  baseAmount?: number;
+  serviceCharge?: number;
   serviceType?: string;
   provider?: string;
   beneficiary?: string;
@@ -86,7 +90,7 @@ export interface VtuRechargeResult {
 }
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
-const variationsCache = new Map<string, { data: DynamicVariation[]; timestamp: number }>();
+const variationsCache = new Map<string, { data: DynamicVariation[]; popular: string[]; timestamp: number }>();
 
 export function normalizeNigerianPhone(phone?: string): string {
   if (!phone) return '';
@@ -138,15 +142,21 @@ async function unwrap(data: any, error: any): Promise<VtuRechargeResult> {
   return { success: false, error: error?.message || 'Service temporarily unavailable' };
 }
 
-/** Retail bundle catalogue for data and cable. */
-export async function fetchDynamicVariations(
-  serviceType: string,
-  provider: string,
-): Promise<DynamicVariation[]> {
+export interface PlanCatalogue {
+  plans: DynamicVariation[];
+  /**
+   * Variation codes customers on this network bought most recently — the
+   * design's "Popular" badge and Hot tab. Empty until there are real sales.
+   */
+  popular: string[];
+}
+
+/** Retail bundle catalogue for data and cable, with what sells most. */
+export async function fetchPlanCatalogue(serviceType: string, provider: string): Promise<PlanCatalogue> {
   const cacheKey = `${serviceType}_${provider}`.toLowerCase();
   const cached = variationsCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-    return cached.data;
+    return { plans: cached.data, popular: cached.popular };
   }
 
   const { data, error } = await supabase.functions.invoke('vtu-service', {
@@ -157,11 +167,17 @@ export async function fetchDynamicVariations(
     // No hardcoded price list: showing a stale price the server will reject
     // just moves the failure to after the customer has committed.
     console.warn('[vtuService] variations unavailable', error ?? data);
-    return [];
+    return { plans: [], popular: [] };
   }
 
-  variationsCache.set(cacheKey, { data: data.variations, timestamp: Date.now() });
-  return data.variations;
+  const popular: string[] = Array.isArray(data.popular) ? data.popular.map(String) : [];
+  variationsCache.set(cacheKey, { data: data.variations, popular, timestamp: Date.now() });
+  return { plans: data.variations, popular };
+}
+
+/** The catalogue alone, for callers that do not show popularity. */
+export async function fetchDynamicVariations(serviceType: string, provider: string): Promise<DynamicVariation[]> {
+  return (await fetchPlanCatalogue(serviceType, provider)).plans;
 }
 
 export interface VtuMargins {

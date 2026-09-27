@@ -72,6 +72,11 @@ class Query implements PromiseLike<Result> {
     return this;
   }
 
+  gte(column: string, value: unknown): this {
+    this.filters.push((row) => String(row[column]) >= String(value));
+    return this;
+  }
+
   order(): this {
     return this;
   }

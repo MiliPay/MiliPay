@@ -87,9 +87,15 @@ describe("the receipts use it", () => {
     }
   });
 
-  it("the purchase screen's success popup only opens on a real success", () => {
-    const src = code("screens/main/QuickServiceScreen.tsx");
-    expect(src).toMatch(/if \(isSuccess\(snapshot\.status\)\) \{\s*setSuccessReceipt\(/);
+  it("the purchase screen's receipt says what actually happened", () => {
+    // The redesign ends every purchase on the receipt screen, whatever the
+    // outcome — so the receipt must take the settled status and draw its
+    // headline from it, never assume success.
+    const screen = code("screens/main/QuickServiceScreen.tsx");
+    expect(screen).toMatch(/navigation\.replace\('Receipt', \{[\s\S]*?status: snap\.status/);
+    const receipt = code("screens/main/ReceiptScreen.tsx");
+    expect(receipt).toMatch(/statusHeadline\(r\.status\)/);
+    expect(receipt).not.toMatch(/Payment Successful|Transaction Successful/);
   });
 
   it("the shared PDF receipt takes its status from the same place", () => {

@@ -56,7 +56,13 @@ describe("the purchase screen uses it", () => {
 
   it("no longer decides by 'more than one account'", () => {
     expect(screen).not.toMatch(/linkedAccounts\.length\s*>\s*1\s*\?/);
-    expect(screen).toMatch(/accountView === 'list'/);
+    // The redesign moved the decision into the Pay button's rules: the screen
+    // hands paymentAccountView's answer over, and the button only enables on
+    // 'list' — so "no bank" is still said only when a load found none.
+    expect(screen).toMatch(/const accountView = paymentAccountView\(/);
+    expect(screen).toMatch(/accounts: accountView/);
+    const rules = readFileSync(join(__dirname, "..", "mobile-app", "src", "lib", "purchaseForm.ts"), "utf8");
+    expect(rules).toMatch(/if \(s\.accounts !== 'list' \|\| s\.settling\) return false;/);
   });
 
   it("reads the accounts itself on arrival, instead of relying on the home screen", () => {
