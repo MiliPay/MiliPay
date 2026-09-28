@@ -113,8 +113,3 @@ export function missingDetailsMessage(missing: string[]): string {
       : `${missing.slice(0, -1).join(', ')} and ${missing[missing.length - 1]}`;
   return `Your bank needs your ${list} on file before quick pay can be set up. Contact support or the agent who enrolled you to add ${missing.length === 1 ? 'it' : 'them'}.`;
 }
-
-/** The short label on the purchase screen's payment card. */
-export function paymentMethodLabel(state: QuickPayState | null | undefined): string {
-  return state === 'on' ? 'Quick pay' : 'Approve at your bank';
-}

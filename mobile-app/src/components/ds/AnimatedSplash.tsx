@@ -58,28 +58,34 @@ export function AnimatedSplash({ onDone }: { onDone: () => void }) {
               <Stop offset="0.78" stopColor="#022C22" />
               <Stop offset="1" stopColor="#011A14" />
             </RadialGradient>
+            {/* A 250 pt disc of rgba(0,200,150,.14) under blur(30px). */}
             <RadialGradient id="glow" cx="50%" cy="50%" r="50%">
-              <Stop offset="0" stopColor="#00C896" stopOpacity="0.22" />
+              <Stop offset="0" stopColor="#00C896" stopOpacity="0.14" />
+              <Stop offset="0.62" stopColor="#00C896" stopOpacity="0.12" />
               <Stop offset="1" stopColor="#00C896" stopOpacity="0" />
             </RadialGradient>
           </Defs>
           <Rect x="0" y="0" width={width} height={height} fill="url(#bg)" />
-          <Rect x={width / 2 - 170} y={centreY - 170} width={340} height={340} fill="url(#glow)" />
+          <Rect x={width / 2 - 155} y={centreY - 155} width={310} height={310} fill="url(#glow)" />
         </Svg>
 
         <Ring size={520} centreY={centreY} colour="rgba(51, 224, 181, 0.10)" />
         <Ring size={380} centreY={centreY} colour="rgba(51, 224, 181, 0.14)" />
 
-        <View style={{ position: 'absolute', left: 0, right: 0, top: centreY - 64 - 60, alignItems: 'center' }}>
-          <LogoTile />
-          <Rise delay={250}>
-            <Text style={{ color: '#FFFFFF', fontSize: 38, fontFamily: 'Inter_800ExtraBold', letterSpacing: -1.33, marginTop: 26 }}>
-              MiliPay
-            </Text>
-          </Rise>
-          <Rise delay={400}>
-            <Text style={{ color: '#9FE8D2', fontSize: 15, fontFamily: 'Inter_500Medium', marginTop: 6 }}>Payments in milliseconds</Text>
-          </Rise>
+        {/* As the prototype lays it out: the logo, name and tagline centred
+            on the screen as one block, then lifted 60 pt (margin-top: -60px). */}
+        <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]} pointerEvents="none">
+          <View style={{ marginTop: -60, alignItems: 'center' }}>
+            <LogoTile />
+            <Rise delay={250}>
+              <Text style={{ color: '#FFFFFF', fontSize: 38, fontFamily: 'Inter_800ExtraBold', letterSpacing: -1.33, marginTop: 26 }}>
+                MiliPay
+              </Text>
+            </Rise>
+            <Rise delay={400}>
+              <Text style={{ color: '#9FE8D2', fontSize: 15, fontFamily: 'Inter_500Medium', marginTop: 6 }}>Payments in milliseconds</Text>
+            </Rise>
+          </View>
         </View>
       </Pressable>
     </Animated.View>

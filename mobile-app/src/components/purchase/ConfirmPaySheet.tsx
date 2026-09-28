@@ -6,7 +6,7 @@ import { Button } from '../ds/Button';
 import { useThemeColors, withAlpha } from '../../theme/useThemeColors';
 import { bankCardTheme, serviceColors } from '../../theme/tokens';
 import { feeLabel, naira2, type ServiceKey } from '../../lib/purchaseForm';
-import { paymentMethodLabel, type QuickPayState } from '../../lib/quickPayCopy';
+import type { QuickPayState } from '../../lib/quickPayCopy';
 import { SERVICE_ICONS } from './ServiceTabs';
 
 export interface PayFromAccount {
@@ -23,10 +23,7 @@ export interface PayFromAccount {
  * summary rows with the REAL fee, and the account it is paid from — tap to
  * switch to another linked account.
  *
- * Under the account it says how the money will be taken: "Quick pay" (nothing
- * more to do) or "Approve at your bank" (Mono's page will open), so leaving
- * the app is never a surprise.
- *
+
  * Content only: the purchase screen shows it inside its one bottom sheet,
  * which swaps confirm → approve → progress in place like the prototype —
  * stacking a sheet per step makes iOS drop the next one.
@@ -57,7 +54,7 @@ export function ConfirmPayContent({
   const colour = serviceColors[service];
   const allRows: { k: string; v: string; brand?: boolean }[] = [
     ...rows.map(([k, v]) => ({ k, v })),
-    { k: 'Fee', v: feeLabel(fee), brand: fee <= 0 },
+    { k: 'Fee', v: feeLabel(fee), brand: true },
   ];
   const theme = bankCardTheme(account?.index ?? 0);
 
@@ -115,9 +112,7 @@ export function ConfirmPayContent({
             <Text style={{ color: c.text, fontSize: 15, fontFamily: 'Inter_600SemiBold' }}>
               {account.bankName} ••{account.accountNumber.slice(-4)}
             </Text>
-            <Text style={{ color: account.quickPay === 'on' ? c.brandText : c.muted, fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 1 }}>
-              {paymentMethodLabel(account.quickPay)}
-            </Text>
+
           </View>
           {canChangeAccount ? <Text style={{ color: c.brandText, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>Change</Text> : null}
         </Pressable>

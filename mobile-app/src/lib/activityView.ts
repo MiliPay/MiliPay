@@ -176,12 +176,6 @@ export function whenLabel(iso: string, now: Date = new Date()): string {
   return `${MONTHS[d.getMonth()]} ${d.getDate()}${year}, ${clockLabel(d)}`;
 }
 
-/** The detail sheet's date: "Sep 20, 2026, 8:30 AM". */
-export function fullDateLabel(iso: string): string {
-  const d = new Date(iso);
-  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}, ${clockLabel(d)}`;
-}
-
 /** A notification's time: "7:41 AM" today, "Yesterday", then "Sep 23". */
 export function notifTimeLabel(iso: string, now: Date = new Date()): string {
   const d = new Date(iso);

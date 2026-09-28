@@ -20,8 +20,11 @@ import * as SplashScreen from 'expo-splash-screen';
 import { LogBox } from 'react-native';
 import { configureReanimatedLogger, ReanimatedLogLevel } from 'react-native-reanimated';
 import { useAuthStore } from './src/store/useStore';
-import { useColorScheme } from 'nativewind';
+import { colorScheme, useColorScheme } from 'nativewind';
+import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
 import { loadThemePreference } from './src/lib/themePreference';
+import { themeColors } from './src/theme/tokens';
 import {
   attachNotificationListeners,
   registerForPushNotifications,
@@ -38,19 +41,45 @@ LogBox.ignoreLogs([
 
 SplashScreen.preventAutoHideAsync();
 
-const appNavTheme = {
-  ...DarkTheme,
-  colors: {
-    ...DarkTheme.colors,
-    background: 'transparent',
-  },
-};
+// The redesign opens in Light (the prototype's default). Set before the first
+// frame, so a phone in dark mode never flashes the app dark; a saved Dark
+// choice is applied as soon as it is read.
+colorScheme.set('light');
+
+/**
+ * React Navigation's colours, from the redesign's tokens. The theme was the
+ * old dark one with a transparent background, so a near-black backdrop showed
+ * behind every pushed screen as it slid in.
+ */
+function navTheme(isDark: boolean) {
+  const c = isDark ? themeColors.dark : themeColors.light;
+  return {
+    ...DarkTheme,
+    dark: isDark,
+    colors: {
+      ...DarkTheme.colors,
+      primary: c.brand,
+      background: c.bg,
+      card: c.bg,
+      text: c.text,
+      border: c.line,
+      notification: c.fail,
+    },
+  };
+}
 
 export default function App() {
   const initializeAuth = useAuthStore((state) => state.initialize);
   const isLoading = useAuthStore((state) => state.isLoading);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const { setColorScheme } = useColorScheme();
+  const { colorScheme: scheme, setColorScheme } = useColorScheme();
+  const isDark = scheme === 'dark';
+
+  // The window behind everything (seen during transitions and keyboard
+  // animations) follows the theme too.
+  useEffect(() => {
+    void SystemUI.setBackgroundColorAsync(isDark ? themeColors.dark.bg : themeColors.light.bg);
+  }, [isDark]);
   
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
@@ -130,10 +159,13 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
+      {/* Dark text on the light theme, light on the dark one. The splash sets
+          its own while it is showing. */}
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       {isLoading ? (
         <HeartbeatFill />
       ) : (
-        <NavigationContainer ref={navigationRef} theme={appNavTheme}>
+        <NavigationContainer ref={navigationRef} theme={navTheme(isDark)}>
           <AppNavigator />
         </NavigationContainer>
       )}

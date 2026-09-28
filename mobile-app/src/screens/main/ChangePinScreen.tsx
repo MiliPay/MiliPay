@@ -88,7 +88,7 @@ export default function ChangePinScreen({ navigation }: any) {
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: c.bg }}>
-      <ScreenHeader title="Change PIN" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Change PIN" onBack={() => navigation.goBack()} inset={24} />
       <View style={{ flex: 1, paddingHorizontal: 24, paddingBottom: 24 }}>
         <View style={{ flexDirection: 'row', gap: 6, marginTop: 18 }}>
           {[1, 2].map((i) => (

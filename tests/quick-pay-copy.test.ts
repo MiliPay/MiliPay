@@ -4,7 +4,6 @@ import * as ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
   missingDetailsMessage,
-  paymentMethodLabel,
   quickPayCopy,
   type QuickPayAccountView,
   type QuickPayState,
@@ -39,10 +38,6 @@ describe("quickPayCopy", () => {
       if (state === "on") expect(copy.title).toMatch(/is on/i);
       else expect(copy.title, state).not.toMatch(/is on/i);
       expect(copy.tone === "ok", state).toBe(state === "on");
-    }
-    expect(paymentMethodLabel("on")).toBe("Quick pay");
-    for (const state of ["off", "setting_up", "paused", "failed", null, undefined] as const) {
-      expect(paymentMethodLabel(state as QuickPayState)).toBe("Approve at your bank");
     }
   });
 
@@ -126,8 +121,6 @@ describe("the screens use it", () => {
 
   it("the purchase screen no longer calls every payment 'Mono DirectPay'", () => {
     expect(code("screens/main/QuickServiceScreen.tsx")).not.toMatch(/Mono DirectPay/);
-    // The redesign says how the money is taken on the confirm step, under the
-    // account it comes from: "Quick pay" or "Approve at your bank".
-    expect(code("components/purchase/ConfirmPaySheet.tsx")).toMatch(/paymentMethodLabel\(account\.quickPay\)/);
+    expect(code("components/purchase/ConfirmPaySheet.tsx")).not.toMatch(/Mono DirectPay/);
   });
 });

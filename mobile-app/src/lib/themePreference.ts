@@ -3,23 +3,25 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 /**
  * The customer's chosen appearance, remembered between launches.
  *
- * The Settings screen held this in useState and handed it to NativeWind's
- * setColorScheme, neither of which survives the app closing — so somebody who
- * chose Dark found it back on System the next morning, and the Settings row
- * said "System" while the app was still showing what they picked.
+ * The redesign opens in Light and offers exactly two choices, Light and Dark,
+ * on Me › Appearance (design handoff: the prototype's `theme` starts at
+ * 'light'; the HTML wins over the README's "follow the system"). It used to
+ * follow the phone, so a phone in dark mode showed every screen dark against
+ * a light design. A 'system' value saved by the old Settings screen now reads
+ * as Light.
  */
-export type ThemePreference = 'system' | 'light' | 'dark';
+export type ThemePreference = 'light' | 'dark';
 
 const KEY = 'milipay.theme';
 
 export async function loadThemePreference(): Promise<ThemePreference> {
   try {
     const stored = await AsyncStorage.getItem(KEY);
-    if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
+    if (stored === 'dark') return 'dark';
   } catch {
     // A device that will not give us storage is not a reason to fail to start.
   }
-  return 'system';
+  return 'light';
 }
 
 export async function saveThemePreference(value: ThemePreference): Promise<void> {

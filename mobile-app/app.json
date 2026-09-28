@@ -72,6 +72,6 @@
     "description": "Pay with your palm. Airtime, data, electricity and TV, paid straight from your bank account.",
     "scheme": "milipay",
     "primaryColor": "#00C896",
-    "backgroundColor": "#080C0A"
+    "backgroundColor": "#F2F5F4"
   }
 }

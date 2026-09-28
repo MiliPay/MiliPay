@@ -12,15 +12,21 @@ import { useThemeColors } from '../../theme/useThemeColors';
 export const PAGE_PADDING = 20;
 export const CARD_GAP = 14;
 
-/** Pushed-screen header: 42 pt round back button, 17/700 title centred. */
+/**
+ * Pushed-screen header: 42 pt round back button, 17/700 title centred —
+ * the prototype's `padding: 6px 16px 0`. `inset` is 24 on Change PIN, whose
+ * whole screen has 24 pt sides.
+ */
 export function ScreenHeader({
   title,
   onBack,
   right,
+  inset = 16,
 }: {
   title: string;
   onBack?: () => void;
   right?: React.ReactNode;
+  inset?: number;
 }) {
   const c = useThemeColors();
   return (
@@ -29,8 +35,8 @@ export function ScreenHeader({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: PAGE_PADDING,
-        paddingVertical: 6,
+        paddingHorizontal: inset,
+        paddingTop: 6,
       }}
     >
       <View style={{ width: 42 }}>

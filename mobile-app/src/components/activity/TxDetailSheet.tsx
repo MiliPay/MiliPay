@@ -10,7 +10,7 @@ import { brandFixed } from '../../theme/tokens';
 import { feeLabel, naira2 } from '../../lib/purchaseForm';
 import { isReturned, statusHeadline, type HeadlineIcon } from '../../lib/statusView';
 import { STATUS_COPY, type TransactionStatus } from '../../lib/transactionStatus';
-import { fullDateLabel, recipientLabel, txService } from '../../lib/activityView';
+import { recipientLabel, txService, whenLabel } from '../../lib/activityView';
 import { shareReceiptAsImage } from '../../lib/receiptSharing';
 import type { AppTransaction } from '../../store/useStore';
 
@@ -85,8 +85,7 @@ function TxDetail({
     ...(tx.fee_amount !== null && tx.fee_amount !== undefined
       ? [{ k: 'Fee', v: feeLabel(tx.fee_amount), brand: tx.fee_amount <= 0 }]
       : []),
-    { k: 'Date', v: fullDateLabel(tx.created_at) },
-    { k: 'Reference', v: tx.reference },
+    { k: 'Date', v: whenLabel(tx.created_at) },
   ];
 
   const copyToken = async () => {
@@ -130,7 +129,7 @@ function TxDetail({
           <Pressable
             onPress={() => void copyToken()}
             accessibilityRole="button"
-            accessibilityLabel="Recharge token. Tap to copy."
+            accessibilityLabel={copied ? "Recharge token, copied" : "Recharge token. Tap to copy."}
             style={{
               marginTop: 14,
               padding: 14,
@@ -148,9 +147,7 @@ function TxDetail({
             <Text selectable style={{ marginTop: 4, color: c.text, fontSize: 18, fontFamily: 'Inter_800ExtraBold', letterSpacing: 1.08, fontVariant: ['tabular-nums'] }}>
               {tx.token}
             </Text>
-            <Text style={{ marginTop: 4, color: c.muted, fontSize: 12, fontFamily: 'Inter_500Medium' }}>
-              {copied ? 'Copied' : tx.units ? `${tx.units} · Tap to copy` : 'Tap to copy'}
-            </Text>
+
           </Pressable>
         ) : null}
 
