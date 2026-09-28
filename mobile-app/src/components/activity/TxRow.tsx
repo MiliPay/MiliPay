@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { Tap } from '../ds/Tap';
 import { Hand, Lightbulb, Receipt, Smartphone, Tv, Wifi, type LucideIcon } from 'lucide-react-native';
 import { StatusChip } from '../ds/Chips';
 import { useThemeColors, withAlpha } from '../../theme/useThemeColors';
@@ -47,7 +48,7 @@ export const TxRow = React.memo(function TxRow({
   const when = whenLabel(tx.created_at);
 
   return (
-    <Pressable
+    <Tap
       onPress={() => onPress(tx.id)}
       accessibilityRole="button"
       accessibilityLabel={`${tx.merchant_name ?? 'Payment'}, ${naira2(Number(tx.amount))}, ${when}${chip ? `, ${chip.label}` : ''}`}
@@ -96,7 +97,7 @@ export const TxRow = React.memo(function TxRow({
       >
         -{naira2(Number(tx.amount))}
       </Text>
-    </Pressable>
+    </Tap>
   );
 });
 

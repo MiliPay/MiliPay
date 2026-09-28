@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Tap } from '../../components/ds/Tap';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import { AlertTriangle, Check, Clock, Copy, FileText, RefreshCw, Share2, X, type LucideIcon } from 'lucide-react-native';
@@ -199,7 +200,7 @@ export default function ReceiptScreen({ route, navigation }: any) {
 function SecondaryButton({ icon: Icon, label, onPress }: { icon: LucideIcon; label: string; onPress: () => void }) {
   const c = useThemeColors();
   return (
-    <Pressable
+    <Tap
       onPress={onPress}
       accessibilityRole="button"
       style={({ pressed }) => ({
@@ -217,6 +218,6 @@ function SecondaryButton({ icon: Icon, label, onPress }: { icon: LucideIcon; lab
     >
       <Icon color={c.text} size={17} />
       <Text style={{ color: c.text, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>{label}</Text>
-    </Pressable>
+    </Tap>
   );
 }

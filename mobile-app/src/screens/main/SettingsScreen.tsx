@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, AppState, Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, AppState, Linking, ScrollView, Text, View } from 'react-native';
+import { Tap } from '../../components/ds/Tap';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Constants from 'expo-constants';
@@ -314,7 +315,7 @@ function MeContent({ navigation, route }: any) {
           />
         </SettingsGroup>
 
-        <Pressable
+        <Tap
           onPress={() => void signOut()}
           accessibilityRole="button"
           style={({ pressed }) => ({
@@ -332,7 +333,7 @@ function MeContent({ navigation, route }: any) {
         >
           <LogOut color={c.fail} size={18} />
           <Text style={{ color: c.fail, fontSize: 15, fontFamily: 'Inter_600SemiBold' }}>Log out</Text>
-        </Pressable>
+        </Tap>
         <Text style={{ marginTop: 14, textAlign: 'center', color: c.faint, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
           MiliPay {version} · Payments in milliseconds
         </Text>

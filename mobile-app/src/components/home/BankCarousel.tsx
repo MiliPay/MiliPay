@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { Tap } from '../ds/Tap';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Check, Copy, Eye, EyeOff, Plus } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
@@ -87,7 +88,7 @@ export function BankCarousel({
           />
         ))}
         {canLink ? (
-          <Pressable
+          <Tap
             onPress={onLink}
             accessibilityRole="button"
             accessibilityLabel="Link bank account"
@@ -109,7 +110,7 @@ export function BankCarousel({
             </View>
             <Text style={{ color: c.text, fontSize: 17, fontFamily: 'Inter_700Bold' }}>Link bank account</Text>
             <Text style={{ color: c.muted, fontSize: 13, fontFamily: 'Inter_400Regular' }}>Connect another account to pay with.</Text>
-          </Pressable>
+          </Tap>
         ) : null}
       </ScrollView>
 

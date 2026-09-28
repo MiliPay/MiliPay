@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Alert, Text, View } from 'react-native';
+import { Tap } from '../ds/Tap';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Landmark, Plus, Trash2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -110,7 +111,7 @@ export function LinkedBanksSheet({
             </View>
           </View>
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
-            <Pressable
+            <Tap
               onPress={() => setTarget(null)}
               disabled={busy}
               accessibilityRole="button"
@@ -127,7 +128,7 @@ export function LinkedBanksSheet({
               })}
             >
               <Text style={{ color: c.text, fontSize: 15, fontFamily: 'Inter_600SemiBold' }}>Cancel</Text>
-            </Pressable>
+            </Tap>
             <PressScale
               onPress={() => void confirmUnlink()}
               disabled={busy}
@@ -181,7 +182,7 @@ export function LinkedBanksSheet({
             ))}
           </View>
           {accounts.length < MAX_LINKED ? (
-            <Pressable
+            <Tap
               onPress={onLink}
               accessibilityRole="button"
               style={({ pressed }) => ({
@@ -202,7 +203,7 @@ export function LinkedBanksSheet({
               <Text style={{ color: c.brandText, fontSize: 15, fontFamily: 'Inter_700Bold' }}>
                 {accounts.length === 0 ? 'Link a bank account' : 'Link another account'}
               </Text>
-            </Pressable>
+            </Tap>
           ) : null}
           <Text style={{ marginTop: 10, color: c.faint, fontSize: 12, lineHeight: 17, fontFamily: 'Inter_400Regular', textAlign: 'center' }}>
             You'll confirm with your fingerprint or PIN, then sign in to your bank.

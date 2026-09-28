@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
+import { Tap } from '../ds/Tap';
 import { Users } from 'lucide-react-native';
 import { FieldLabel, InputBox, OptionTile } from '../ds/Form';
 import { useThemeColors } from '../../theme/useThemeColors';
@@ -63,7 +64,7 @@ export function PhoneSection({
         inputStyle={{ letterSpacing: 0.54 }}
         left={<TelcoBadge id={telco} />}
         right={
-          <Pressable
+          <Tap
             onPress={onPickContact}
             accessibilityRole="button"
             accessibilityLabel="Choose from contacts"
@@ -77,7 +78,7 @@ export function PhoneSection({
             })}
           >
             <Users color={c.brandText} size={18} />
-          </Pressable>
+          </Tap>
         }
       />
       <Text
@@ -96,7 +97,7 @@ export function PhoneSection({
       {saved.length > 0 ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20, marginTop: 6 }}>
           {saved.map((s) => (
-            <Pressable
+            <Tap
               key={s.phone}
               accessibilityRole="button"
               accessibilityLabel={`${s.label}, ${formatPhone(s.phone)}`}
@@ -120,7 +121,7 @@ export function PhoneSection({
                 </Text>
               </View>
               <Text style={{ color: c.text, fontSize: 13, fontFamily: 'Inter_500Medium' }}>{s.label}</Text>
-            </Pressable>
+            </Tap>
           ))}
         </ScrollView>
       ) : null}

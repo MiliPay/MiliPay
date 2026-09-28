@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { Tap } from '../ds/Tap';
 import { AlertTriangle, Check, CircleHelp, Clock, RefreshCw, Share2, X, type LucideIcon } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
@@ -167,7 +168,7 @@ function TxDetail({
       </View>
 
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
-        <Pressable
+        <Tap
           onPress={() => onHelp(tx)}
           accessibilityRole="button"
           style={({ pressed }) => ({
@@ -185,8 +186,8 @@ function TxDetail({
         >
           <CircleHelp color={c.text} size={17} />
           <Text style={{ color: c.text, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>Get help</Text>
-        </Pressable>
-        <Pressable
+        </Tap>
+        <Tap
           onPress={() => void shareReceiptAsImage(shotRef)}
           accessibilityRole="button"
           style={({ pressed }) => ({
@@ -203,10 +204,10 @@ function TxDetail({
         >
           <Share2 color={brandFixed.onBrand} size={17} />
           <Text style={{ color: brandFixed.onBrand, fontSize: 14, fontFamily: 'Inter_700Bold' }}>Share receipt</Text>
-        </Pressable>
+        </Tap>
       </View>
 
-      <Pressable
+      <Tap
         onPress={onClose}
         accessibilityRole="button"
         accessibilityLabel="Close"
@@ -224,7 +225,7 @@ function TxDetail({
         })}
       >
         <X color={c.muted} size={18} />
-      </Pressable>
+      </Tap>
     </View>
   );
 }

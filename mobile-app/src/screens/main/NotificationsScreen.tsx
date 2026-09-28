@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Tap } from '../../components/ds/Tap';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   AlertTriangle,
@@ -182,7 +183,7 @@ function NotificationRow({ n, first, onPress }: { n: AppNotification; first: boo
   const [tileBg, iconFg] = toneColours(tone, c);
   const unread = !n.read_at;
   return (
-    <Pressable
+    <Tap
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${unread ? 'Unread. ' : ''}${n.title}. ${n.body}`}
@@ -207,6 +208,6 @@ function NotificationRow({ n, first, onPress }: { n: AppNotification; first: boo
         <Text style={{ marginTop: 3, color: c.muted, fontSize: 13, lineHeight: 18, fontFamily: 'Inter_400Regular' }}>{n.body}</Text>
       </View>
       {unread ? <View style={{ width: 8, height: 8, borderRadius: 4, marginTop: 6, backgroundColor: c.brand }} /> : null}
-    </Pressable>
+    </Tap>
   );
 }

@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Keyboard
 } from 'react-native';
+import { Tap } from '../../components/ds/Tap';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { 
@@ -189,7 +190,7 @@ export default function SupportScreen({ navigation }: any) {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00C896" />}
         >
           {/* Main "Talk to Support" CTA Banner */}
-          <Pressable 
+          <Tap 
             onPress={handleStartChat}
             style={({ pressed }) => [
               {
@@ -233,7 +234,7 @@ export default function SupportScreen({ navigation }: any) {
                 <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 14 }}>Start a New Chat</Text>
               </View>
             </LinearGradient>
-          </Pressable>
+          </Tap>
 
           {/* Quick FAQ / Topics */}
           <View style={{ marginTop: 24 }}>
@@ -317,7 +318,7 @@ export default function SupportScreen({ navigation }: any) {
                   }
 
                   return (
-                    <Pressable
+                    <Tap
                       key={conv.id}
                       onPress={() => handleSelectConversation(conv)}
                       style={({ pressed }) => [
@@ -355,7 +356,7 @@ export default function SupportScreen({ navigation }: any) {
                         <Text style={{ color: '#00C896', fontSize: 12, fontWeight: '600', marginRight: 4 }}>Open Chat</Text>
                         <ChevronRight color="#00C896" size={14} />
                       </View>
-                    </Pressable>
+                    </Tap>
                   );
                 })}
               </View>

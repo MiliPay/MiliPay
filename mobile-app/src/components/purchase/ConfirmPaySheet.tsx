@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { Tap } from '../ds/Tap';
 import { Check, Landmark } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Button } from '../ds/Button';
@@ -82,7 +83,7 @@ export function ConfirmPayContent({
       </View>
 
       {account ? (
-        <Pressable
+        <Tap
           onPress={canChangeAccount ? onChangeAccount : undefined}
           accessibilityRole={canChangeAccount ? 'button' : undefined}
           accessibilityLabel={`Pay from ${account.bankName} ending ${account.accountNumber.slice(-4)}${canChangeAccount ? '. Double tap to change' : ''}`}
@@ -115,7 +116,7 @@ export function ConfirmPayContent({
 
           </View>
           {canChangeAccount ? <Text style={{ color: c.brandText, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>Change</Text> : null}
-        </Pressable>
+        </Tap>
       ) : null}
 
       <View style={{ marginTop: 16 }}>

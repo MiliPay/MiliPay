@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { Tap } from '../ds/Tap';
 import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { Fingerprint, Lock, ScanFace } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -196,7 +197,7 @@ export function AuthContent({
       )}
 
       {onCancel ? (
-        <Pressable
+        <Tap
           onPress={onCancel}
           accessibilityRole="button"
           style={({ pressed }) => ({
@@ -211,7 +212,7 @@ export function AuthContent({
           })}
         >
           <Text style={{ color: c.text, fontSize: 15, fontFamily: 'Inter_600SemiBold' }}>Cancel</Text>
-        </Pressable>
+        </Tap>
       ) : null}
     </View>
   );

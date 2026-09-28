@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { Tap } from '../ds/Tap';
 import { Mail, Phone, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
@@ -160,7 +161,7 @@ export function ContactCodeSheet({
             </Text>
           </PressScale>
 
-          <Pressable
+          <Tap
             onPress={onClose}
             disabled={busy}
             accessibilityRole="button"
@@ -179,7 +180,7 @@ export function ContactCodeSheet({
             })}
           >
             <X color={c.muted} size={16} />
-          </Pressable>
+          </Tap>
         </View>
       ) : null}
     </BottomSheet>

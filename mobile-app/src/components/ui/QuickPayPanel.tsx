@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, ActivityIndicator, Alert, Linking } from 'react-native';
+import { Tap } from '../ds/Tap';
 import * as Haptics from 'expo-haptics';
 import { Zap } from 'lucide-react-native';
 
@@ -144,7 +145,7 @@ export function QuickPayPanel({
         {busy ? (
           <ActivityIndicator size="small" color={TONE_COLOUR[copy.tone]} />
         ) : actionLabel && !choosing ? (
-          <Pressable
+          <Tap
             onPress={onAction}
             className={`px-3 py-1.5 rounded-full border ${
               copy.action === 'turn_off' || copy.action === 'cancel_setup'
@@ -162,7 +163,7 @@ export function QuickPayPanel({
             >
               {actionLabel}
             </Text>
-          </Pressable>
+          </Tap>
         ) : null}
       </View>
 

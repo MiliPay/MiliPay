@@ -1,5 +1,6 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { Tap } from '../ds/Tap';
 import { AlertTriangle, ShieldCheck } from 'lucide-react-native';
 import { FieldLabel, InputBox, OptionTile, Toggle } from '../ds/Form';
 import { useThemeColors } from '../../theme/useThemeColors';
@@ -215,7 +216,7 @@ export function PackageList<T extends { id?: string; variation_code: string; nam
           packages.map((p, i) => {
             const on = p.variation_code === selectedCode;
             return (
-              <Pressable
+              <Tap
                 key={`${p.variation_code}-${i}`}
                 accessibilityRole="radio"
                 accessibilityState={{ checked: on }}
@@ -235,7 +236,7 @@ export function PackageList<T extends { id?: string; variation_code: string; nam
                 <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: on ? 6 : 2, borderColor: on ? PURPLE : c.line }} />
                 <Text style={{ flex: 1, color: c.text, fontSize: 15, fontFamily: 'Inter_600SemiBold' }}>{p.name}</Text>
                 <Text style={{ color: c.text, fontSize: 15, fontFamily: 'Inter_700Bold', fontVariant: ['tabular-nums'] }}>{naira0(p.price)}</Text>
-              </Pressable>
+              </Tap>
             );
           })
         )}

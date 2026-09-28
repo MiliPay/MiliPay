@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { Tap } from './Tap';
 import Animated from 'react-native-reanimated';
 import { Delete } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -90,7 +91,7 @@ export function Keypad({
             if (k === '') return <View key={i} style={{ flex: 1, height }} />;
             const isDel = k === 'del';
             return (
-              <Pressable
+              <Tap
                 key={i}
                 disabled={disabled}
                 accessibilityRole="button"
@@ -114,7 +115,7 @@ export function Keypad({
                 ) : (
                   <Text style={{ color: c.text, fontSize, fontFamily: 'Inter_600SemiBold' }}>{k}</Text>
                 )}
-              </Pressable>
+              </Tap>
             );
           })}
         </View>

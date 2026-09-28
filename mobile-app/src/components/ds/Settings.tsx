@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { Tap } from './Tap';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { ChevronRight, type LucideIcon } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -94,7 +95,7 @@ export function SettingsRow({
 }) {
   const c = useThemeColors();
   return (
-    <Pressable
+    <Tap
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={value ? `${label}, ${value}` : label}
       onPress={onPress}
@@ -131,7 +132,7 @@ export function SettingsRow({
           <ChevronRight color={c.faint} size={18} />
         </View>
       ) : null}
-    </Pressable>
+    </Tap>
   );
 }
 

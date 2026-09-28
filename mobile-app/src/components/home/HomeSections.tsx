@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { Tap } from '../ds/Tap';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronRight, Hand, LayoutGrid } from 'lucide-react-native';
 
@@ -92,7 +93,7 @@ function ServiceSquare({
   const bg = more ? c.chip : live ? withAlpha(colour, 0.14) : c.chip;
   const Icon = more ? LayoutGrid : (tile as ServiceTile).icon;
   return (
-    <Pressable
+    <Tap
       onPress={live ? onPress : undefined}
       disabled={!live}
       accessibilityRole="button"
@@ -108,7 +109,7 @@ function ServiceSquare({
       {!live ? (
         <Text style={{ marginTop: -6, color: c.faint, fontSize: 10, fontFamily: 'Inter_600SemiBold' }}>Soon</Text>
       ) : null}
-    </Pressable>
+    </Tap>
   );
 }
 
