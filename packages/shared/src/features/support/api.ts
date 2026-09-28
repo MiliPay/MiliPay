@@ -197,12 +197,15 @@ export async function claimTicket(ticketId: string, agentId: string) {
   const { data: staff } = await supabase.from("staff_profiles").select("full_name").eq("id", agentId).single();
   const agentName = staff?.full_name || "A support agent";
 
-  // Notify chat participants
+  // Tell the customer, in the words of their app ("Tolu from MiliPay Support
+  // joined the chat"). ticket_id is required: without it this insert failed
+  // silently and the customer never saw an agent arrive.
   try {
     await supabase.from("ticket_messages").insert({
+      ticket_id: ticketId,
       sender_id: agentId,
       sender_type: "system",
-      content: `${agentName} has attended this chat and is now assisting you.`
+      content: `${agentName.split(" ")[0]} from MiliPay Support joined the chat`
     });
   } catch (msgErr) {
     console.warn("Could not insert attend system message:", msgErr);
@@ -231,7 +234,7 @@ export async function resolveTicket(dbId: string, staffId: string) {
       ticket_id: dbId,
       sender_id: staffId,
       sender_type: "system",
-      content: `Ticket ${data.ticket_id} has been marked as solved.`
+      content: "Ticket marked as solved"
     });
   } catch (msgErr) {
     console.warn("Could not insert solve system message:", msgErr);
@@ -262,7 +265,9 @@ export async function escalateTicket(dbId: string, subject: string, staffId?: st
       ticket_id: dbId,
       sender_id: staffId || null,
       sender_type: "system",
-      content: `Ticket ${data.ticket_id} has been escalated to Administration: "${subject}". An Administrator will review and resolve this case.`
+      // The customer sees this. The escalation subject is an internal note
+      // for the admin team, so it stays out of the chat.
+      content: "Escalated to admin"
     });
   } catch (msgErr) {
     console.warn("Could not insert escalation system message:", msgErr);
@@ -331,6 +336,10 @@ export async function sendTicketMessage(ticketId: string, senderId: string, send
   const { data, error } = await supabase
     .from("ticket_messages")
     .insert({
+      // Required. It was dropped in ebe6d458 (mistaken for the ticket's
+      // human-readable number), and from then every staff reply failed to
+      // save — customers never saw an answer.
+      ticket_id: ticketId,
       sender_id: senderId,
       sender_type: senderType,
       content,
@@ -340,14 +349,8 @@ export async function sendTicketMessage(ticketId: string, senderId: string, send
     
   if (error) throw error;
 
-  // Auto-reopen logic if customer messages a resolved ticket
-  if (senderType === "customer") {
-    const { data: ticket } = await supabase.from("support_tickets").select("status").eq("id", ticketId).single();
-    if (ticket && ticket.status === "resolved") {
-      await supabase.from("support_tickets").update({ status: "in_progress" }).eq("id", ticketId);
-    }
-  }
-
+  // A solved ticket stays closed: the customer starts a new chat instead
+  // (the database refuses their messages into a solved one).
   return data;
 }
 
@@ -392,7 +395,7 @@ export async function createTicket(
   return data;
 }
 
-export async function bumpTicketPriority(ticketId: string, agentName: string) {
+export async function bumpTicketPriority(ticketId: string, _agentName?: string) {
   const { data, error } = await supabase
     .from("support_tickets")
     .update({ urgency: "critical" })
@@ -402,11 +405,13 @@ export async function bumpTicketPriority(ticketId: string, agentName: string) {
     
   if (error) throw error;
 
+  // The customer sees system messages; the SLA details are for staff.
   await supabase
     .from("ticket_messages")
     .insert({
+      ticket_id: ticketId,
       sender_type: "system",
-      content: `Priority escalated to CRITICAL by Field Agent ${agentName} due to 24hr SLA breach.`,
+      content: "Your case has been given priority",
     });
 
   return data;

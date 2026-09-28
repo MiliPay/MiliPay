@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, Link, useLocation } from "react-router-dom";
 import { ArrowLeft, User, MessageSquareWarning, ShieldCheck, AlertTriangle, Send } from "lucide-react";
 import { supabase } from "@milipay/shared/lib/supabase";
@@ -21,6 +21,29 @@ export function TicketDetailsPage() {
   const [escalationSubject, setEscalationSubject] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // "Agent is typing…" in the customer's app: a broadcast on the ticket's own
+  // typing channel, at most every 2 s while the agent types. Nothing is
+  // stored; the customer's app hides the dots a few seconds after the last one.
+  const typingChannel = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const lastTypingSent = useRef(0);
+  useEffect(() => {
+    if (!id) return;
+    const channel = supabase.channel(`support_typing_${id}`);
+    channel.subscribe();
+    typingChannel.current = channel;
+    return () => {
+      typingChannel.current = null;
+      supabase.removeChannel(channel);
+    };
+  }, [id]);
+
+  const announceTyping = () => {
+    const now = Date.now();
+    if (!typingChannel.current || now - lastTypingSent.current < 2000) return;
+    lastTypingSent.current = now;
+    void typingChannel.current.send({ type: "broadcast", event: "typing", payload: { from: "staff" } });
+  };
 
   const loadTicketAndMessages = async () => {
     if (!id) return;
@@ -275,7 +298,10 @@ export function TicketDetailsPage() {
                 <input
                   type="text"
                   value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
+                  onChange={(e) => {
+                    setNewMessage(e.target.value);
+                    if (e.target.value.trim()) announceTyping();
+                  }}
                   placeholder="Type a message to the customer..."
                   className="flex-1 bg-white/[0.05] border border-white/[0.1] text-ink px-4 py-3 rounded-xl focus:outline-none focus:border-signal/50 focus:bg-white/[0.08] transition-all"
                 />

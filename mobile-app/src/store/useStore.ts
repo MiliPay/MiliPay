@@ -637,308 +637,244 @@ export interface SupportMessage {
 
 export interface SupportConversation {
   id: string;
-  ticket_id?: string;
+  /** The human reference staff see: "TKT-00012". */
+  ticket_id: string | null;
   issue_description: string;
-  subject?: string;
-  status: 'open' | 'in_progress' | 'resolved';
-  urgency: string;
-  is_escalated?: boolean;
-  assigned_to?: string;
+  status: string;
+  is_escalated: boolean;
+  assigned_to: string | null;
   created_at: string;
   updated_at: string;
-  last_message?: string;
+  /** The last thing a person said in it (never a system notice). */
+  last_message: string;
 }
 
 interface SupportState {
   conversations: SupportConversation[];
-  activeTicket: SupportConversation | null;
-  activeTicketId: string | null;
-  messages: SupportMessage[];
   isLoading: boolean;
-  isLoadingMessages: boolean;
   error: string | null;
-  subscription: any | null;
+  activeTicketId: string | null;
+  activeTicket: SupportConversation | null;
+  messages: SupportMessage[];
+  isLoadingMessages: boolean;
+  /** The agent is typing right now (a live signal from the support portal). */
+  agentTyping: boolean;
   fetchConversations: () => Promise<void>;
-  startNewChat: (description?: string) => Promise<string | null>;
+  /**
+   * Open a chat with the customer's first message. The ticket is created
+   * only now, as in the design: "Start a new chat" shows an empty chat, and
+   * nothing reaches the support queue until the customer has said something.
+   */
+  startNewChat: (firstMessage: string) => Promise<string | null>;
   selectChat: (ticketId: string) => Promise<void>;
   leaveChat: () => void;
-  sendMessage: (content: string) => Promise<void>;
+  sendMessage: (content: string) => Promise<boolean>;
   unsubscribe: () => void;
 }
 
+const TICKET_COLUMNS = 'id, ticket_id, issue_description, status, is_escalated, assigned_to, created_at, updated_at';
+
+function toConversation(row: any, lastMessage?: string): SupportConversation {
+  return {
+    id: row.id,
+    ticket_id: row.ticket_id ?? null,
+    issue_description: row.issue_description ?? '',
+    status: row.status,
+    is_escalated: Boolean(row.is_escalated),
+    assigned_to: row.assigned_to ?? null,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    last_message: lastMessage ?? row.issue_description ?? '',
+  };
+}
+
+// Live channels for the open chat, outside the store's state: they are not
+// something a screen draws.
+let chatChannel: ReturnType<typeof supabase.channel> | null = null;
+let typingChannel: ReturnType<typeof supabase.channel> | null = null;
+let typingTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** How long the dots stay after the portal's last typing signal. */
+const TYPING_HOLD_MS = 4000;
+
 export const useSupportStore = create<SupportState>((set, get) => ({
   conversations: [],
-  activeTicket: null,
-  activeTicketId: null,
-  messages: [],
   isLoading: false,
-  isLoadingMessages: false,
   error: null,
-  subscription: null,
+  activeTicketId: null,
+  activeTicket: null,
+  messages: [],
+  isLoadingMessages: false,
+  agentTyping: false,
 
   fetchConversations: async () => {
     set({ isLoading: true, error: null });
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const user = sessionData.session?.user;
-      if (!user) {
-        set({ conversations: [], isLoading: false });
-        return;
-      }
-
-      // Fetch customer record if present
-      const { data: customerRecord } = await supabase
-        .from('customers')
-        .select('id')
-        .eq('auth_user_id', user.id)
-        .maybeSingle();
-
-      let query = supabase
-        .from('support_tickets')
-        .select('*');
-
-      if (customerRecord?.id) {
-        query = query.or(`created_by.eq.${user.id},customer_id.eq.${customerRecord.id}`);
-      } else {
-        query = query.eq('created_by', user.id);
-      }
-
-      const { data: tickets, error: ticketError } = await query
-        .order('updated_at', { ascending: false });
-
-      if (ticketError) throw ticketError;
-
-      const convList: SupportConversation[] = [];
-
-      for (const t of (tickets || [])) {
-        // Fetch the last message preview for this ticket
-        const { data: lastMsg } = await supabase
-          .from('ticket_messages')
-          .select('content, created_at')
-          .eq('ticket_id', t.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        convList.push({
-          id: t.id,
-          ticket_id: t.ticket_id,
-          issue_description: t.issue_description,
-          subject: t.subject,
-          status: t.status,
-          urgency: t.urgency,
-          is_escalated: t.is_escalated,
-          assigned_to: t.assigned_to,
-          created_at: t.created_at,
-          updated_at: t.updated_at,
-          last_message: lastMsg?.content || t.issue_description || 'Chat started',
-        });
-      }
-
-      set({ conversations: convList, isLoading: false });
-    } catch (err: any) {
-      console.error('Error fetching conversations:', err);
-      set({ error: err.message, isLoading: false });
+    // Row security limits both reads to the signed-in customer's own tickets.
+    const { data: tickets, error } = await supabase
+      .from('support_tickets')
+      .select(TICKET_COLUMNS)
+      .order('updated_at', { ascending: false })
+      .limit(50);
+    if (error) {
+      console.warn('[support] could not load chats', error.message);
+      set({ error: error.message, isLoading: false });
+      return;
     }
+
+    // Each card's preview in one read, not one query per ticket.
+    const ids = (tickets ?? []).map((t: any) => t.id);
+    const lastSaid: Record<string, string> = {};
+    if (ids.length > 0) {
+      const { data: msgs } = await supabase
+        .from('ticket_messages')
+        .select('ticket_id, sender_type, content, created_at')
+        .in('ticket_id', ids)
+        .neq('sender_type', 'system')
+        .order('created_at', { ascending: false })
+        .limit(500);
+      for (const m of msgs ?? []) {
+        if (!lastSaid[m.ticket_id]) lastSaid[m.ticket_id] = m.content;
+      }
+    }
+
+    set({
+      conversations: (tickets ?? []).map((t: any) => toConversation(t, lastSaid[t.id])),
+      isLoading: false,
+    });
   },
 
-  startNewChat: async (description?: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const user = sessionData.session?.user;
-      if (!user) throw new Error('Not authenticated');
+  startNewChat: async (firstMessage) => {
+    const text = firstMessage.trim();
+    if (!text) return null;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+    if (!userId) return null;
+    const customerId = useAuthStore.getState().user?.customerId ?? null;
 
-      // Fetch associated customer record to populate customer_id
-      const { data: customerRecord } = await supabase
-        .from('customers')
-        .select('id')
-        .eq('auth_user_id', user.id)
-        .maybeSingle();
-
-      const issueText = description?.trim() || 'Need help with my account';
-
-      const { data: newTicket, error: createError } = await supabase
-        .from('support_tickets')
-        .insert({
-          created_by: user.id,
-          customer_id: customerRecord?.id || null,
-          status: 'open',
-          urgency: 'medium',
-          issue_description: issueText,
-        })
-        .select()
-        .single();
-
-      if (createError) throw createError;
-
-      // Select this fresh chat
-      await get().selectChat(newTicket.id);
-      return newTicket.id;
-    } catch (err: any) {
-      console.error('Error starting new chat:', err);
-      set({ error: err.message, isLoading: false });
+    const { data: ticket, error } = await supabase
+      .from('support_tickets')
+      .insert({
+        created_by: userId,
+        customer_id: customerId,
+        issue_description: text.slice(0, 500),
+        status: 'open',
+        urgency: 'medium',
+      })
+      .select(TICKET_COLUMNS)
+      .single();
+    if (error || !ticket) {
+      console.warn('[support] could not start a chat', error?.message);
+      set({ error: error?.message ?? 'Could not start a chat' });
       return null;
     }
+
+    const { error: msgError } = await supabase
+      .from('ticket_messages')
+      .insert({ ticket_id: ticket.id, sender_id: userId, sender_type: 'customer', content: text });
+    if (msgError) console.warn('[support] first message not saved', msgError.message);
+
+    await get().selectChat(ticket.id);
+    void get().fetchConversations();
+    return ticket.id;
   },
 
-  selectChat: async (ticketId: string) => {
+  selectChat: async (ticketId) => {
     get().unsubscribe();
-    set({ activeTicketId: ticketId, isLoadingMessages: true, messages: [], error: null });
+    set({ activeTicketId: ticketId, activeTicket: null, messages: [], isLoadingMessages: true, agentTyping: false, error: null });
 
-    try {
-      // Fetch ticket info
-      const { data: ticketData } = await supabase
-        .from('support_tickets')
-        .select('*')
-        .eq('id', ticketId)
-        .single();
-
-      if (ticketData) {
-        set({
-          activeTicket: {
-            id: ticketData.id,
-            ticket_id: ticketData.ticket_id,
-            issue_description: ticketData.issue_description,
-            subject: ticketData.subject,
-            status: ticketData.status,
-            urgency: ticketData.urgency,
-            is_escalated: ticketData.is_escalated,
-            assigned_to: ticketData.assigned_to,
-            created_at: ticketData.created_at,
-            updated_at: ticketData.updated_at,
-          }
-        });
-      }
-
-      // Fetch existing messages
-      const { data: msgs, error: msgError } = await supabase
+    const [{ data: ticket }, { data: msgs, error: msgError }] = await Promise.all([
+      supabase.from('support_tickets').select(TICKET_COLUMNS).eq('id', ticketId).maybeSingle(),
+      supabase
         .from('ticket_messages')
-        .select('*')
+        .select('id, ticket_id, content, sender_type, created_at')
         .eq('ticket_id', ticketId)
         .order('created_at', { ascending: true })
         // A long-running ticket is not a reason to load a thousand bubbles
         // before the first one can be drawn.
-        .limit(200);
+        .limit(200),
+    ]);
+    if (get().activeTicketId !== ticketId) return;
+    if (msgError) console.warn('[support] could not load messages', msgError.message);
+    set({
+      activeTicket: ticket ? toConversation(ticket) : null,
+      messages: (msgs ?? []) as SupportMessage[],
+      isLoadingMessages: false,
+    });
 
-      if (msgError) throw msgError;
+    chatChannel = supabase
+      .channel(`support_chat_${ticketId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'ticket_messages', filter: `ticket_id=eq.${ticketId}` },
+        (payload) => {
+          const message = payload.new as SupportMessage;
+          set((state) => {
+            if (state.messages.some((m) => m.id === message.id)) return state;
+            // A reply ends the typing dots at once.
+            return { messages: [...state.messages, message], agentTyping: message.sender_type === 'staff' ? false : state.agentTyping };
+          });
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'support_tickets', filter: `id=eq.${ticketId}` },
+        (payload) => {
+          set((state) => ({ activeTicket: state.activeTicket ? toConversation(payload.new, state.activeTicket.last_message) : state.activeTicket }));
+        },
+      )
+      .subscribe();
 
-      set({ messages: msgs || [], isLoadingMessages: false });
-
-      // Subscribe to real-time messages & ticket status updates
-      const channel = supabase
-        .channel(`support_chat_${ticketId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'ticket_messages',
-            filter: `ticket_id=eq.${ticketId}`
-          },
-          (payload) => {
-            const newMessage = payload.new as SupportMessage;
-            set((state) => {
-              if (state.messages.some(m => m.id === newMessage.id)) return state;
-              return { messages: [...state.messages, newMessage] };
-            });
-          }
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'support_tickets',
-            filter: `id=eq.${ticketId}`
-          },
-          (payload) => {
-            const updated = payload.new as any;
-            set((state) => ({
-              activeTicket: state.activeTicket ? {
-                ...state.activeTicket,
-                status: updated.status,
-                ticket_id: updated.ticket_id,
-                assigned_to: updated.assigned_to,
-                is_escalated: updated.is_escalated,
-              } : null
-            }));
-          }
-        )
-        .subscribe();
-
-      set({ subscription: channel });
-    } catch (err: any) {
-      console.error('Error selecting chat:', err);
-      set({ error: err.message, isLoadingMessages: false });
-    }
+    // "Agent is typing…" — a broadcast from the support portal, nothing stored.
+    typingChannel = supabase
+      .channel(`support_typing_${ticketId}`)
+      .on('broadcast', { event: 'typing' }, (msg) => {
+        if ((msg.payload as { from?: string } | undefined)?.from !== 'staff') return;
+        set({ agentTyping: true });
+        if (typingTimer) clearTimeout(typingTimer);
+        typingTimer = setTimeout(() => set({ agentTyping: false }), TYPING_HOLD_MS);
+      })
+      .subscribe();
   },
 
   leaveChat: () => {
     get().unsubscribe();
-    set({ activeTicketId: null, activeTicket: null, messages: [] });
-    get().fetchConversations();
+    set({ activeTicketId: null, activeTicket: null, messages: [], agentTyping: false });
+    void get().fetchConversations();
   },
 
-  sendMessage: async (content: string) => {
+  sendMessage: async (content) => {
     const { activeTicketId } = get();
-    if (!activeTicketId || !content.trim()) return;
+    const text = content.trim();
+    if (!activeTicketId || !text) return false;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+    if (!userId) return false;
 
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const user = sessionData.session?.user;
-      if (!user) throw new Error('Not authenticated');
-
-      const trimmed = content.trim();
-
-      const { data: newMessage, error } = await supabase
-        .from('ticket_messages')
-        .insert({
-          ticket_id: activeTicketId,
-          sender_id: user.id,
-          sender_type: 'customer',
-          content: trimmed,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Update ticket updated_at and reopen if it was resolved
-      const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
-      if (get().activeTicket?.status === 'resolved') {
-        updatePayload.status = 'in_progress';
-      }
-
-      await supabase
-        .from('support_tickets')
-        .update(updatePayload)
-        .eq('id', activeTicketId);
-
-      set((state) => {
-        const nextMessages = state.messages.some(m => m.id === newMessage.id)
-          ? state.messages
-          : [...state.messages, newMessage as SupportMessage];
-
-        return {
-          messages: nextMessages,
-          activeTicket: state.activeTicket && updatePayload.status
-            ? { ...state.activeTicket, status: updatePayload.status }
-            : state.activeTicket
-        };
-      });
-    } catch (err: any) {
-      console.error('Error sending message:', err);
+    // Only the message: the database moves the ticket up the staff queue, and
+    // a customer can no longer edit the ticket itself.
+    const { data, error } = await supabase
+      .from('ticket_messages')
+      .insert({ ticket_id: activeTicketId, sender_id: userId, sender_type: 'customer', content: text })
+      .select('id, ticket_id, content, sender_type, created_at')
+      .single();
+    if (error || !data) {
+      console.warn('[support] message not sent', error?.message);
+      return false;
     }
+    set((state) =>
+      state.messages.some((m) => m.id === data.id) ? state : { messages: [...state.messages, data as SupportMessage] },
+    );
+    return true;
   },
 
   unsubscribe: () => {
-    const { subscription } = get();
-    if (subscription) {
-      supabase.removeChannel(subscription);
-      set({ subscription: null });
-    }
-  }
+    if (chatChannel) supabase.removeChannel(chatChannel);
+    if (typingChannel) supabase.removeChannel(typingChannel);
+    if (typingTimer) clearTimeout(typingTimer);
+    chatChannel = null;
+    typingChannel = null;
+    typingTimer = null;
+  },
 }));
 
 export interface AppTransaction {

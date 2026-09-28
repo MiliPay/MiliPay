@@ -4,9 +4,9 @@ import { useSupportStore, type AppTransaction } from '../../store/useStore';
 import { naira2 } from '../../lib/purchaseForm';
 
 /**
- * "Get help" on a transaction: opens a support chat that already names the
- * purchase and its reference, so the customer does not have to find them and
- * support does not have to ask.
+ * "Get help" on a transaction: starts a support chat whose first message
+ * already names the purchase and its reference, and opens it — so the
+ * customer does not have to find them and support does not have to ask.
  */
 export function useTxHelp(navigation: any, beforeLeave?: () => void) {
   const startNewChat = useSupportStore((s) => s.startNewChat);
@@ -20,7 +20,7 @@ export function useTxHelp(navigation: any, beforeLeave?: () => void) {
         return;
       }
       beforeLeave?.();
-      navigation.navigate('MeTab', { screen: 'SupportScreen' });
+      navigation.navigate('MeTab', { screen: 'SupportChat', params: { ticketId: id }, initial: false });
     },
     [startNewChat, navigation, beforeLeave],
   );

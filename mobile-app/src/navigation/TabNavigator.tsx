@@ -11,6 +11,7 @@ import ActivityScreen from '../screens/main/ActivityScreen';
 import NotificationsScreen from '../screens/main/NotificationsScreen';
 import ProfileSettingsScreen from '../screens/main/ProfileSettingsScreen';
 import SupportScreen from '../screens/main/SupportScreen';
+import SupportChatScreen from '../screens/main/SupportChatScreen';
 import AccountLimitsScreen from '../screens/main/AccountLimitsScreen';
 import ChangePinScreen from '../screens/main/ChangePinScreen';
 import QuickServiceScreen from '../screens/main/QuickServiceScreen';
@@ -42,6 +43,7 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen name="SettingsScreen" component={SettingsScreen} />
       <SettingsStack.Screen name="ProfileSettings" component={ProfileSettingsScreen} />
       <SettingsStack.Screen name="SupportScreen" component={SupportScreen} />
+      <SettingsStack.Screen name="SupportChat" component={SupportChatScreen} />
       <SettingsStack.Screen name="AccountLimits" component={AccountLimitsScreen} />
       <SettingsStack.Screen name="ChangePin" component={ChangePinScreen} />
     </SettingsStack.Navigator>

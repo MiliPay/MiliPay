@@ -951,6 +951,14 @@
     },
     {
       "anon_execute": false,
+      "args": "",
+      "authenticated_execute": false,
+      "name": "touch_ticket_on_message",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
       "args": "p_status text, p_service text, p_is_palm boolean, p_name text, p_beneficiary text, p_amount numeric, p_has_token boolean, p_prepaid boolean, p_bank_name text, p_bank_last4 text, OUT title text, OUT body text",
       "authenticated_execute": false,
       "name": "transaction_notice",
@@ -1322,7 +1330,7 @@
       "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['admin'::text, 'super_admin'::text, 'support'::text, 'agent'::text])))))"
     },
     {
-      "check": "(created_by = auth.uid())",
+      "check": "((created_by = auth.uid()) AND ((customer_id IS NULL) OR (customer_id IN ( SELECT customers.id\n   FROM customers\n  WHERE (customers.auth_user_id = auth.uid())))) AND (status = 'open'::text) AND (assigned_to IS NULL) AND (COALESCE(is_escalated, false) = false) AND (solved_by IS NULL) AND (resolved_at IS NULL))",
       "command": "INSERT",
       "name": "Customers can create tickets",
       "roles": [
@@ -1330,16 +1338,6 @@
       ],
       "table": "support_tickets",
       "using": ""
-    },
-    {
-      "check": "",
-      "command": "UPDATE",
-      "name": "Customers can update own tickets",
-      "roles": [
-        "public"
-      ],
-      "table": "support_tickets",
-      "using": "((created_by = auth.uid()) OR (customer_id IN ( SELECT customers.id\n   FROM customers\n  WHERE (customers.auth_user_id = auth.uid()))))"
     },
     {
       "check": "",
@@ -1372,7 +1370,7 @@
       "using": "(EXISTS ( SELECT 1\n   FROM staff_profiles\n  WHERE ((staff_profiles.id = auth.uid()) AND (staff_profiles.role = ANY (ARRAY['admin'::text, 'super_admin'::text, 'support'::text, 'agent'::text])))))"
     },
     {
-      "check": "((ticket_id IN ( SELECT support_tickets.id\n   FROM support_tickets\n  WHERE ((support_tickets.created_by = auth.uid()) OR (support_tickets.customer_id IN ( SELECT customers.id\n           FROM customers\n          WHERE (customers.auth_user_id = auth.uid())))))) AND (sender_id = auth.uid()) AND (sender_type = 'customer'::text))",
+      "check": "((sender_id = auth.uid()) AND (sender_type = 'customer'::text) AND (ticket_id IN ( SELECT support_tickets.id\n   FROM support_tickets\n  WHERE (((support_tickets.created_by = auth.uid()) OR (support_tickets.customer_id IN ( SELECT customers.id\n           FROM customers\n          WHERE (customers.auth_user_id = auth.uid())))) AND (support_tickets.status <> 'resolved'::text)))))",
       "command": "INSERT",
       "name": "Customers can insert own messages",
       "roles": [
