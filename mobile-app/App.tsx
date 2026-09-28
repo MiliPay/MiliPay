@@ -17,7 +17,7 @@ import { AnimatedSplash } from './src/components/ds/AnimatedSplash';
 import { HeartbeatFill } from './src/components/ds/HeartbeatLoader';
 import { SpaceMono_400Regular, SpaceMono_700Bold } from '@expo-google-fonts/space-mono';
 import * as SplashScreen from 'expo-splash-screen';
-import { LogBox } from 'react-native';
+import { LogBox, View } from 'react-native';
 import { configureReanimatedLogger, ReanimatedLogLevel } from 'react-native-reanimated';
 import { useAuthStore } from './src/store/useStore';
 import { colorScheme, useColorScheme } from 'nativewind';
@@ -162,13 +162,18 @@ export default function App() {
       {/* Dark text on the light theme, light on the dark one. The splash sets
           its own while it is showing. */}
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      {isLoading ? (
-        <HeartbeatFill />
-      ) : (
-        <NavigationContainer ref={navigationRef} theme={navTheme(isDark)}>
-          <AppNavigator />
-        </NavigationContainer>
-      )}
+      {/* The app loads underneath the splash but stays invisible until it
+          ends, so no tab bar or card can show through or draw over it; then
+          the splash fades out over it. */}
+      <View style={{ flex: 1, opacity: splashDone ? 1 : 0 }}>
+        {isLoading ? (
+          <HeartbeatFill />
+        ) : (
+          <NavigationContainer ref={navigationRef} theme={navTheme(isDark)}>
+            <AppNavigator />
+          </NavigationContainer>
+        )}
+      </View>
       {!splashDone ? <AnimatedSplash onDone={endSplash} /> : null}
     </SafeAreaProvider>
   );

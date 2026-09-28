@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing,
@@ -31,7 +31,12 @@ export const SPLASH_MS = 2600;
  * is the first thing every customer reads.
  */
 export function AnimatedSplash({ onDone }: { onDone: () => void }) {
-  const { width, height } = useWindowDimensions();
+  const window = useWindowDimensions();
+  // The splash's own measured size. Android's window size can leave out the
+  // strip behind the system bars, and the gradient drawn to that size let the
+  // tab bar show underneath.
+  const [size, setSize] = useState({ width: window.width, height: window.height });
+  const { width, height } = size;
 
   useEffect(() => {
     const t = setTimeout(onDone, SPLASH_MS);
@@ -41,7 +46,13 @@ export function AnimatedSplash({ onDone }: { onDone: () => void }) {
   const centreY = height * 0.4;
 
   return (
-    <Animated.View exiting={FadeOut.duration(250)} style={StyleSheet.absoluteFill}>
+    <Animated.View
+      exiting={FadeOut.duration(250)}
+      onLayout={(e) => setSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
+      // Above everything: on Android anything with elevation (a shadowed
+      // card, the raised Palm button) otherwise draws over a later sibling.
+      style={[StyleSheet.absoluteFill, { zIndex: 9999, elevation: 9999, backgroundColor: '#022C22' }]}
+    >
       <StatusBar style="light" />
       <Pressable
         style={StyleSheet.absoluteFill}
@@ -50,7 +61,7 @@ export function AnimatedSplash({ onDone }: { onDone: () => void }) {
         accessibilityLabel="MiliPay. Payments in milliseconds. Tap to continue."
       >
         {/* radial-gradient(120% 80% at 50% 38%, #0a7a5a, #065f46 38%, #022c22 78%, #011a14) */}
-        <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
+        <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
           <Defs>
             <RadialGradient id="bg" cx="50%" cy="38%" rx="120%" ry="80%" fx="50%" fy="38%" gradientUnits="objectBoundingBox">
               <Stop offset="0" stopColor="#0A7A5A" />
@@ -65,7 +76,7 @@ export function AnimatedSplash({ onDone }: { onDone: () => void }) {
               <Stop offset="1" stopColor="#00C896" stopOpacity="0" />
             </RadialGradient>
           </Defs>
-          <Rect x="0" y="0" width={width} height={height} fill="url(#bg)" />
+          <Rect x="0" y="0" width="100%" height="100%" fill="url(#bg)" />
           <Rect x={width / 2 - 155} y={centreY - 155} width={310} height={310} fill="url(#glow)" />
         </Svg>
 

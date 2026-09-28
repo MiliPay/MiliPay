@@ -19,12 +19,17 @@ const GAP = 12;
  * screen: 20 pt in from the left, with just 32 pt of the next card peeking in
  * on the right. A fixed 326 on a wider phone showed most of the next card
  * beside the first, so the width follows the screen (keeping those same
- * margins) and the height keeps the design's 326:200 shape.
+ * margins). The height grows only a little with it — by 30% of the extra
+ * width — because scaling it fully made the card tower on a wide phone
+ * (272 pt on a 508 pt screen; this gives 235). On the design's phone it is
+ * exactly 326×200.
  */
 export function useCardSize() {
   const { width: screen } = useWindowDimensions();
   const width = Math.round(Math.min(Math.max(screen - 64, 260), 460));
-  return { width, height: Math.round((width * 200) / 326), step: width + GAP };
+  // Narrower than the design's phone: keep the 326:200 shape.
+  const height = Math.round(width < 326 ? (width * 200) / 326 : 200 + (width - 326) * 0.3);
+  return { width, height, step: width + GAP };
 }
 
 /**
