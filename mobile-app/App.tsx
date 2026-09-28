@@ -99,10 +99,8 @@ export default function App() {
         if (!navigationRef.isReady()) return;
         // The ref is typed against a param list this app does not declare, so
         // the call is widened rather than each argument being cast.
-        (navigationRef.navigate as (name: string, params?: object) => void)('HomeTab', {
-          screen: 'Transactions',
-          params: { reference },
-        });
+        // Activity opens the transaction the alert is about.
+        (navigationRef.navigate as (name: string, params?: object) => void)('ActivityTab', { reference });
       },
     });
   }, []);

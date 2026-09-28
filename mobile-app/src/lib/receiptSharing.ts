@@ -1,9 +1,9 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { captureRef } from 'react-native-view-shot';
-import { Share, Alert } from 'react-native';
+import { Alert } from 'react-native';
 import { SUPPORT_EMAIL } from './brand';
-import { receiptHeadline } from './receiptHeadline';
+import { isReturned, statusHeadline, type HeadlineIcon, type Tone } from './statusView';
 
 export interface ReceiptInfo {
   reference: string;
@@ -33,25 +33,32 @@ export interface ReceiptInfo {
 }
 
 /**
- * How a status should be shown, and whether it is good news. Delegates to
- * receiptHeadline(), which the in-app receipts use too, so the shared PDF and
- * the screen can never tell the customer two different things.
+ * The status headline, from statusHeadline() — the same one the receipt
+ * screen and the transaction details use, so the shared PDF and the screen can
+ * never tell the customer two different things. Only a delivered purchase is
+ * drawn as a success.
  */
-function presentStatus(status: string): { label: string; tone: 'ok' | 'pending' | 'bad' } {
-  const headline = receiptHeadline(status);
-  return { label: headline.title, tone: headline.tone };
-}
+const STATUS_TONES: Record<Tone, { bg: string; fg: string; mark: string }> = {
+  ok: { bg: '#d1fae5', fg: '#065f46', mark: '#00C896' },
+  warn: { bg: '#fef3c7', fg: '#92400e', mark: '#f59e0b' },
+  fail: { bg: '#fee2e2', fg: '#991b1b', mark: '#ef4444' },
+  muted: { bg: '#f1f5f9', fg: '#475569', mark: '#94a3b8' },
+};
 
-const STATUS_TONES = {
-  ok: { bg: '#d1fae5', fg: '#065f46', mark: '#00C896', glyph: '&#10003;' },
-  pending: { bg: '#fef3c7', fg: '#92400e', mark: '#f59e0b', glyph: '&#8226;' },
-  bad: { bg: '#fee2e2', fg: '#991b1b', mark: '#ef4444', glyph: '&#33;' },
-} as const;
+const GLYPHS: Record<HeadlineIcon, string> = {
+  check: '&#10003;',
+  x: '&#10005;',
+  alert: '&#33;',
+  refresh: '&#8634;',
+  clock: '&#8226;',
+};
 
 export function generateReceiptHtml(receipt: ReceiptInfo): string {
   const formattedAmount = `₦${receipt.amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
-  const state = presentStatus(receipt.status);
-  const tone = STATUS_TONES[state.tone];
+  const state = statusHeadline(receipt.status);
+  const tone = { ...STATUS_TONES[state.tone], glyph: GLYPHS[state.icon] };
+  // Money that never left, or came back, is not money paid.
+  const returned = isReturned(receipt.status);
   
   return `
 <!DOCTYPE html>
@@ -204,12 +211,12 @@ export function generateReceiptHtml(receipt: ReceiptInfo): string {
     <div class="header">
       <div class="logo-badge">${tone.glyph}</div>
       <div class="app-name">MiliPay Receipt</div>
-      <div class="status-badge">${state.label}</div>
+      <div class="status-badge">${state.title}</div>
     </div>
 
     <div class="amount-box">
-      <div class="amount-label">Amount Paid</div>
-      <div class="amount-val">${formattedAmount}</div>
+      <div class="amount-label">Amount</div>
+      <div class="amount-val"${returned ? ' style="color: #94a3b8; text-decoration: line-through;"' : ''}>${formattedAmount}</div>
     </div>
 
     ${receipt.token ? `
@@ -318,25 +325,5 @@ export async function shareReceiptAsImage(viewRef: React.RefObject<any>): Promis
   } catch (err: any) {
     console.error('Error sharing receipt as image:', err);
     Alert.alert('Share Error', err.message || 'Unable to capture receipt image');
-  }
-}
-
-export async function shareReceiptAsText(receipt: ReceiptInfo): Promise<void> {
-  try {
-    const text = `*MiliPay Transaction Receipt*
-Status: Successful
-Amount: ₦${receipt.amount.toLocaleString()}
-Service: ${receipt.merchant}
-Beneficiary: ${receipt.beneficiary}
-Date: ${receipt.date}
-Ref: ${receipt.reference}
-${receipt.token ? `Token: ${receipt.token}\n` : ''}Payment: ${receipt.bank || 'MiliPay Account'}`;
-
-    await Share.share({
-      message: text,
-      title: `MiliPay Receipt - ${receipt.reference}`,
-    });
-  } catch (err: any) {
-    console.error('Error sharing receipt as text:', err);
   }
 }

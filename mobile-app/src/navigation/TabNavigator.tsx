@@ -7,7 +7,8 @@ import HomeScreen from '../screens/main/HomeScreen';
 import PalmScreen from '../screens/main/PalmScreen';
 import RewardsScreen from '../screens/main/RewardsScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
-import TransactionsScreen from '../screens/main/TransactionsScreen';
+import ActivityScreen from '../screens/main/ActivityScreen';
+import NotificationsScreen from '../screens/main/NotificationsScreen';
 import ProfileSettingsScreen from '../screens/main/ProfileSettingsScreen';
 import SupportScreen from '../screens/main/SupportScreen';
 import AccountLimitsScreen from '../screens/main/AccountLimitsScreen';
@@ -26,7 +27,7 @@ function HomeStackNavigator() {
       {/* No swipe-back: a receipt is left with Done or Buy again, never by
           sliding back into a form that has already been paid. */}
       <HomeStack.Screen name="Receipt" component={ReceiptScreen} options={{ gestureEnabled: false, animation: 'fade' }} />
-      <HomeStack.Screen name="Transactions" component={TransactionsScreen} />
+      <HomeStack.Screen name="Notifications" component={NotificationsScreen} />
       <HomeStack.Screen name="ProfileSettings" component={ProfileSettingsScreen} />
       <HomeStack.Screen name="AccountLimits" component={AccountLimitsScreen} />
     </HomeStack.Navigator>
@@ -57,13 +58,13 @@ function SettingsStackNavigator() {
  * AppTabBar draws the bar (Palm raised in the middle) and hides it on any
  * pushed screen, which replaces the per-screen `tabBarStyle: display none`
  * lists this used to keep — lists that had to be updated by hand every time a
- * screen was added, and were not (Transactions pushed from Home kept the bar).
+ * screen was added, and were not (a history screen pushed from Home kept the bar).
  */
 export default function TabNavigator() {
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={(props) => <AppTabBar {...props} />}>
       <Tab.Screen name="HomeTab" component={HomeStackNavigator} />
-      <Tab.Screen name="ActivityTab" component={TransactionsScreen} />
+      <Tab.Screen name="ActivityTab" component={ActivityScreen} />
       <Tab.Screen name="PalmTab" component={PalmScreen} />
       <Tab.Screen name="RewardsTab" component={RewardsScreen} />
       <Tab.Screen name="MeTab" component={SettingsStackNavigator} />

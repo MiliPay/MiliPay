@@ -14,6 +14,8 @@ interface User {
   nin?: string;
   kycTier?: number;
   pinThreshold?: number;
+  /** An agent has captured this customer's palm (customers.has_palm_template). */
+  hasPalm?: boolean;
 }
 
 /**
@@ -76,7 +78,7 @@ interface AuthState {
 const CUSTOMER_COLUMNS =
   'id, first_name, last_name, phone, email, address, state, nin_last_4, ' +
   'kyc_tier, pin_threshold, single_limit, daily_limit, status, ' +
-  'must_change_password, biometric_enrolled_at, onboarding_completed_at';
+  'must_change_password, biometric_enrolled_at, onboarding_completed_at, has_palm_template';
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: false,
@@ -139,6 +141,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             address: customerData?.address || customerData?.state || undefined,
             kycTier: customerData?.kyc_tier || 2,
             pinThreshold: Number(customerData?.pin_threshold) || 10000,
+            hasPalm: Boolean(customerData?.has_palm_template),
           },
           isLoading: false
         });
@@ -190,6 +193,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             address: customerData?.address || customerData?.state || undefined,
             kycTier: customerData?.kyc_tier || 2,
             pinThreshold: Number(customerData?.pin_threshold) || 10000,
+            hasPalm: Boolean(customerData?.has_palm_template),
           },
           isLoading: false
         });
@@ -234,6 +238,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     await supabase.auth.signOut();
     set({ isAuthenticated: false, user: null, onboarding: null });
+    // A shared handset: the next person to sign in must not glimpse the last
+    // customer's history or inbox while their own is loading.
+    useTransactionStore.setState({ transactions: [] });
+    useNotificationStore.setState({ notifications: [] });
   },
 
   /**
@@ -476,6 +484,8 @@ export interface LinkedAccount {
   accountNumber: string;
   balance: string; // Formatted for display (e.g. ₦100,000.00)
   balanceNgn: number; // Naira, numeric(12,2) — matches the column exactly. Never kobo.
+  /** When the balance was read from the bank. It is a snapshot, not live. */
+  balanceAsOf: string | null;
 }
 
 interface BankState {
@@ -518,6 +528,7 @@ export const useBankStore = create<BankState>((set, get) => ({
           accountNumber: acc.account_number,
           balanceNgn: naira,
           balance: formatNaira(naira),
+          balanceAsOf: acc.balance_as_of ?? null,
         };
       });
 
@@ -914,17 +925,25 @@ export interface AppTransaction {
   reference: string;
   customer_id?: string | null;
   user_id?: string | null;
+  /** The service label ("MTN Airtime", "IKEDC (prepaid)") or the merchant. */
   merchant_name: string;
-  amount: number; // in Naira (e.g. 1000)
-  status: 'success' | 'failed' | 'pending';
+  amount: number; // in Naira (e.g. 1000), fee included
+  /** The payment rail's state machine; older rows may carry legacy words. */
+  status: string;
   account_used?: string | null;
   created_at: string;
-  category?: 'bills' | 'pos' | 'transfer' | 'received';
-  type?: 'debit' | 'credit' | string;
-  direction?: 'inflow' | 'outflow';
-  recipient?: string | null;
-  units?: string | null;
+  /** airtime | data | power | cable. Null on rows from before the rail. */
+  service_type?: string | null;
+  provider?: string | null;
+  /** Phone, meter or smartcard number. */
+  beneficiary?: string | null;
+  /** What MiliPay charged on top; null when not recorded (older rows). */
+  fee_amount?: number | null;
   token?: string | null;
+  units?: string | null;
+  /** Set on a palm payment made at a merchant's terminal. */
+  merchant_id?: string | null;
+  terminal_id?: string | null;
 }
 
 
@@ -934,7 +953,7 @@ interface TransactionState {
   error: string | null;
   fetchTransactions: (userId: string, customerId?: string) => Promise<void>;
   /**
-   * Live history and live balance.
+   * Live history, live balance and the live inbox.
    *
    * A purchase settles asynchronously now — the bank confirms by webhook and
    * the airtime follows — so a transaction genuinely changes state while the
@@ -947,15 +966,43 @@ interface TransactionState {
   subscribeToLive: (userId: string) => () => void;
 }
 
-/** What a history row actually renders. */
+/**
+ * What the history rows and the detail sheet show. Named columns, not '*':
+ * the payment rail's lifecycle timestamps, failure reasons and provider
+ * references are for staff, not for drawing a list.
+ */
 const TRANSACTION_LIST_COLUMNS =
-  'id, reference, customer_id, user_id, merchant_name, amount, status, account_used, created_at';
+  'id, reference, customer_id, user_id, merchant_name, amount, status, account_used, created_at, ' +
+  'service_type, provider, beneficiary, fee_amount, token, units, merchant_id, terminal_id';
 
 /**
  * Newest N. Deep history belongs behind a "load older" control rather than in
  * every cold start; nobody scrolls two thousand rows.
  */
 const TRANSACTION_PAGE_SIZE = 100;
+
+/** One mapper for the first read and every realtime event after it. */
+function toAppTransaction(row: any): AppTransaction {
+  return {
+    id: row.id,
+    reference: row.reference,
+    customer_id: row.customer_id,
+    user_id: row.user_id,
+    merchant_name: row.merchant_name,
+    amount: Number(row.amount) || 0,
+    status: row.status,
+    account_used: row.account_used,
+    created_at: row.created_at,
+    service_type: row.service_type ?? null,
+    provider: row.provider ?? null,
+    beneficiary: row.beneficiary ?? null,
+    fee_amount: row.fee_amount === null || row.fee_amount === undefined ? null : Number(row.fee_amount),
+    token: row.token ?? null,
+    units: row.units ?? null,
+    merchant_id: row.merchant_id ?? null,
+    terminal_id: row.terminal_id ?? null,
+  };
+}
 
 export const useTransactionStore = create<TransactionState>((set, get) => ({
   transactions: [],
@@ -965,11 +1012,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   fetchTransactions: async (userId: string, customerId?: string) => {
     set({ isLoading: true, error: null });
     try {
-      // Named columns, not '*'. The payment rail added base_amount, fee_amount,
-      // service_charge, the four lifecycle timestamps, tokens and failure
-      // reasons — none of which these lists show. '*' pulled all of it over the
-      // wire on every app open and again on every realtime event.
-      //
       // And a limit. There was none, so the query returned every transaction
       // the customer had ever made; a year of daily airtime is a few thousand
       // rows fetched, parsed and mounted to draw a screen that shows five.
@@ -988,21 +1030,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       const { data, error } = await query;
       if (error) throw error;
 
-      set({
-        transactions: (data || []).map((row: any) => ({
-          id: row.id,
-          reference: row.reference,
-          customer_id: row.customer_id,
-          user_id: row.user_id,
-          merchant_name: row.merchant_name,
-          amount: row.amount,
-          status: row.status,
-          account_used: row.account_used,
-          created_at: row.created_at,
-          category: 'bills',
-        })),
-        isLoading: false,
-      });
+      set({ transactions: (data || []).map(toAppTransaction), isLoading: false });
     } catch (err: any) {
       console.error('Error fetching transactions:', err);
       set({ error: err.message, isLoading: false });
@@ -1023,19 +1051,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         (payload) => {
           const row = payload.new as any;
           if (!row?.id) return;
-
-          const mapped: AppTransaction = {
-            id: row.id,
-            reference: row.reference,
-            customer_id: row.customer_id,
-            user_id: row.user_id,
-            merchant_name: row.merchant_name,
-            amount: row.amount,
-            status: row.status,
-            account_used: row.account_used,
-            created_at: row.created_at,
-            category: 'bills',
-          };
+          const mapped = toAppTransaction(row);
 
           set((state) => {
             const index = state.transactions.findIndex((t) => t.id === mapped.id);
@@ -1065,6 +1081,21 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
           void useBankStore.getState().fetchAccounts(userId);
         },
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'customer_notifications',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          // A new alert (the bell's badge goes up) or one marked read on
+          // another device (it comes down).
+          const row = payload.new as any;
+          if (row?.id) useNotificationStore.getState().upsert(toAppNotification(row));
+        },
+      )
       .subscribe();
 
     return () => {
@@ -1073,3 +1104,103 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   },
 }));
 
+/**
+ * One entry in the customer's inbox. Written by the database, never by the
+ * app (migration 20260927120000_customer_notifications): a purchase's outcome,
+ * a palm payment, or a security event on the account.
+ */
+export interface AppNotification {
+  id: string;
+  kind: 'payment' | 'palm' | 'security';
+  /** The transaction's status when this was written; null for security. */
+  status: string | null;
+  /** The transaction it is about, when there is one. */
+  reference: string | null;
+  title: string;
+  body: string;
+  created_at: string;
+  read_at: string | null;
+}
+
+interface NotificationState {
+  notifications: AppNotification[];
+  isLoading: boolean;
+  error: string | null;
+  fetchNotifications: () => Promise<void>;
+  /** Mark these read, or every unread one when no ids are given. */
+  markRead: (ids?: string[]) => Promise<void>;
+  /** Add or replace one, from a realtime event. */
+  upsert: (notification: AppNotification) => void;
+}
+
+const NOTIFICATION_COLUMNS = 'id, kind, status, reference, title, body, created_at, read_at';
+
+/** The inbox is a recent-history view, like the transaction list. */
+const NOTIFICATION_PAGE_SIZE = 100;
+
+function toAppNotification(row: any): AppNotification {
+  return {
+    id: row.id,
+    kind: row.kind,
+    status: row.status ?? null,
+    reference: row.reference ?? null,
+    title: row.title,
+    body: row.body,
+    created_at: row.created_at,
+    read_at: row.read_at ?? null,
+  };
+}
+
+export const useNotificationStore = create<NotificationState>((set, get) => ({
+  notifications: [],
+  isLoading: false,
+  error: null,
+
+  fetchNotifications: async () => {
+    set({ isLoading: true, error: null });
+    // Row security limits this to the signed-in customer's own entries.
+    const { data, error } = await supabase
+      .from('customer_notifications')
+      .select(NOTIFICATION_COLUMNS)
+      .order('created_at', { ascending: false })
+      .limit(NOTIFICATION_PAGE_SIZE);
+
+    if (error) {
+      console.warn('[notifications] could not load', error.message);
+      set({ error: error.message, isLoading: false });
+      return;
+    }
+    set({ notifications: (data || []).map(toAppNotification), isLoading: false });
+  },
+
+  markRead: async (ids) => {
+    const now = new Date().toISOString();
+    const targets = ids ? new Set(ids) : null;
+    const before = get().notifications;
+    // At once, so the dot and the badge clear under the finger; the server
+    // write follows. If it fails the list is read again, so a stale "read"
+    // never sticks.
+    set({
+      notifications: before.map((n) =>
+        !n.read_at && (!targets || targets.has(n.id)) ? { ...n, read_at: now } : n,
+      ),
+    });
+    const { error } = await supabase.rpc('mark_notifications_read', { p_ids: ids ?? null });
+    if (error) {
+      console.warn('[notifications] could not mark read', error.message);
+      await get().fetchNotifications();
+    }
+  },
+
+  upsert: (notification) => {
+    set((state) => {
+      const index = state.notifications.findIndex((n) => n.id === notification.id);
+      if (index === -1) {
+        return { notifications: [notification, ...state.notifications] };
+      }
+      const next = [...state.notifications];
+      next[index] = notification;
+      return { notifications: next };
+    });
+  },
+}));

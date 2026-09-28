@@ -76,7 +76,7 @@ export async function transitionTransaction(
     .update(patch)
     .eq("reference", request.reference)
     .eq("status", request.from)
-    .select("id, user_id, customer_id, amount, service_type, provider, beneficiary")
+    .select("id, user_id, customer_id")
     .maybeSingle();
 
   if (error) {
@@ -107,32 +107,18 @@ export async function transitionTransaction(
   }
 
   // Tell the customer, but never let it affect the outcome: the money has
-  // already moved and the row already says so. notifyTransactionStatus
-  // swallows its own errors, and stays silent for states not worth a buzz.
+  // already moved and the row already says so. The UPDATE above has already
+  // written their inbox entry (a database trigger); the banner sends its words.
+  // notifyTransactionStatus swallows its own errors, and stays silent for
+  // states with no inbox entry.
   await notifyTransactionStatus(admin, {
     userId: data.user_id,
     customerId: data.customer_id,
     status: request.to,
-    context: {
-      reference: request.reference,
-      amountNgn: Number(data.amount ?? 0),
-      serviceLabel: describeService(data.service_type, data.provider),
-      beneficiary: data.beneficiary,
-    },
+    reference: request.reference,
   });
 
   return { ok: true, transactionId: data.id };
-}
-
-/** "MTN airtime", "IKEDC electricity" — what the customer thinks they bought. */
-function describeService(serviceType?: string | null, provider?: string | null): string {
-  const service =
-    serviceType === "power"
-      ? "electricity"
-      : serviceType === "cable"
-      ? "TV subscription"
-      : serviceType ?? "purchase";
-  return provider ? `${provider.toUpperCase()} ${service}` : service;
 }
 
 /** Puts a transaction in the refund queue, or notes that it is already there. */

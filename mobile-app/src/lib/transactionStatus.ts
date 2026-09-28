@@ -69,36 +69,6 @@ export function isTerminal(status: TransactionStatus): boolean {
   return TERMINAL.includes(status);
 }
 
-export function isSuccess(status: TransactionStatus): boolean {
-  return status === 'delivered';
-}
-
-/** True while the customer's money is with us and nothing has been delivered. */
-export function isInFlight(status: TransactionStatus): boolean {
-  return !isTerminal(status);
-}
-
-/**
- * The four steps a customer sees. Several machine states collapse onto one
- * step, because "fulfilling" and "fulfilment_pending" are the same thing as far
- * as somebody holding a phone is concerned.
- */
-export type ProgressStep = 'paying' | 'paid' | 'sending' | 'done';
-
-export function progressStep(status: TransactionStatus): ProgressStep {
-  switch (status) {
-    case 'initiated':
-      return 'paying';
-    case 'paid':
-      return 'paid';
-    case 'fulfilling':
-    case 'fulfilment_pending':
-      return 'sending';
-    default:
-      return 'done';
-  }
-}
-
 function toSnapshot(row: Record<string, unknown>): TransactionSnapshot {
   return {
     reference: String(row.reference ?? ''),
@@ -211,50 +181,4 @@ export function watchTransaction(options: WatchOptions): () => void {
     finished = true;
     cleanup();
   };
-}
-
-/**
- * A short badge for a transaction in a list, or null when none is needed.
- *
- * The history rows showed merchant, date, account and amount and nothing else,
- * so a declined payment, a refunded one and a delivered one were
- * indistinguishable — all three rendered as a plain "-₦1,000", which reads as
- * money gone. Delivered stays unbadged because it is the expected case and a
- * badge on every row is just noise.
- */
-export function rowStatus(
-  status: TransactionStatus | string | null | undefined,
-): { label: string; tone: 'warn' | 'fail' | 'muted' } | null {
-  switch (status) {
-    case 'delivered':
-    case undefined:
-    case null:
-      return null;
-    case 'payment_failed':
-      // Not "Declined": this also covers a customer abandoning the payment
-      // page, and Mono refusing to start it. Neither is the bank.
-      return { label: 'Payment failed', tone: 'fail' };
-    case 'fulfilment_failed':
-      return { label: 'Failed', tone: 'fail' };
-    case 'refund_failed':
-      return { label: 'Refund delayed', tone: 'fail' };
-    case 'quarantined':
-      return { label: 'On hold', tone: 'fail' };
-    case 'refunded':
-      return { label: 'Refunded', tone: 'muted' };
-    case 'refund_pending':
-      return { label: 'Refunding', tone: 'warn' };
-    case 'initiated':
-    case 'paid':
-    case 'fulfilling':
-    case 'fulfilment_pending':
-      return { label: 'In progress', tone: 'warn' };
-    default:
-      return { label: String(status), tone: 'muted' };
-  }
-}
-
-/** True when the customer's money did not ultimately leave them. */
-export function isMoneyReturned(status: TransactionStatus | string | null | undefined): boolean {
-  return status === 'payment_failed' || status === 'refunded';
 }

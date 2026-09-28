@@ -80,6 +80,22 @@
     },
     {
       "columns": [
+        "body",
+        "created_at",
+        "id",
+        "kind",
+        "read_at",
+        "reference",
+        "status",
+        "title",
+        "user_id"
+      ],
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "table": "customer_notifications"
+    },
+    {
+      "columns": [
         "address",
         "auth_user_id",
         "biometric_enrolled_at",
@@ -759,9 +775,57 @@
     },
     {
       "anon_execute": false,
+      "args": "p_ids uuid[]",
+      "authenticated_execute": true,
+      "name": "mark_notifications_read",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
       "args": "",
       "authenticated_execute": true,
       "name": "mark_password_changed",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "p_amount numeric",
+      "authenticated_execute": false,
+      "name": "naira_label",
+      "search_path_pinned": true,
+      "security_definer": false
+    },
+    {
+      "anon_execute": false,
+      "args": "",
+      "authenticated_execute": false,
+      "name": "notify_bank_link_change",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "",
+      "authenticated_execute": false,
+      "name": "notify_credential_change",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "p_user_id uuid, p_kind text, p_title text, p_body text, p_status text, p_reference text",
+      "authenticated_execute": false,
+      "name": "notify_customer",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "",
+      "authenticated_execute": false,
+      "name": "notify_transaction_change",
       "search_path_pinned": true,
       "security_definer": true
     },
@@ -780,6 +844,14 @@
       "name": "palm_enrolment_state",
       "search_path_pinned": true,
       "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "p_phone text",
+      "authenticated_execute": false,
+      "name": "phone_label",
+      "search_path_pinned": true,
+      "security_definer": false
     },
     {
       "anon_execute": false,
@@ -863,6 +935,14 @@
     },
     {
       "anon_execute": false,
+      "args": "p_status text, p_service text, p_is_palm boolean, p_name text, p_beneficiary text, p_amount numeric, p_has_token boolean, p_prepaid boolean, p_bank_name text, p_bank_last4 text, OUT title text, OUT body text",
+      "authenticated_execute": false,
+      "name": "transaction_notice",
+      "search_path_pinned": true,
+      "security_definer": false
+    },
+    {
+      "anon_execute": false,
       "args": "target_account_id uuid",
       "authenticated_execute": true,
       "name": "unlink_bank_account",
@@ -924,6 +1004,16 @@
       ],
       "table": "complaints",
       "using": "(((auth.jwt() -> 'app_metadata'::text) ->> 'role'::text) = 'service'::text)"
+    },
+    {
+      "check": "",
+      "command": "SELECT",
+      "name": "Customers read their own notifications",
+      "roles": [
+        "authenticated"
+      ],
+      "table": "customer_notifications",
+      "using": "(user_id = auth.uid())"
     },
     {
       "check": "",
@@ -1410,6 +1500,11 @@
     {
       "grantee": "authenticated",
       "privilege": "SELECT",
+      "table": "customer_notifications"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege": "SELECT",
       "table": "linked_accounts"
     },
     {
@@ -1566,6 +1661,11 @@
   "tables": [
     {
       "name": "complaints",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "name": "customer_notifications",
       "rls_enabled": true,
       "rls_forced": false
     },

@@ -8,16 +8,26 @@ export type ChipTone = 'warn' | 'fail' | 'muted' | 'brand';
 /**
  * A status chip: "In progress", "Payment failed", "Refunded", "Palm".
  * 11/600 on a soft fill of the same tone (the prototype's TONE table).
+ * `shape="tag"` is the smaller, squarer chip on a list row (radius 6).
  */
-export function StatusChip({ label, tone }: { label: string; tone: ChipTone }) {
+export function StatusChip({ label, tone, shape = 'pill' }: { label: string; tone: ChipTone; shape?: 'pill' | 'tag' }) {
   const c = useThemeColors();
   const [bg, fg] =
     tone === 'warn' ? [c.warnSoft, c.warn]
     : tone === 'fail' ? [c.failSoft, c.fail]
     : tone === 'brand' ? [c.brandSoft, c.brandText]
     : [c.chip, c.muted];
+  const tag = shape === 'tag';
   return (
-    <View style={{ alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: bg }}>
+    <View
+      style={{
+        alignSelf: 'flex-start',
+        paddingHorizontal: tag ? 7 : 8,
+        paddingVertical: tag ? 2 : 3,
+        borderRadius: tag ? 6 : 999,
+        backgroundColor: bg,
+      }}
+    >
       <Text style={{ color: fg, fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>{label}</Text>
     </View>
   );

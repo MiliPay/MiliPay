@@ -11,78 +11,22 @@ import type { TransactionStatus } from "./vtu-state.ts";
  *    called, and failing the transition because Expo was slow would be far
  *    worse than a missing banner.
  *
- * 2. It never says delivered before the server does. The copy is keyed off the
- *    real status and nothing else, which is the same rule the app's progress
- *    sheet follows.
+ * 2. It says exactly what the inbox says. The words are not written here: the
+ *    database writes the customer's inbox entry from a trigger on the status
+ *    change (migration 20260927120000_customer_notifications), and the banner
+ *    sends that entry's title and body. One message, two channels — a banner
+ *    that said "Payment successful" over an inbox that said "Airtime
+ *    delivered" would be two stories about one purchase.
  *
- * 3. Silence is a valid outcome. Most intermediate states are noise — a
- *    customer who is watching the purchase screen does not need a banner
- *    saying "payment confirmed" two seconds before "delivered".
+ * 3. Silence is a valid outcome. A state with no inbox entry — initiated,
+ *    paid, fulfilling, refund_pending — is not worth a buzz either: they last
+ *    seconds and the app shows them live.
  */
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
 /** Expo will not accept more than 100 messages in one request. */
 const MAX_BATCH = 100;
-
-interface Copy {
-  title: string;
-  body: (context: NotifyContext) => string;
-}
-
-export interface NotifyContext {
-  reference: string;
-  amountNgn: number;
-  serviceLabel: string;
-  beneficiary?: string | null;
-}
-
-function naira(amount: number): string {
-  return `₦${Number(amount).toLocaleString("en-NG", { minimumFractionDigits: 2 })}`;
-}
-
-/**
- * What is worth interrupting somebody for.
- *
- * `initiated`, `paid` and `fulfilling` are deliberately absent: they last
- * seconds and the app shows them live. A notification for each would mean four
- * buzzes for one airtime purchase.
- */
-const COPY: Partial<Record<TransactionStatus, Copy>> = {
-  delivered: {
-    title: "Payment successful",
-    body: (c) =>
-      c.beneficiary
-        ? `${naira(c.amountNgn)} ${c.serviceLabel} to ${c.beneficiary} was delivered.`
-        : `${naira(c.amountNgn)} ${c.serviceLabel} was delivered.`,
-  },
-  // Not "declined": this also fires when the customer abandons the payment
-  // page or Mono refuses to start it, and neither is the bank.
-  payment_failed: {
-    title: "Payment didn't go through",
-    body: (c) => `Your ${naira(c.amountNgn)} payment for ${c.serviceLabel} didn't go through. Nothing was charged.`,
-  },
-  fulfilment_failed: {
-    title: "We could not complete this",
-    body: (c) => `${c.serviceLabel} could not be delivered. Your refund of ${naira(c.amountNgn)} is on its way.`,
-  },
-  fulfilment_pending: {
-    title: "Still confirming",
-    body: (c) => `${c.serviceLabel} is taking longer than usual. We are checking with the network.`,
-  },
-  refunded: {
-    title: "Refunded",
-    body: (c) => `${naira(c.amountNgn)} has been returned to your account.`,
-  },
-  refund_failed: {
-    title: "Your refund is delayed",
-    body: (c) => `We could not return ${naira(c.amountNgn)} automatically. Our team is on it.`,
-  },
-  quarantined: {
-    title: "On hold for review",
-    body: () => "One of your payments is being reviewed. Our team will contact you.",
-  },
-};
 
 interface ExpoMessage {
   to: string;
@@ -106,13 +50,19 @@ export async function notifyTransactionStatus(
     userId?: string | null;
     customerId?: string | null;
     status: TransactionStatus;
-    context: NotifyContext;
+    reference: string;
   },
 ): Promise<void> {
   try {
-    const copy = COPY[args.status];
-    if (!copy) return;
     if (!args.userId && !args.customerId) return;
+
+    const { data: note } = await admin
+      .from("customer_notifications")
+      .select("title, body")
+      .eq("reference", args.reference)
+      .eq("status", args.status)
+      .maybeSingle();
+    if (!note?.title || !note?.body) return;
 
     let query = admin
       .from("push_tokens")
@@ -128,13 +78,13 @@ export async function notifyTransactionStatus(
 
     const messages: ExpoMessage[] = rows.map((row: { token: string }) => ({
       to: row.token,
-      title: copy.title,
-      body: copy.body(args.context),
+      title: String(note.title),
+      body: String(note.body),
       sound: "default",
       channelId: "transactions",
       priority: "high",
       // The app reads this to open the right transaction when tapped.
-      data: { reference: args.context.reference, status: args.status },
+      data: { reference: args.reference, status: args.status },
     }));
 
     for (let i = 0; i < messages.length; i += MAX_BATCH) {
