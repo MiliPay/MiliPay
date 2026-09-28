@@ -1,215 +1,139 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Pressable, Switch, Alert, Modal, ActivityIndicator, Linking, AppState } from 'react-native';
+import { Alert, AppState, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
-import { 
-  ChevronRight, 
-  Fingerprint, 
-  Shield, 
-  Lock, 
-  Mail, 
-  Phone, 
-  LogOut, 
-  HelpCircle,
+import Constants from 'expo-constants';
+import {
+  ChevronRight,
+  CircleHelp,
   FileText,
-  Info,
-  Palette, X, Sun, Moon, Smartphone, Check, Trash2, Landmark, Building, Sliders,
+  Fingerprint,
+  Hand,
+  Landmark,
+  Lock,
+  LogOut,
+  Moon,
+  ShieldCheck,
+  Sliders,
+  Sun,
+  Bell,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useColorScheme } from 'nativewind';
-import { Bell, BellOff } from 'lucide-react-native';
-import {
-  notificationsEnabled,
-  registerForPushNotifications,
-  revokeThisDevice,
-} from '../../lib/notifications';
-import {
-  loadThemePreference,
-  saveThemePreference,
-  type ThemePreference,
-} from '../../lib/themePreference';
 
-import { useAuthStore, useBankStore } from '../../store/useStore';
-import { GlassCard } from '../../components/ui/GlassCard';
+import { Avatar, PressScale, Segmented, SettingsGroup, SettingsRow, Switch } from '../../components/ds';
+import { BankLinkingProvider, MAX_LINKED, useBankLinking } from '../../components/banks/BankLinking';
+import { LinkedBanksSheet } from '../../components/me/LinkedBanksSheet';
+import { DoneSheet } from '../../components/me/DoneSheet';
 import { ConfirmIdentitySheet } from '../../components/ui/ConfirmIdentitySheet';
-import { QuickPayPanel } from '../../components/ui/QuickPayPanel';
-import { stopQuickPay, useQuickPay } from '../../lib/quickPay';
+import { useAuthStore, useBankStore } from '../../store/useStore';
+import { useThemeColors } from '../../theme/useThemeColors';
+import { brandFixed } from '../../theme/tokens';
+import { formatPhone, naira0 } from '../../lib/purchaseForm';
+import { SUPPORT_EMAIL } from '../../lib/brand';
+import { notificationsEnabled, registerForPushNotifications, revokeThisDevice } from '../../lib/notifications';
+import { saveThemePreference } from '../../lib/themePreference';
 import {
+  enrolBiometricUnlock,
   getBiometricCapability,
   isBiometricUnlockEnabled,
-  enrolBiometricUnlock,
   setBiometricUnlockEnabled,
   type BiometricCapability,
 } from '../../lib/deviceAuth';
 
-// --- Reusable Setting Row ---
-const SettingRow = ({ icon: Icon, label, subtitle, value, type = 'nav', danger = false, onPress, iconBg }: any) => {
-  const { colorScheme } = useColorScheme();
-  const isDark = colorScheme !== 'light';
-
-  return (
-    <Pressable 
-      onPress={onPress}
-      className="flex-row items-center py-3.5"
-      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-    >
-      <View className={`w-9 h-9 rounded-xl items-center justify-center mr-3 ${iconBg || (danger ? (isDark ? 'bg-red-500/15' : 'bg-red-500/10') : (isDark ? 'bg-white/5' : 'bg-black/5'))}`}>
-        <Icon color={danger ? '#ef4444' : (isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)')} size={18} />
-      </View>
-      <View className="flex-1">
-        <Text className={`font-inter-medium text-[15px] ${danger ? 'text-red-500 dark:text-red-400' : 'text-slate-800 dark:text-white'}`}>
-          {label}
-        </Text>
-        {subtitle && (
-          <Text className="text-slate-500 dark:text-white/30 font-inter text-xs mt-0.5">{subtitle}</Text>
-        )}
-      </View>
-      {type === 'switch' ? (
-        <Switch 
-          value={value} 
-          onValueChange={onPress}
-          trackColor={{ false: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', true: '#00C896' }}
-          thumbColor="#fff"
-        />
-      ) : type === 'badge' ? (
-        <View className="bg-signal/15 px-2.5 py-1 rounded-lg">
-          <Text className="text-signal-dim dark:text-signal-bright font-inter-semibold text-xs">{value}</Text>
-        </View>
-      ) : type === 'value' ? (
-        <Text className="text-slate-400 dark:text-white/40 font-inter text-sm">{value}</Text>
-      ) : !danger ? (
-        <ChevronRight color={isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)"} size={18} />
-      ) : null}
-    </Pressable>
-  );
-};
-
-// --- Section Divider ---
-const SectionDivider = () => (
-  <View className="h-px bg-black/5 dark:bg-white/5 mx-1" />
-);
-
-// --- Section Header ---
-const SectionHeader = ({ title }: { title: string }) => (
-  <Text className="text-slate-400 dark:text-white/40 font-inter-semibold uppercase tracking-widest text-[11px] mb-2 ml-1 mt-6">
-    {title}
-  </Text>
-);
-
-export default function SettingsScreen({ navigation }: any) {
-  const user = useAuthStore((state) => state.user);
-  const logout = useAuthStore((state) => state.logout);
-  const recordBiometricEnrolled = useAuthStore((state) => state.setBiometricEnrolled);
-  const linkedAccounts = useBankStore((s) => s.linkedAccounts);
-  const unlinkAccount = useBankStore((s) => s.unlinkAccount);
-  
+/**
+ * The Me tab (design handoff, screen 9): who you are and your tier, your
+ * profile, then Money (linked banks, account limits), Security (fingerprint,
+ * Change PIN), Preferences (appearance, payment alerts), Help, and Log out.
+ */
+function MeContent({ navigation, route }: any) {
+  const c = useThemeColors();
+  const user = useAuthStore((s) => s.user);
+  const onboarding = useAuthStore((s) => s.onboarding);
+  const logout = useAuthStore((s) => s.logout);
+  const recordBiometricEnrolled = useAuthStore((s) => s.setBiometricEnrolled);
+  const accounts = useBankStore((s) => s.linkedAccounts);
+  const { startLink } = useBankLinking();
   const { colorScheme, setColorScheme } = useColorScheme();
-  const isDark = colorScheme !== 'light';
 
-  // Reflects the real SecureStore preference, not an optimistic default. The
-  // switch used to start on and toggle a local boolean that nothing consumed.
-  const [biometricEnabled, setBiometricEnabled] = useState(false);
-  const [biometricCapability, setBiometricCapability] = useState<BiometricCapability | null>(null);
-  const [isChangingPin, setIsChangingPin] = useState(false);
+  const tier = onboarding?.kycTier ?? user?.kycTier ?? 2;
+  const pinThreshold = user?.pinThreshold ?? onboarding?.pinThreshold ?? 10000;
 
+  const [banksOpen, setBanksOpen] = useState(false);
+  const [confirmingPin, setConfirmingPin] = useState(false);
+  const [pinDone, setPinDone] = useState(false);
+
+  // Back from Change PIN with a new PIN saved.
+  const pinChanged = route?.params?.pinChanged;
+  useEffect(() => {
+    if (!pinChanged) return;
+    setPinDone(true);
+    navigation.setParams({ pinChanged: undefined });
+  }, [pinChanged, navigation]);
+
+  // Fingerprint unlock reflects the real SecureStore preference, not an
+  // optimistic default.
+  const [biometricOn, setBiometricOn] = useState(false);
+  const [capability, setCapability] = useState<BiometricCapability | null>(null);
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getBiometricCapability(), isBiometricUnlockEnabled()]).then(
-      ([capability, enabled]) => {
-        if (cancelled) return;
-        setBiometricCapability(capability);
-        setBiometricEnabled(enabled);
-      }
-    );
+    Promise.all([getBiometricCapability(), isBiometricUnlockEnabled()]).then(([cap, enabled]) => {
+      if (cancelled) return;
+      setCapability(cap);
+      setBiometricOn(enabled);
+    });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const handleToggleBiometric = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    if (biometricEnabled) {
+  const toggleBiometric = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    if (biometricOn) {
       await setBiometricUnlockEnabled(false);
       await recordBiometricEnrolled(false);
-      setBiometricEnabled(false);
+      setBiometricOn(false);
       return;
     }
-
-    if (!biometricCapability?.hasHardware || !biometricCapability?.isEnrolled) {
+    if (!capability?.hasHardware || !capability?.isEnrolled) {
       Alert.alert(
         'Not available',
-        `No ${biometricCapability?.label.toLowerCase() ?? 'biometrics'} are set up on this phone. Add one in your device settings first.`
+        `No ${capability?.label.toLowerCase() ?? 'biometrics'} are set up on this phone. Add one in your device settings first.`,
       );
       return;
     }
-
-    const enrolled = await enrolBiometricUnlock('Confirm it is you to enable biometric unlock');
+    const enrolled = await enrolBiometricUnlock('Confirm it is you to turn on biometric unlock');
     if (!enrolled) {
-      Alert.alert('Not enabled', 'That did not match. Biometric unlock is still off.');
+      Alert.alert('Not turned on', "That didn't match. Biometric unlock is still off.");
       return;
     }
-
     await recordBiometricEnrolled(true);
-    setBiometricEnabled(true);
+    setBiometricOn(true);
   };
-  const [isThemeModalVisible, setIsThemeModalVisible] = useState(false);
-  const [activeTheme, setActiveTheme] = useState<ThemePreference>('system');
-
-  // Reflect what was actually chosen last time, so the row does not say
-  // "System" while the app is showing something else.
-  useEffect(() => {
-    let cancelled = false;
-    loadThemePreference().then((stored) => {
-      if (!cancelled) setActiveTheme(stored);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  const [isBankModalVisible, setIsBankModalVisible] = useState(false);
-  const [accountToUnlink, setAccountToUnlink] = useState<any>(null);
-  const [isUnlinking, setIsUnlinking] = useState(false);
-  // Read while Linked Banks is open, and again whenever the app returns to
-  // the foreground — which is when quick pay changes: the customer has just
-  // been to Mono's page and their bank app.
-  const quickPay = useQuickPay(isBankModalVisible);
 
   /**
-   * Whether the operating system is letting us notify this customer.
-   *
-   * Read from the OS rather than stored in the app, and re-read whenever the
-   * app comes back to the foreground — because the only place this can be
-   * changed is in system settings, and a switch here that disagreed with the
-   * system would be exactly the kind of control that lies.
+   * Payment alerts follow the phone's own setting, re-read whenever the app
+   * returns to the foreground: that is the only place they can be turned
+   * off, and a switch here that disagreed with the system would lie.
    */
-  const [pushEnabled, setPushEnabled] = useState<boolean | null>(null);
-
+  const [alertsOn, setAlertsOn] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    const read = () => {
-      notificationsEnabled().then((on) => {
-        if (!cancelled) setPushEnabled(on);
-      });
-    };
-    read();
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') read();
-    });
+    const read = () => notificationsEnabled().then((on) => !cancelled && setAlertsOn(on));
+    void read();
+    const sub = AppState.addEventListener('change', (state) => state === 'active' && void read());
     return () => {
       cancelled = true;
       sub.remove();
     };
   }, []);
 
-  const handleNotificationsPress = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    if (pushEnabled) {
+  const toggleAlerts = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    if (alertsOn) {
       Alert.alert(
         'Payment alerts are on',
-        'You will hear when a payment is confirmed, delivered, or fails. Turn them off in your phone settings.',
+        'You hear when a payment is confirmed, delivered or fails. Turn them off in your phone settings.',
         [
           { text: 'Close', style: 'cancel' },
           { text: 'Open settings', onPress: () => void Linking.openSettings() },
@@ -217,11 +141,9 @@ export default function SettingsScreen({ navigation }: any) {
       );
       return;
     }
-
-    // First refusal is recoverable in-app; after that only the OS can grant it.
     const result = await registerForPushNotifications();
     if (result.ok) {
-      setPushEnabled(true);
+      setAlertsOn(true);
       return;
     }
     if (result.reason === 'simulator') {
@@ -229,18 +151,14 @@ export default function SettingsScreen({ navigation }: any) {
       return;
     }
     if (result.reason === 'expo-go') {
-      // Expo removed Android push from Expo Go in SDK 53. Saying "check your
-      // phone settings" here would send someone to a screen where there is
-      // nothing to find.
-      Alert.alert(
-        'Not available in Expo Go',
-        'Payment alerts need the installed MiliPay app. Everything else works here.',
-      );
+      // Expo removed Android push from Expo Go in SDK 53. Sending someone to
+      // their phone settings here would send them where there is nothing to find.
+      Alert.alert('Not available in Expo Go', 'Payment alerts need the installed MiliPay app. Everything else works here.');
       return;
     }
     Alert.alert(
       'Turn on payment alerts',
-      'Allow notifications for MiliPay in your phone settings and we will tell you when a payment is confirmed, delivered, or fails.',
+      'Allow notifications for MiliPay in your phone settings and we will tell you when a payment is confirmed, delivered or fails.',
       [
         { text: 'Not now', style: 'cancel' },
         { text: 'Open settings', onPress: () => void Linking.openSettings() },
@@ -248,614 +166,232 @@ export default function SettingsScreen({ navigation }: any) {
     );
   };
 
-  const applyTheme = (theme: ThemePreference) => {
-    Haptics.selectionAsync();
-    setActiveTheme(theme);
-    void saveThemePreference(theme);
-    setTimeout(() => {
-      setColorScheme(theme);
-    }, 50);
+  const theme: 'light' | 'dark' = colorScheme === 'dark' ? 'dark' : 'light';
+  const setTheme = (next: 'light' | 'dark') => {
+    Haptics.selectionAsync().catch(() => {});
+    void saveThemePreference(next);
+    setColorScheme(next);
   };
 
-  const handleLogout = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    Alert.alert(
-      'Log Out',
-      'Are you sure you want to log out of MiliPay?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Log Out',
-          style: 'destructive',
-          onPress: async () => {
-            await revokeThisDevice();
-            void logout();
-          },
-        },
-      ]
-    );
+  const signOut = async () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+    await revokeThisDevice();
+    void logout();
   };
 
-  const handleThemeChange = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIsThemeModalVisible(true);
-  };
-
-  const activeAccounts = linkedAccounts.length;
+  const contactLine = [user?.phone ? formatPhone(user.phone) : null, user?.email || null].filter(Boolean).join(' · ');
+  const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ');
+  const version = Constants.expoConfig?.version ?? '';
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50 dark:bg-black">
-      <LinearGradient colors={isDark ? ['rgba(0, 200, 150, 0.08)', '#000'] : ['rgba(0, 200, 150, 0.08)', '#f8fafc']} className="absolute inset-0" />
-      
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View className="px-6 pt-6 pb-2">
-          <Text className="text-slate-900 dark:text-white font-inter-bold text-2xl tracking-tight">Settings</Text>
-        </View>
-
-        {/* Profile Card */}
-        <View className="px-6 mt-4">
-          <GlassCard intensity={isDark ? 15 : 40} className="p-0">
-            <Pressable 
-              onPress={() => navigation.navigate('ProfileSettings')}
-              className="flex-row items-center py-2"
-              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-            >
-              <View className="w-14 h-14 rounded-full bg-signal/10 dark:bg-signal/20 border border-signal/20 dark:border-signal/30 items-center justify-center mr-4">
-                <Text className="text-signal-dim dark:text-signal-bright font-inter-bold text-lg">
-                  {user?.initials || 'ME'}
-                </Text>
-              </View>
-              <View className="flex-1">
-                <Text className="text-slate-800 dark:text-white font-inter-bold text-lg">
-                  {user?.firstName} {user?.lastName}
-                </Text>
-                <Text className="text-slate-500 dark:text-white/40 font-inter text-sm mt-0.5">
-                  {user?.email || 'No email set'}
-                </Text>
-              </View>
-              <ChevronRight color={isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)"} size={18} />
-            </Pressable>
-          </GlassCard>
-        </View>
-
-        {/* Account Info */}
-        <View className="px-6">
-          <SectionHeader title="Account" />
-          <GlassCard intensity={isDark ? 15 : 40} className="p-0">
-            <SettingRow 
-              icon={Mail} 
-              label="Email" 
-              value={user?.email || 'Not set'}
-              type="value"
-              onPress={() => navigation.navigate('ProfileSettings')}
-            />
-            <SectionDivider />
-            <SettingRow 
-              icon={Phone} 
-              label="Phone" 
-              value={user?.phone || 'Not set'}
-              type="value"
-              onPress={() => navigation.navigate('ProfileSettings')}
-            />
-            <SectionDivider />
-            <SettingRow 
-              icon={Shield} 
-              label="Linked Bank Accounts" 
-              value={activeAccounts > 0 ? `${activeAccounts} Active` : 'None'}
-              type="badge"
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setIsBankModalVisible(true);
-              }}
-            />
-          </GlassCard>
-        </View>
-
-        {/* Security */}
-        <View className="px-6">
-          <SectionHeader title="Security" />
-          <GlassCard intensity={isDark ? 15 : 40} className="p-0">
-            <SettingRow
-              icon={Fingerprint}
-              label={`${biometricCapability?.label ?? 'Biometric'} Unlock`}
-              subtitle="Confirm sensitive actions like linking a bank"
-              type="switch"
-              value={biometricEnabled}
-              onPress={handleToggleBiometric}
-            />
-            <SectionDivider />
-            <SettingRow
-              icon={Lock}
-              label="Change PIN"
-              subtitle="Update your 4-digit transaction PIN"
-              type="nav"
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setIsChangingPin(true);
-              }}
-            />
-            <SectionDivider />
-            <SettingRow 
-              icon={Sliders} 
-              label="Transaction Limits & PIN Security" 
-              subtitle={`Tier ${user?.kycTier || 2} • PIN required over ₦${(user?.pinThreshold || 10000).toLocaleString()}`}
-              type="nav"
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                navigation.navigate('AccountLimits');
-              }}
-            />
-          </GlassCard>
-        </View>
-
-        {/* Preferences */}
-        <View className="px-6">
-          <SectionHeader title="Preferences" />
-          <GlassCard intensity={isDark ? 15 : 40} className="p-0">
-            <SettingRow
-              icon={pushEnabled ? Bell : BellOff}
-              label="Payment alerts"
-              subtitle={
-                pushEnabled === null
-                  ? 'Checking…'
-                  : pushEnabled
-                  ? 'On — we will tell you when a payment lands'
-                  : 'Off — turn on to hear about your payments'
-              }
-              type="nav"
-              onPress={handleNotificationsPress}
-            />
-            <SectionDivider />
-            <SettingRow 
-              icon={Palette} 
-              label="Theme" 
-              value={activeTheme === 'dark' ? 'Dark' : activeTheme === 'light' ? 'Light' : 'System'}
-              type="value"
-              onPress={handleThemeChange}
-            />
-          </GlassCard>
-        </View>
-
-        {/* Support & Legal */}
-        <View className="px-6">
-          <SectionHeader title="Support" />
-          <GlassCard intensity={isDark ? 15 : 40} className="p-0">
-            <SettingRow 
-              icon={HelpCircle} 
-              label="Help & Support" 
-              subtitle="FAQs and contact support"
-              onPress={() => navigation.navigate('SupportScreen')}
-            />
-          </GlassCard>
-        </View>
-
-        {/* Log Out */}
-        <View className="px-6 mt-6 mb-4">
-          <GlassCard intensity={isDark ? 15 : 40} className="p-0">
-            <SettingRow 
-              icon={LogOut} 
-              label="Log Out" 
-              danger={true}
-              onPress={handleLogout}
-            />
-          </GlassCard>
-        </View>
-
-        {/* App Version */}
-        <View className="items-center pb-12 mt-2">
-          <View className="flex-row items-center">
-            <Info color={isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)"} size={12} />
-            <Text className="text-slate-400 dark:text-white/15 font-inter text-xs ml-1">MiliPay v1.0.0 (Sandbox)</Text>
-          </View>
-        </View>
-
-      </ScrollView>
-    
-   {/* Crazy Centered Theme Modal */}
-      <Modal
-        visible={isThemeModalVisible}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setIsThemeModalVisible(false)}
-      >
-        <View className="flex-1 justify-center items-center px-4">
-          {/* Deep Blur Background */}
-          <Pressable 
-            className="absolute inset-0" 
-            onPress={() => setIsThemeModalVisible(false)}
-          >
-            <BlurView intensity={isDark ? 40 : 20} tint={isDark ? 'dark' : 'light'} className="absolute inset-0" />
-            <View className={`absolute inset-0 ${isDark ? 'bg-black/40' : 'bg-black/10'}`} />
-          </Pressable>
-
-          {/* The Crazy Card */}
-          <View 
-            className="w-full rounded-[40px] overflow-hidden border"
-            style={{
-              backgroundColor: isDark ? '#0f172a' : '#ffffff',
-              borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#e2e8f0',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.2,
-              shadowRadius: 24,
-              elevation: 10,
-            }}
-          >
-            <LinearGradient 
-              colors={isDark ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0)'] : ['rgba(0, 200, 150,0.03)', 'rgba(255,255,255,0)']} 
-              className="absolute inset-0" 
-            />
-            
-            <View className="p-8 pb-10">
-              <View className="flex-row items-center justify-between mb-8">
-                <View>
-                  <Text className="text-slate-900 dark:text-white font-inter-bold text-3xl tracking-tight mb-1">Appearance</Text>
-                  <Text className="text-slate-500 dark:text-white/50 font-inter text-sm">Choose your MiliPay aesthetic.</Text>
-                </View>
-                <Pressable 
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setIsThemeModalVisible(false);
-                  }}
-                  className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/10 items-center justify-center border border-slate-200 dark:border-white/10"
-                  style={({pressed}) => ({ transform: [{scale: pressed ? 0.9 : 1}] })}
-                >
-                  <X color={isDark ? '#fff' : '#000'} size={20} />
-                </Pressable>
-              </View>
-
-              {/* System Option - Full Width */}
-              <Pressable 
-                onPress={() => applyTheme('system')}
-                style={({pressed}) => [
-                  { transform: [{scale: pressed ? 0.97 : 1}] },
-                  {
-                    borderColor: activeTheme === 'system' ? '#33E0B5' : (isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'),
-                    backgroundColor: activeTheme === 'system' ? (isDark ? 'rgba(0, 200, 150,0.1)' : '#ecfdf5') : (isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc'),
-                  }
-                ]}
-                className="w-full h-24 rounded-3xl mb-4 overflow-hidden border-2"
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: c.bg }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 28 }} showsVerticalScrollIndicator={false}>
+        <View style={{ paddingTop: 8, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <PressScale scaleTo={0.94} onPress={() => navigation.navigate('ProfileSettings')} accessibilityRole="button" accessibilityLabel="Your profile">
+            <Avatar firstName={user?.firstName} lastName={user?.lastName} size={46} variant="hero" />
+          </PressScale>
+          <View style={{ flex: 1, minWidth: 0, alignItems: 'flex-start', gap: 4 }}>
+            <Text numberOfLines={1} style={{ color: c.text, fontSize: 19, fontFamily: 'Inter_800ExtraBold', letterSpacing: -0.38 }}>
+              Hi, {user?.firstName || 'there'}
+            </Text>
+            <PressScale scaleTo={0.96} onPress={() => navigation.navigate('AccountLimits')} accessibilityRole="button" accessibilityLabel={`Tier ${tier}, account limits`}>
+              <LinearGradient
+                colors={brandFixed.gold as unknown as [string, string]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 3, paddingLeft: 8, paddingRight: 6, borderRadius: 999 }}
               >
-                <LinearGradient colors={isDark ? ['#6366f1', '#a855f7'] : ['rgba(99,102,241,0.1)', 'rgba(168,85,247,0.1)']} start={{x:0,y:0}} end={{x:1,y:1}} className="absolute inset-0 opacity-20" />
-                <View className="flex-1 flex-row items-center px-6">
-                  <View 
-                    className="w-12 h-12 rounded-2xl items-center justify-center mr-4"
-                    style={{
-                      backgroundColor: activeTheme === 'system' ? 'rgba(0, 200, 150,0.2)' : (isDark ? 'rgba(255,255,255,0.1)' : '#e2e8f0')
-                    }}
-                  >
-                    <Smartphone color={activeTheme === 'system' ? '#00C896' : (isDark ? '#fff' : '#000')} size={24} />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-slate-900 dark:text-white font-inter-bold text-lg mb-0.5">System Match</Text>
-                    <Text className="text-slate-500 dark:text-white/50 font-inter text-xs">Adapts to your device</Text>
-                  </View>
-                  {activeTheme === 'system' && (
-                    <View 
-                      className="w-8 h-8 rounded-full bg-signal items-center justify-center"
-                      style={{
-                        shadowColor: '#00C896',
-                        shadowOffset: { width: 0, height: 0 },
-                        shadowOpacity: 0.5,
-                        shadowRadius: 8,
-                        elevation: 4,
-                      }}
-                    >
-                      <Check color="#fff" size={16} />
-                    </View>
-                  )}
-                </View>
-              </Pressable>
-
-              {/* Light & Dark - Side by Side Grid */}
-              <View className="flex-row justify-between h-40">
-                
-                {/* Light Option */}
-                <Pressable 
-                  onPress={() => applyTheme('light')}
-                  style={({pressed}) => [
-                    { transform: [{scale: pressed ? 0.95 : 1}] },
-                    {
-                      borderColor: activeTheme === 'light' ? '#33E0B5' : (isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'),
-                      backgroundColor: activeTheme === 'light' ? (isDark ? 'rgba(0, 200, 150,0.1)' : '#ecfdf5') : (isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc'),
-                    }
-                  ]}
-                  className="w-[48%] h-full rounded-3xl overflow-hidden border-2 p-4 justify-between"
-                >
-                  <LinearGradient colors={['rgba(253,251,251,0.5)', 'rgba(235,237,238,0.5)']} className="absolute inset-0" />
-                  <View className="flex-row items-start justify-between">
-                    <View className="w-12 h-12 rounded-full bg-orange-500/10 border border-orange-500/20 items-center justify-center">
-                      <Sun color="#f59e0b" size={24} fill="#f59e0b" />
-                    </View>
-                    {activeTheme === 'light' && (
-                      <View 
-                        className="w-6 h-6 rounded-full bg-signal items-center justify-center"
-                        style={{
-                          shadowColor: '#00C896',
-                          shadowOffset: { width: 0, height: 0 },
-                          shadowOpacity: 0.5,
-                          shadowRadius: 6,
-                          elevation: 3,
-                        }}
-                      >
-                        <Check color="#fff" size={12} />
-                      </View>
-                    )}
-                  </View>
-                  <View>
-                    <Text className="text-slate-900 dark:text-white font-inter-bold text-xl">Light</Text>
-                    <Text className="text-slate-500 dark:text-white/50 font-inter text-xs mt-1">Clean & bright</Text>
-                  </View>
-                </Pressable>
-
-                {/* Dark Option */}
-                <Pressable 
-                  onPress={() => applyTheme('dark')}
-                  style={({pressed}) => [
-                    { transform: [{scale: pressed ? 0.95 : 1}] },
-                    {
-                      borderColor: activeTheme === 'dark' ? '#33E0B5' : (isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'),
-                      backgroundColor: activeTheme === 'dark' ? (isDark ? 'rgba(0, 200, 150,0.1)' : '#ecfdf5') : (isDark ? '#020617' : '#f8fafc'),
-                    }
-                  ]}
-                  className="w-[48%] h-full rounded-3xl overflow-hidden border-2 p-4 justify-between"
-                >
-                  <LinearGradient colors={['rgba(15,23,42,0.8)', 'rgba(2,6,23,0.8)']} className="absolute inset-0" />
-                  <View className="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl" />
-                  <View className="flex-row items-start justify-between">
-                    <View className="w-12 h-12 rounded-full bg-blue-500/10 border border-blue-500/20 items-center justify-center">
-                      <Moon color="#3b82f6" size={24} fill="#3b82f6" />
-                    </View>
-                    {activeTheme === 'dark' && (
-                      <View 
-                        className="w-6 h-6 rounded-full bg-signal items-center justify-center"
-                        style={{
-                          shadowColor: '#00C896',
-                          shadowOffset: { width: 0, height: 0 },
-                          shadowOpacity: 0.5,
-                          shadowRadius: 6,
-                          elevation: 3,
-                        }}
-                      >
-                        <Check color="#fff" size={12} />
-                      </View>
-                    )}
-                  </View>
-                  <View>
-                    <Text className="text-slate-900 dark:text-white font-inter-bold text-xl">Dark</Text>
-                    <Text className="text-slate-500 dark:text-white/50 font-inter text-xs mt-1">Sleek & deep</Text>
-                  </View>
-                </Pressable>
-
-              </View>
-
-            </View>
+                <ShieldCheck color={brandFixed.goldText} size={12} strokeWidth={2.5} />
+                <Text style={{ color: brandFixed.goldText, fontSize: 11, fontFamily: 'Inter_800ExtraBold' }}>Tier {tier}</Text>
+                <ChevronRight color={brandFixed.goldText} size={12} strokeWidth={2.5} />
+              </LinearGradient>
+            </PressScale>
           </View>
         </View>
-      </Modal>
-    
-            {/* Linked Bank Accounts Modal */}
-      <Modal
-        visible={isBankModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsBankModalVisible(false)}
-      >
-        <View className="flex-1 justify-end">
-          <Pressable 
-            className="absolute inset-0" 
-            onPress={() => setIsBankModalVisible(false)}
-          >
-            <BlurView intensity={isDark ? 40 : 20} tint={isDark ? 'dark' : 'light'} className="absolute inset-0" />
-            <View className={`absolute inset-0 ${isDark ? 'bg-black/40' : 'bg-black/10'}`} />
-          </Pressable>
 
-          <View 
-            className={`w-full rounded-t-[40px] overflow-hidden border-t ${isDark ? 'bg-[#0f172a] border-white/10' : 'bg-white border-slate-200'} pb-10 min-h-[50%]`}
-            style={{
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: -8 },
-              shadowOpacity: 0.15,
-              shadowRadius: 20,
-              elevation: 8,
-            }}
-          >
-            <LinearGradient 
-              colors={isDark ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0)'] : ['rgba(0, 200, 150,0.03)', 'rgba(255,255,255,0)']} 
-              className="absolute inset-0" 
-            />
-            
-            <View className="p-8">
-              <View className="flex-row items-center justify-between mb-8">
-                <View>
-                  <Text className="text-slate-900 dark:text-white font-inter-bold text-3xl tracking-tight mb-1">Linked Banks</Text>
-                  <Text className="text-slate-500 dark:text-white/50 font-inter text-sm">Manage your connected accounts</Text>
-                </View>
-                <Pressable 
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setIsBankModalVisible(false);
-                  }}
-                  className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/10 items-center justify-center border border-slate-200 dark:border-white/10"
-                >
-                  <X color={isDark ? '#fff' : '#000'} size={20} />
-                </Pressable>
-              </View>
-
-              <ScrollView showsVerticalScrollIndicator={false} className="max-h-96">
-                {linkedAccounts.length === 0 ? (
-                  <View className="items-center py-12">
-                    <View className="w-20 h-20 rounded-full bg-signal/10 items-center justify-center mb-4">
-                      <Building color={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)"} size={32} />
-                    </View>
-                    <Text className="text-slate-500 dark:text-white/40 font-inter-medium text-base">No banks linked yet.</Text>
-                  </View>
-                ) : (
-                  linkedAccounts.map((acc, index) => (
-                    <React.Fragment key={acc.id || index.toString()}>
-                    <Pressable
-                      className={`flex-row items-center justify-between p-5 mb-4 rounded-[28px] border ${isDark ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}
-                      style={{
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 1 },
-                        shadowOpacity: 0.05,
-                        shadowRadius: 2,
-                        elevation: 1,
-                      }}
-                    >
-                      <View className="flex-row items-center flex-1">
-                        <View className="w-14 h-14 rounded-2xl bg-signal/10 items-center justify-center mr-4 border border-signal/20">
-                          <Building color="#00C896" size={24} />
-                        </View>
-                        <View className="flex-1">
-                          <Text className="text-slate-900 dark:text-white font-inter-bold text-lg mb-1">{acc.bankName}</Text>
-                          <View className="flex-row items-center">
-                            <View className="flex-row mr-2 space-x-0.5">
-                              <View className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-white/40" />
-                              <View className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-white/40" />
-                              <View className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-white/40" />
-                              <View className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-white/40" />
-                            </View>
-                            <Text className="text-slate-500 dark:text-white/50 font-inter-medium text-sm tracking-widest">
-                              {acc.accountNumber?.slice(-4) || '****'}
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-                      
-                      <Pressable 
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                          setAccountToUnlink(acc);
-                        }}
-                        className="w-12 h-12 rounded-full bg-red-50 dark:bg-red-500/10 items-center justify-center border border-red-100 dark:border-red-500/20 ml-2"
-                        style={({pressed}) => ({ opacity: pressed ? 0.6 : 1, transform: [{scale: pressed ? 0.95 : 1}] })}
-                      >
-                        <Trash2 color="#ef4444" size={20} />
-                      </Pressable>
-                    </Pressable>
-                    {/* Shown only once quick pay is offered at all. */}
-                    {quickPay.status.available && quickPay.forAccount(acc.id) ? (
-                      <QuickPayPanel
-                        view={quickPay.forAccount(acc.id)!}
-                        allowances={quickPay.status.allowances}
-                        missingDetails={quickPay.status.missingDetails}
-                        onChanged={() => void quickPay.refresh()}
-                        isDark={isDark}
-                      />
-                    ) : null}
-                    </React.Fragment>
-                  ))
-                )}
-              </ScrollView>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Custom Confirm Unlink Modal */}
-      <Modal
-        visible={!!accountToUnlink}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setAccountToUnlink(null)}
-      >
-        <View className="flex-1 justify-center items-center px-6">
-          <Pressable 
-            className="absolute inset-0" 
-            onPress={() => setAccountToUnlink(null)}
-          >
-            <BlurView intensity={isDark ? 50 : 30} tint={isDark ? 'dark' : 'light'} className="absolute inset-0" />
-            <View className={`absolute inset-0 ${isDark ? 'bg-black/60' : 'bg-black/20'}`} />
-          </Pressable>
-
-          <View 
-            className={`w-full rounded-[36px] overflow-hidden border ${isDark ? 'bg-[#0f172a] border-white/10' : 'bg-white border-slate-200'}`}
-            style={{
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.2,
-              shadowRadius: 20,
-              elevation: 8,
-            }}
-          >
-            <View className="p-8 items-center">
-              <View className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-500/10 items-center justify-center mb-6 border border-red-100 dark:border-red-500/20">
-                <Trash2 color="#ef4444" size={32} />
-              </View>
-              
-              <Text className="text-slate-900 dark:text-white font-inter-bold text-2xl text-center mb-3">Remove Bank?</Text>
-              <Text className="text-slate-500 dark:text-white/60 font-inter text-center text-sm mb-8 leading-relaxed px-2">
-                Are you sure you want to unlink your <Text className="font-inter-bold text-slate-700 dark:text-white/90">{accountToUnlink?.bankName}</Text> account? You won't be able to use it for transactions.
+        <PressScale
+          scaleTo={0.99}
+          onPress={() => navigation.navigate('ProfileSettings')}
+          accessibilityRole="button"
+          accessibilityLabel="Profile and identity"
+          style={{
+            marginTop: 14,
+            marginHorizontal: 20,
+            padding: 18,
+            gap: 14,
+            backgroundColor: c.card,
+            borderRadius: 22,
+            borderWidth: 1,
+            borderColor: c.cardLine,
+            boxShadow: c.shadow,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+            <Avatar firstName={user?.firstName} lastName={user?.lastName} size={58} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text numberOfLines={1} style={{ color: c.text, fontSize: 18, fontFamily: 'Inter_700Bold' }}>
+                {fullName || 'Your name'}
               </Text>
-
-              <View className="w-full flex-row justify-between">
-                <Pressable 
-                  disabled={isUnlinking}
-                  onPress={() => {
-                    if (!isUnlinking) {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setAccountToUnlink(null);
-                    }
-                  }}
-                  className={`w-[48%] h-14 rounded-2xl items-center justify-center border ${isDark ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'} ${isUnlinking ? 'opacity-40' : ''}`}
-                >
-                  <Text className="text-slate-700 dark:text-white font-inter-semibold text-base">Cancel</Text>
-                </Pressable>
-                
-                <Pressable 
-                  disabled={isUnlinking}
-                  onPress={async () => {
-                    if (accountToUnlink && !isUnlinking) {
-                      setIsUnlinking(true);
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                      const targetId = accountToUnlink.id;
-                      // A removed account must not keep a standing permission
-                      // to debit it. The server never debits an unlinked
-                      // account either way; this also cancels it at the bank.
-                      const quickPayState = quickPay.forAccount(targetId)?.state;
-                      if (quickPayState && quickPayState !== 'off') {
-                        await stopQuickPay(targetId).catch(() => false);
-                      }
-                      await unlinkAccount(targetId);
-                      setIsUnlinking(false);
-                      setAccountToUnlink(null);
-                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                    }
-                  }}
-                  className={`w-[48%] h-14 rounded-2xl bg-red-500 items-center justify-center ${isUnlinking ? 'opacity-80' : ''}`}
-                  style={{
-                    shadowColor: '#ef4444',
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.3,
-                    shadowRadius: 6,
-                    elevation: 3,
-                  }}
-                >
-                  {isUnlinking ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text className="text-white font-inter-bold text-base">Remove</Text>
-                  )}
-                </Pressable>
-              </View>
+              <Text numberOfLines={1} style={{ marginTop: 2, color: c.muted, fontSize: 13, fontFamily: 'Inter_400Regular' }}>
+                {contactLine}
+              </Text>
             </View>
+            <ChevronRight color={c.faint} size={20} />
           </View>
-        </View>
-      </Modal>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            <Badge
+              icon={ShieldCheck}
+              label={user?.ninVerified ? 'Identity verified' : 'Identity check pending'}
+              tone={user?.ninVerified ? 'brand' : 'muted'}
+            />
+            <Badge icon={Hand} label={user?.hasPalm ? 'Palm enrolled' : 'Palm not enrolled'} tone={user?.hasPalm ? 'brand' : 'muted'} />
+          </View>
+        </PressScale>
+
+        <SettingsGroup title="Money">
+          <SettingsRow icon={Landmark} label="Linked banks" value={`${accounts.length} of ${MAX_LINKED}`} onPress={() => setBanksOpen(true)} />
+          <SettingsRow
+            icon={Sliders}
+            label="Account limits"
+            sub={`PIN required over ${naira0(pinThreshold)}`}
+            value={`Tier ${tier}`}
+            onPress={() => navigation.navigate('AccountLimits')}
+          />
+        </SettingsGroup>
+
+        <SettingsGroup title="Security">
+          <SettingsRow
+            icon={Fingerprint}
+            label="Biometric unlock"
+            onPress={() => void toggleBiometric()}
+            right={<Switch value={biometricOn} onChange={() => void toggleBiometric()} label="Biometric unlock" />}
+          />
+          <SettingsRow
+            icon={Lock}
+            label="Change PIN"
+            sub="Used at terminals and to approve payments"
+            chevron
+            onPress={() => setConfirmingPin(true)}
+          />
+        </SettingsGroup>
+
+        <SettingsGroup title="Preferences">
+          <SettingsRow
+            icon={theme === 'dark' ? Moon : Sun}
+            label="Appearance"
+            right={
+              <Segmented
+                options={[
+                  { value: 'light', label: 'Light' },
+                  { value: 'dark', label: 'Dark' },
+                ]}
+                value={theme}
+                onChange={setTheme}
+              />
+            }
+          />
+          <SettingsRow
+            icon={Bell}
+            label="Payment alerts"
+            sub="Confirmed, delivered or failed"
+            onPress={() => void toggleAlerts()}
+            right={<Switch value={alertsOn} onChange={() => void toggleAlerts()} label="Payment alerts" />}
+          />
+        </SettingsGroup>
+
+        <SettingsGroup title="Help">
+          <SettingsRow icon={CircleHelp} label="Help & support" sub="Chat with us 24/7" chevron onPress={() => navigation.navigate('SupportScreen')} />
+          <SettingsRow
+            icon={FileText}
+            label="Terms & privacy"
+            chevron
+            onPress={() =>
+              Alert.alert('Terms & privacy', `Our terms of use and privacy policy are available from support: ${SUPPORT_EMAIL}.`, [
+                { text: 'Close', style: 'cancel' },
+                { text: 'Email support', onPress: () => void Linking.openURL(`mailto:${SUPPORT_EMAIL}`) },
+              ])
+            }
+          />
+        </SettingsGroup>
+
+        <Pressable
+          onPress={() => void signOut()}
+          accessibilityRole="button"
+          style={({ pressed }) => ({
+            marginTop: 18,
+            marginHorizontal: 20,
+            height: 52,
+            borderRadius: 16,
+            backgroundColor: c.failSoft,
+            opacity: pressed ? 0.8 : 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+          })}
+        >
+          <LogOut color={c.fail} size={18} />
+          <Text style={{ color: c.fail, fontSize: 15, fontFamily: 'Inter_600SemiBold' }}>Log out</Text>
+        </Pressable>
+        <Text style={{ marginTop: 14, textAlign: 'center', color: c.faint, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+          MiliPay {version} · Payments in milliseconds
+        </Text>
+      </ScrollView>
+
+      <LinkedBanksSheet
+        visible={banksOpen}
+        onClose={() => setBanksOpen(false)}
+        onLink={() => {
+          // One sheet at a time: close this one, then the identity check opens.
+          setBanksOpen(false);
+          setTimeout(startLink, 260);
+        }}
+      />
 
       {/* Changing the PIN is gated on the same check as linking a bank: a
           stolen unlocked handset must not be able to reset the PIN freely. */}
       <ConfirmIdentitySheet
-        visible={isChangingPin}
+        visible={confirmingPin}
         reason="Confirm it is you before changing your transaction PIN."
         onConfirmed={() => {
-          setIsChangingPin(false);
+          setConfirmingPin(false);
           navigation.navigate('ChangePin');
         }}
-        onCancel={() => setIsChangingPin(false)}
+        onCancel={() => setConfirmingPin(false)}
+      />
+
+      <DoneSheet
+        visible={pinDone}
+        title="PIN changed"
+        sub="Use your new PIN from now on, at terminals and in the app. We've sent you a security alert."
+        onClose={() => setPinDone(false)}
       />
     </SafeAreaView>
+  );
+}
+
+function Badge({ icon: Icon, label, tone }: { icon: typeof ShieldCheck; label: string; tone: 'brand' | 'muted' }) {
+  const c = useThemeColors();
+  const [bg, fg] = tone === 'brand' ? [c.brandSoft, c.brandText] : [c.chip, c.muted];
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 10, backgroundColor: bg }}>
+      <Icon color={fg} size={14} />
+      <Text style={{ color: fg, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>{label}</Text>
+    </View>
+  );
+}
+
+export default function SettingsScreen({ navigation, route }: any) {
+  const setActiveBankIndex = useBankStore((s) => s.setActiveBankIndex);
+  // A newly linked account is shown on Home, as the chosen card (the
+  // prototype's monoFinish).
+  const onLinked = () => {
+    setActiveBankIndex(Math.max(0, useBankStore.getState().linkedAccounts.length - 1));
+    navigation.navigate('HomeTab');
+  };
+  return (
+    <BankLinkingProvider onLinked={onLinked}>
+      <MeContent navigation={navigation} route={route} />
+    </BankLinkingProvider>
   );
 }

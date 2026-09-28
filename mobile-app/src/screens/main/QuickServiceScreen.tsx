@@ -26,6 +26,7 @@ import {
   canPay,
   detectTelco,
   formatPhone,
+  naira0,
   payHint,
   payLabel,
   type PayState,
@@ -606,8 +607,8 @@ export default function QuickServiceScreen({ route, navigation }: any) {
         ) : lastSheet.current === 'auth' ? (
           <AuthContent
             active={sheet === 'auth'}
-            total={breakdown.total}
-            title={summary.title}
+            subtitle={`${naira0(breakdown.total)} to ${summary.title}`}
+            reason={`Approve ${naira0(breakdown.total)} to ${summary.title}`}
             pinRequired={pinRequired}
             pinPrompt={pinPrompt}
             onApproved={(pin) => void submit(pin)}

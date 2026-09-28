@@ -9,13 +9,12 @@ import { useThemeColors } from '../../theme/useThemeColors';
 import { bankCardTheme } from '../../theme/tokens';
 import { balanceCaption } from '../../lib/activityView';
 import type { LinkedAccount } from '../../store/useStore';
+import { MAX_LINKED } from '../banks/BankLinking';
 
 export const CARD_WIDTH = 326;
 export const CARD_HEIGHT = 200;
 const GAP = 12;
 const STEP = CARD_WIDTH + GAP;
-/** The prototype links at most three accounts. */
-export const MAX_LINKED = 3;
 
 /**
  * The swipeable linked-bank cards on Home (design handoff, screen 5): 326×200,

@@ -761,6 +761,14 @@
       "anon_execute": false,
       "args": "",
       "authenticated_execute": true,
+      "name": "get_my_daily_spend",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "",
+      "authenticated_execute": true,
       "name": "get_onboarding_state",
       "search_path_pinned": true,
       "security_definer": true
@@ -772,6 +780,14 @@
       "name": "get_transactions_policies",
       "search_path_pinned": true,
       "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "",
+      "authenticated_execute": false,
+      "name": "guard_customer_contact",
+      "search_path_pinned": true,
+      "security_definer": false
     },
     {
       "anon_execute": false,
@@ -1661,6 +1677,11 @@
   "tables": [
     {
       "name": "complaints",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "name": "contact_change_requests",
       "rls_enabled": true,
       "rls_forced": false
     },

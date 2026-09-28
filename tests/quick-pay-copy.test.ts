@@ -110,13 +110,14 @@ describe("the screens use it", () => {
       .printFile(ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true, kind));
   };
 
-  it("Linked Banks shows quick pay only once the business offers it", () => {
-    const src = code("screens/main/SettingsScreen.tsx");
+  it("Linked banks shows quick pay only once the business offers it", () => {
+    // The redesign's Me › Linked banks sheet.
+    const src = code("components/me/LinkedBanksSheet.tsx");
     expect(src).toMatch(/quickPay\.status\.available && quickPay\.forAccount\(acc\.id\)/);
   });
 
   it("removing a bank switches its quick pay off first", () => {
-    const src = code("screens/main/SettingsScreen.tsx");
+    const src = code("components/me/LinkedBanksSheet.tsx");
     const stop = src.indexOf("await stopQuickPay(targetId)");
     const unlink = src.indexOf("await unlinkAccount(targetId)");
     expect(stop).toBeGreaterThan(-1);

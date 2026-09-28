@@ -1,13 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Bell } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { MonoProvider, useMonoConnect } from '@mono.co/connect-react-native';
 
-import { ConfirmIdentitySheet } from '../../components/ui/ConfirmIdentitySheet';
+import { BankLinkingProvider, useBankLinking } from '../../components/banks/BankLinking';
 import { Avatar, BottomSheet, IconButton, PressScale } from '../../components/ds';
-import { BankCarousel, CARD_HEIGHT, MAX_LINKED } from '../../components/home/BankCarousel';
+import { BankCarousel, CARD_HEIGHT } from '../../components/home/BankCarousel';
 import { AllServices, PalmCard, PayBillsCard } from '../../components/home/HomeSections';
 import { PromoCarousel } from '../../components/home/PromoCarousel';
 import { TxCard, TxRow } from '../../components/activity/TxRow';
@@ -53,8 +52,7 @@ function HomeContent({ navigation }: any) {
 
   const [servicesOpen, setServicesOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [confirmingLink, setConfirmingLink] = useState(false);
-  const { init } = useMonoConnect();
+  const { startLink } = useBankLinking();
 
   useEffect(() => {
     if (!user?.id) return;
@@ -91,31 +89,6 @@ function HomeContent({ navigation }: any) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setServicesOpen(false);
     navigation.navigate('QuickService', { serviceType });
-  };
-
-  /**
-   * Linking a bank account is a sensitive action, so it is gated on the device
-   * fingerprint with the MiliPay PIN as the fallback: anyone holding an
-   * unlocked handset must not be able to attach an account.
-   *
-   * Mono ties the connection — and any Direct Debit mandate signed against it
-   * — to the name and email we hand over. Refusing to link is recoverable;
-   * linking a real bank account under a placeholder identity is not.
-   */
-  const startLink = () => {
-    if (accounts.length >= MAX_LINKED) {
-      Alert.alert('Limit reached', 'You can link up to 3 bank accounts. Remove one to link another.');
-      return;
-    }
-    const hasCompleteIdentity = Boolean(user?.email?.trim() && user?.firstName?.trim() && user.firstName !== 'User');
-    if (!hasCompleteIdentity) {
-      Alert.alert(
-        'We need your details first',
-        'Your bank has to match this account to your full name and email address, and we do not have both on file. Contact support or the agent who enrolled you, then try again.',
-      );
-      return;
-    }
-    setConfirmingLink(true);
   };
 
   return (
@@ -190,65 +163,18 @@ function HomeContent({ navigation }: any) {
         onHelp={(tx) => void help(tx)}
       />
 
-      <ConfirmIdentitySheet
-        visible={confirmingLink}
-        reason="Confirm it is you before linking a bank account to MiliPay."
-        onConfirmed={() => {
-          setConfirmingLink(false);
-          init();
-        }}
-        onCancel={() => setConfirmingLink(false)}
-      />
     </SafeAreaView>
   );
 }
 
 export default function HomeScreen({ navigation }: any) {
-  const user = useAuthStore((state) => state.user);
-  const linkMonoAccount = useBankStore((s) => s.linkMonoAccount);
-
-  // Mono records this as the identity behind the bank connection, and under the
-  // Direct Debit model it is the identity a mandate is signed against. It used
-  // to fall back to "Test User" / "test@biopay.app", so a customer whose
-  // session carried no email — the store defaults it to an empty string —
-  // linked a real bank account under a placeholder. `startLink` above stops
-  // the widget opening at all in that case.
-  const monoConfig = {
-    publicKey: process.env.EXPO_PUBLIC_MONO_PUBLIC_KEY || '',
-    scope: 'auth',
-    data: {
-      customer: {
-        name: [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim(),
-        email: user?.email ?? '',
-      },
-    },
-    onClose: () => {},
-    onSuccess: async (data: any) => {
-      try {
-        const code = data.getAuthCode();
-        await linkMonoAccount(code);
-
-        // Linking is the moment a customer is thinking about how much this
-        // account should be allowed to move, so offer the limits screen here
-        // rather than leaving it buried in Settings.
-        Alert.alert(
-          'Bank account linked',
-          'Would you like to set your transaction limits now? You can always change them later in Settings.',
-          [
-            { text: 'Later', style: 'cancel' },
-            { text: 'Set limits', onPress: () => navigation.navigate('AccountLimits') },
-          ],
-        );
-      } catch (err) {
-        console.error('Mono link error', err);
-        Alert.alert('Could not link account', err instanceof Error ? err.message : 'Please try again.');
-      }
-    },
-  };
-
+  const setActiveBankIndex = useBankStore((s) => s.setActiveBankIndex);
+  // A newly linked account is shown straight away: it becomes the chosen
+  // card, the last one in the carousel (the prototype's monoFinish).
+  const onLinked = () => setActiveBankIndex(Math.max(0, useBankStore.getState().linkedAccounts.length - 1));
   return (
-    <MonoProvider {...monoConfig}>
+    <BankLinkingProvider onLinked={onLinked}>
       <HomeContent navigation={navigation} />
-    </MonoProvider>
+    </BankLinkingProvider>
   );
 }

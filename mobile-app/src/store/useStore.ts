@@ -16,6 +16,8 @@ interface User {
   pinThreshold?: number;
   /** An agent has captured this customer's palm (customers.has_palm_template). */
   hasPalm?: boolean;
+  /** Their NIN has been checked (customers.nin_verified). */
+  ninVerified?: boolean;
 }
 
 /**
@@ -66,8 +68,13 @@ interface AuthState {
     daily: number | null
   ) => Promise<{ success: boolean; error?: string; limits?: TransactionLimits }>;
   updateProfile: (
-    changes: { firstName?: string; lastName?: string; email?: string; address?: string }
+    changes: { firstName?: string; lastName?: string; address?: string }
   ) => Promise<{ success: boolean; error?: string }>;
+  /**
+   * Record an email/phone change the server has already saved, after every
+   * code was verified (contact-change). Never a way to change them.
+   */
+  applyVerifiedContact: (contact: { email?: string | null; phone?: string | null }) => void;
 }
 
 /**
@@ -78,7 +85,7 @@ interface AuthState {
 const CUSTOMER_COLUMNS =
   'id, first_name, last_name, phone, email, address, state, nin_last_4, ' +
   'kyc_tier, pin_threshold, single_limit, daily_limit, status, ' +
-  'must_change_password, biometric_enrolled_at, onboarding_completed_at, has_palm_template';
+  'must_change_password, biometric_enrolled_at, onboarding_completed_at, has_palm_template, nin_verified';
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: false,
@@ -142,6 +149,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             kycTier: customerData?.kyc_tier || 2,
             pinThreshold: Number(customerData?.pin_threshold) || 10000,
             hasPalm: Boolean(customerData?.has_palm_template),
+            ninVerified: Boolean(customerData?.nin_verified),
           },
           isLoading: false
         });
@@ -194,6 +202,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             kycTier: customerData?.kyc_tier || 2,
             pinThreshold: Number(customerData?.pin_threshold) || 10000,
             hasPalm: Boolean(customerData?.has_palm_template),
+            ninVerified: Boolean(customerData?.nin_verified),
           },
           isLoading: false
         });
@@ -245,13 +254,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   /**
-   * Save the parts of a profile a customer owns.
+   * Save the parts of a profile a customer may change directly: names and
+   * address.
    *
-   * Only these columns: the database grants `authenticated` UPDATE on
-   * first_name, last_name, email, phone, address and state and nothing else,
+   * The database grants `authenticated` UPDATE on a handful of columns only,
    * so kyc_tier, status and the limits cannot be written from here even by a
-   * repacked app. Phone is deliberately left out — it is the login identifier
-   * and changing it belongs with an agent.
+   * repacked app. Email and phone are not among what this sends: they change
+   * only through a code sent to the new one (the contact-change Edge
+   * Function), and a database guard refuses them from here.
    */
   updateProfile: async (changes) => {
     const current = get().user;
@@ -262,14 +272,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const payload: Record<string, string> = {};
     if (changes.firstName !== undefined) payload.first_name = changes.firstName.trim();
     if (changes.lastName !== undefined) payload.last_name = changes.lastName.trim();
-    if (changes.email !== undefined) payload.email = changes.email.trim().toLowerCase();
     if (changes.address !== undefined) payload.address = changes.address.trim();
 
     if (Object.keys(payload).length === 0) return { success: true };
 
-    if (payload.email && !/^[^@s]+@[^@s]+.[^@s]+$/.test(payload.email)) {
-      return { success: false, error: 'That email address does not look right.' };
-    }
     if (payload.first_name !== undefined && payload.first_name.length < 2) {
       return { success: false, error: 'Enter your first name.' };
     }
@@ -306,6 +312,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
 
     return { success: true };
+  },
+
+  applyVerifiedContact: (contact) => {
+    const current = get().user;
+    if (!current) return;
+    set({
+      user: {
+        ...current,
+        email: contact.email ?? current.email,
+        phone: contact.phone ?? current.phone,
+      },
+    });
   },
 
   refreshOnboarding: async () => {
@@ -496,7 +514,8 @@ interface BankState {
   fetchAccounts: (userId: string) => Promise<void>;
   setActiveBankIndex: (index: number) => void;
   linkMonoAccount: (monoCode: string) => Promise<void>;
-  unlinkAccount: (id: string) => Promise<void>;
+  /** Refused by the server for the last linked account (LAST_ACCOUNT). */
+  unlinkAccount: (id: string) => Promise<{ success: true } | { success: false; error: string; code?: string }>;
 }
 
 export const useBankStore = create<BankState>((set, get) => ({
@@ -543,29 +562,31 @@ export const useBankStore = create<BankState>((set, get) => ({
 
 
   unlinkAccount: async (id: string) => {
-    try {
-      const { data, error: rpcError } = await supabase.rpc('unlink_bank_account', {
-        target_account_id: id
-      });
-
-      if (rpcError || (data && !data.success)) {
-        // There used to be a direct table UPDATE here as a fallback. It only
-        // worked because 'authenticated' held an UPDATE grant on
-        // linked_accounts with no WITH CHECK — the same grant that let anyone
-        // set their own balance to whatever they liked. The grant is gone, so
-        // unlink_bank_account is the only path, and a failure is surfaced
-        // rather than worked around.
-        console.error("Failed to unlink account:", rpcError?.message ?? data?.error);
-        throw new Error("Could not unlink this account. Please try again.");
-      }
-    } catch (err) {
-      console.error("Error unlinking account:", err);
-    } finally {
-      set(state => ({
-        linkedAccounts: state.linkedAccounts.filter(acc => acc.id !== id),
-        activeBankIndex: 0
-      }));
+    // unlink_bank_account is the only path. There used to be a direct table
+    // UPDATE here as a fallback, which only worked because 'authenticated'
+    // held an UPDATE grant on linked_accounts with no WITH CHECK — the same
+    // grant that let anyone set their own balance. The grant is gone.
+    //
+    // The account leaves the list only when the server says it is unlinked.
+    // It used to be removed whatever happened, so a refused or failed unlink
+    // looked like a successful one until the next refresh brought it back.
+    const { data, error } = await supabase.rpc('unlink_bank_account', { target_account_id: id });
+    if (error || !data?.success) {
+      console.warn('[banks] unlink refused', error?.message ?? data?.error);
+      return {
+        success: false as const,
+        code: data?.code,
+        error:
+          data?.code === 'LAST_ACCOUNT' && typeof data?.error === 'string'
+            ? data.error
+            : 'Could not unlink this account. Please try again.',
+      };
     }
+    set((state) => ({
+      linkedAccounts: state.linkedAccounts.filter((acc) => acc.id !== id),
+      activeBankIndex: 0,
+    }));
+    return { success: true as const };
   },
   linkMonoAccount: async (monoCode: string) => {
     set({ isLoading: true, error: null });

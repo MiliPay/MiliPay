@@ -1,8 +1,9 @@
 /**
  * An in-memory stand-in for the parts of supabase-js the Edge Functions use:
- * from().select/insert/update + eq/is/in/lt/order/limit + maybeSingle/single,
- * rpc() (answered per test through rpcAnswers), and auth.getUser() (tokens
- * mapped to users through `users`).
+ * from().select/insert/update + eq/neq/is/in/lt/order/limit + maybeSingle/single,
+ * rpc() (answered per test through rpcAnswers), auth.getUser() (tokens
+ * mapped to users through `users`) and auth.admin.updateUserById() (recorded
+ * in `authUpdates`).
  *
  * Deliberately small and deliberately literal. It applies equality filters
  * and patches exactly as written and does nothing clever, so a test failure
@@ -49,6 +50,11 @@ class Query implements PromiseLike<Result> {
 
   eq(column: string, value: unknown): this {
     this.filters.push((row) => row[column] === value);
+    return this;
+  }
+
+  neq(column: string, value: unknown): this {
+    this.filters.push((row) => row[column] !== value);
     return this;
   }
 
@@ -163,12 +169,24 @@ export class FakeSupabase {
   /** Bearer token -> user, for requireCaller's auth.getUser(). */
   readonly users = new Map<string, { id: string; email?: string | null }>();
 
+  /** Auth admin writes, in order, for tests to inspect. */
+  readonly authUpdates: { id: string; attributes: Record<string, unknown> }[] = [];
+  /** Make auth.admin.updateUserById fail with this message. */
+  authUpdateError: string | null = null;
+
   readonly auth = {
     getUser: async (token: string) => {
       const user = this.users.get(token);
       return user
         ? { data: { user }, error: null }
         : { data: { user: null }, error: { message: "invalid token" } };
+    },
+    admin: {
+      updateUserById: async (id: string, attributes: Record<string, unknown>) => {
+        if (this.authUpdateError) return { data: { user: null }, error: { message: this.authUpdateError } };
+        this.authUpdates.push({ id, attributes });
+        return { data: { user: { id, ...attributes } }, error: null };
+      },
     },
   };
 

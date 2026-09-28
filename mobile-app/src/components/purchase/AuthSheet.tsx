@@ -13,7 +13,6 @@ import {
   promptBiometric,
   type BiometricCapability,
 } from '../../lib/deviceAuth';
-import { naira0 } from '../../lib/purchaseForm';
 
 type Method = 'biometric' | 'pin';
 
@@ -29,25 +28,31 @@ type Method = 'biometric' | 'pin';
  * and lockout as payments) and handed back so the purchase can carry it.
  * Palm is never offered: palm approval happens at a physical terminal.
  *
- * Content only, shown inside the purchase screen's one bottom sheet; `active`
+ * Content only, shown inside a bottom sheet — the purchase screen's, or
+ * ConfirmIdentitySheet's before linking a bank or changing the PIN; `active`
  * is true while this step is the one on screen, and each activation starts
  * clean.
  */
 export function AuthContent({
   active: visible,
-  total,
-  title,
+  subtitle,
+  reason,
   pinRequired,
   pinPrompt,
   onApproved,
+  onCancel,
 }: {
   active: boolean;
-  total: number;
-  title: string;
+  /** Under the title: "₦1,000 to MTN Airtime", or why we are asking. */
+  subtitle: string;
+  /** What the phone's own fingerprint prompt says. */
+  reason: string;
   pinRequired: boolean;
   /** The server's own words when it asked for a PIN (wrong PIN, threshold). */
   pinPrompt?: string | null;
   onApproved: (pin?: string) => void;
+  /** Draws the design's outlined Cancel button under the check. */
+  onCancel?: () => void;
 }) {
   const c = useThemeColors();
   const verifyPin = useAuthStore((s) => s.verifyPin);
@@ -65,7 +70,6 @@ export function AuthContent({
   const approvedRef = useRef(onApproved);
   approvedRef.current = onApproved;
 
-  const reason = `Approve ${naira0(total)} to ${title}`;
 
   const tryBiometric = useCallback(async () => {
     if (promptingRef.current) return;
@@ -134,8 +138,8 @@ export function AuthContent({
       <Text accessibilityRole="header" style={{ textAlign: 'center', color: c.text, fontSize: 20, fontFamily: 'Inter_800ExtraBold', letterSpacing: -0.4 }}>
         Confirm it's you
       </Text>
-      <Text style={{ textAlign: 'center', marginTop: 4, color: c.muted, fontSize: 14, fontFamily: 'Inter_400Regular' }}>
-        {naira0(total)} to {title}
+      <Text style={{ textAlign: 'center', marginTop: 4, paddingHorizontal: 10, color: c.muted, fontSize: 14, lineHeight: 20, fontFamily: 'Inter_400Regular' }}>
+        {subtitle}
       </Text>
 
       {biometricAllowed ? (
@@ -190,6 +194,25 @@ export function AuthContent({
           <Keypad compact keyTone="chip" onDigit={onDigit} onDelete={() => setPin((p) => p.slice(0, -1))} disabled={checking} />
         </View>
       )}
+
+      {onCancel ? (
+        <Pressable
+          onPress={onCancel}
+          accessibilityRole="button"
+          style={({ pressed }) => ({
+            marginTop: 18,
+            height: 52,
+            borderRadius: 16,
+            borderWidth: 1.5,
+            borderColor: c.line,
+            backgroundColor: pressed ? c.chip : 'transparent',
+            alignItems: 'center',
+            justifyContent: 'center',
+          })}
+        >
+          <Text style={{ color: c.text, fontSize: 15, fontFamily: 'Inter_600SemiBold' }}>Cancel</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

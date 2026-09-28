@@ -12,7 +12,7 @@ import NotificationsScreen from '../screens/main/NotificationsScreen';
 import ProfileSettingsScreen from '../screens/main/ProfileSettingsScreen';
 import SupportScreen from '../screens/main/SupportScreen';
 import AccountLimitsScreen from '../screens/main/AccountLimitsScreen';
-import PinSetupScreen from '../screens/auth/PinSetupScreen';
+import ChangePinScreen from '../screens/main/ChangePinScreen';
 import QuickServiceScreen from '../screens/main/QuickServiceScreen';
 import ReceiptScreen from '../screens/main/ReceiptScreen';
 
@@ -43,11 +43,7 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen name="ProfileSettings" component={ProfileSettingsScreen} />
       <SettingsStack.Screen name="SupportScreen" component={SupportScreen} />
       <SettingsStack.Screen name="AccountLimits" component={AccountLimitsScreen} />
-      <SettingsStack.Screen
-        name="ChangePin"
-        component={PinSetupScreen}
-        initialParams={{ mode: 'change' }}
-      />
+      <SettingsStack.Screen name="ChangePin" component={ChangePinScreen} />
     </SettingsStack.Navigator>
   );
 }

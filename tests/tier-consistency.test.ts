@@ -8,7 +8,7 @@ import { TIER_LIMITS } from "../supabase/functions/_shared/tier-math";
  *   1. supabase/functions/_shared/tier-math.ts  — Deno, enforces payments
  *   2. public.tier_caps()                        — SQL, clamps limit writes
  *   3. packages/shared/src/types/index.ts        — Vite, the web portals
- *   4. mobile-app/.../AccountLimitsScreen.tsx    — Expo, a separate package
+ *   4. mobile-app/src/lib/limitsView.ts         — Expo, a separate package
  *
  * Deno cannot import from packages/shared, and the Expo app is not in the npm
  * workspace, so a single shared module is not available without restructuring
@@ -63,7 +63,7 @@ describe("tier limits agree across every copy", () => {
   });
 
   it("the mobile app's TIER_CAPS matches tier-math", () => {
-    const tsx = read("mobile-app/src/screens/main/AccountLimitsScreen.tsx");
+    const tsx = read("mobile-app/src/lib/limitsView.ts");
     const table = tsx.slice(tsx.indexOf("const TIER_CAPS"));
 
     for (const tier of [1, 2, 3] as const) {
