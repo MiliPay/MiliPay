@@ -6,7 +6,7 @@ import * as Haptics from 'expo-haptics';
 
 import { BankLinkingProvider, useBankLinking } from '../../components/banks/BankLinking';
 import { Avatar, BottomSheet, IconButton, PressScale } from '../../components/ds';
-import { BankCarousel, CARD_HEIGHT } from '../../components/home/BankCarousel';
+import { BankCarousel, useCardSize } from '../../components/home/BankCarousel';
 import { AllServices, PalmCard, PayBillsCard } from '../../components/home/HomeSections';
 import { PromoCarousel } from '../../components/home/PromoCarousel';
 import { TxCard, TxRow } from '../../components/activity/TxRow';
@@ -53,6 +53,7 @@ function HomeContent({ navigation }: any) {
   const [servicesOpen, setServicesOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { startLink } = useBankLinking();
+  const card = useCardSize();
 
   useEffect(() => {
     if (!user?.id) return;
@@ -113,7 +114,7 @@ function HomeContent({ navigation }: any) {
         </View>
 
         {accountsLoading && accounts.length === 0 ? (
-          <View style={{ marginTop: 18, marginHorizontal: 20, height: CARD_HEIGHT, borderRadius: 26, backgroundColor: c.chip }} />
+          <View style={{ marginTop: 18, marginBottom: 18, marginLeft: 20, width: card.width, height: card.height, borderRadius: 26, backgroundColor: c.chip }} />
         ) : (
           <BankCarousel accounts={accounts} activeIndex={activeIndex} onSelect={setActiveBankIndex} onLink={startLink} />
         )}

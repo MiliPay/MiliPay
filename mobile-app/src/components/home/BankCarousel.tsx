@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { Pressable, ScrollView, Text, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Tap } from '../ds/Tap';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Check, Copy, Eye, EyeOff, Plus } from 'lucide-react-native';
@@ -12,17 +12,27 @@ import { balanceCaption } from '../../lib/activityView';
 import type { LinkedAccount } from '../../store/useStore';
 import { MAX_LINKED } from '../banks/BankLinking';
 
-export const CARD_WIDTH = 326;
-export const CARD_HEIGHT = 200;
 const GAP = 12;
-const STEP = CARD_WIDTH + GAP;
 
 /**
- * The swipeable linked-bank cards on Home (design handoff, screen 5): 326×200,
- * radius 26, a bank-specific gradient, snapping one card at a time. The
- * chosen card wears "Paying from" — purchases default to it. A dashed "Link
- * bank account" card comes last while fewer than three are linked, and page
- * dots sit underneath, the active one wider.
+ * A card's size on this phone. The design draws them 326×200 on a 390 pt
+ * screen: 20 pt in from the left, with just 32 pt of the next card peeking in
+ * on the right. A fixed 326 on a wider phone showed most of the next card
+ * beside the first, so the width follows the screen (keeping those same
+ * margins) and the height keeps the design's 326:200 shape.
+ */
+export function useCardSize() {
+  const { width: screen } = useWindowDimensions();
+  const width = Math.round(Math.min(Math.max(screen - 64, 260), 460));
+  return { width, height: Math.round((width * 200) / 326), step: width + GAP };
+}
+
+/**
+ * The swipeable linked-bank cards on Home (design handoff, screen 5): 326×200
+ * on the design's phone, radius 26, a bank-specific gradient, snapping one
+ * card at a time. The chosen card wears "Paying from" — purchases default to
+ * it. A dashed "Link bank account" card comes last while fewer than three are
+ * linked, and page dots sit underneath, the active one wider.
  */
 export function BankCarousel({
   accounts,
@@ -36,6 +46,7 @@ export function BankCarousel({
   onLink: () => void;
 }) {
   const c = useThemeColors();
+  const { width: cardWidth, height: cardHeight, step: STEP } = useCardSize();
   const scroller = useRef<ScrollView>(null);
   const [hidden, setHidden] = useState(true);
   const canLink = accounts.length < MAX_LINKED;
@@ -49,8 +60,15 @@ export function BankCarousel({
     scroller.current?.scrollTo({ x: activeIndex * STEP, animated: true });
   }, [activeIndex]);
 
+  // The dots follow the swipe as it happens (the prototype's onCarScroll);
+  // the chosen account changes once the card settles.
+  const indexAt = (x: number) => Math.max(0, Math.min(pages - 1, Math.round(x / STEP)));
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const index = indexAt(e.nativeEvent.contentOffset.x);
+    if (index !== page) setPage(index);
+  };
   const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const index = Math.max(0, Math.min(pages - 1, Math.round(e.nativeEvent.contentOffset.x / STEP)));
+    const index = indexAt(e.nativeEvent.contentOffset.x);
     setPage(index);
     if (index < accounts.length && index !== activeIndex) {
       Haptics.selectionAsync().catch(() => {});
@@ -73,14 +91,20 @@ export function BankCarousel({
         snapToInterval={STEP}
         decelerationRate="fast"
         disableIntervalMomentum
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         onMomentumScrollEnd={onScrollEnd}
-        contentContainerStyle={{ gap: GAP, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 4 }}
+        // 18 below rather than the design's 4, so the card's shadow is not cut
+        // off in a hard line; the dots move up by the same 14 to stay put.
+        contentContainerStyle={{ gap: GAP, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 18 }}
       >
         {accounts.map((account, i) => (
           <BankCard
             key={account.id}
             account={account}
             index={i}
+            width={cardWidth}
+            height={cardHeight}
             active={i === activeIndex}
             hidden={hidden}
             onToggleHidden={() => setHidden((h) => !h)}
@@ -93,8 +117,8 @@ export function BankCarousel({
             accessibilityRole="button"
             accessibilityLabel="Link bank account"
             style={({ pressed }) => ({
-              width: CARD_WIDTH,
-              height: CARD_HEIGHT,
+              width: cardWidth,
+              height: cardHeight,
               borderRadius: 26,
               borderWidth: 1.5,
               borderStyle: 'dashed',
@@ -115,7 +139,7 @@ export function BankCarousel({
       </ScrollView>
 
       {pages > 1 ? (
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 10 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: -4 }}>
           {Array.from({ length: pages }, (_, i) => (
             <Pressable
               key={i}
@@ -135,6 +159,8 @@ export function BankCarousel({
 function BankCard({
   account,
   index,
+  width,
+  height,
   active,
   hidden,
   onToggleHidden,
@@ -142,6 +168,8 @@ function BankCard({
 }: {
   account: LinkedAccount;
   index: number;
+  width: number;
+  height: number;
   active: boolean;
   hidden: boolean;
   onToggleHidden: () => void;
@@ -161,7 +189,7 @@ function BankCard({
     <Pressable
       onPress={onPress}
       accessibilityLabel={`${account.bankName}, ${account.accountName}${active ? ', paying from this account' : ''}`}
-      style={{ width: CARD_WIDTH, height: CARD_HEIGHT, borderRadius: 26, boxShadow: `0px 12px 28px -12px ${theme.shadow}` }}
+      style={{ width, height, borderRadius: 26, boxShadow: `0px 12px 28px -12px ${theme.shadow}` }}
     >
       <LinearGradient
         colors={theme.gradient as unknown as [string, string]}
