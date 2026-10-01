@@ -16,14 +16,27 @@ import { HOME_ROW_SERVICES, SERVICE_GROUPS, SERVICE_TILES, type ServiceTile, typ
  * palm. Which account palm payments come from, and pausing them, arrive with
  * the Palm tab itself.
  */
-export function PalmCard({ enrolled, onPress }: { enrolled: boolean; onPress: () => void }) {
+export function PalmCard({
+  enrolled,
+  paused = false,
+  paysFrom = null,
+  onPress,
+}: {
+  enrolled: boolean;
+  /** Palm payments paused (Palm tab): the chip and line say so. */
+  paused?: boolean;
+  /** "GTBank ••6789", the account palm payments come from. */
+  paysFrom?: string | null;
+  onPress: () => void;
+}) {
   const c = useThemeColors();
+  const [chipBg, chipFg] = !enrolled ? [c.chip, c.muted] : paused ? [c.warnSoft, c.warn] : [c.brandSoft, c.brandText];
   return (
     <PressScale
       scaleTo={0.99}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Palm Pay, ${enrolled ? 'active' : 'not enrolled'}`}
+      accessibilityLabel={`Palm Pay, ${!enrolled ? 'not enrolled' : paused ? 'paused' : 'active'}`}
       style={{
         marginHorizontal: 20,
         marginTop: 16,
@@ -57,19 +70,23 @@ export function PalmCard({ enrolled, onPress }: { enrolled: boolean; onPress: ()
               paddingHorizontal: 8,
               paddingVertical: 2,
               borderRadius: 999,
-              backgroundColor: enrolled ? c.brandSoft : c.chip,
+              backgroundColor: chipBg,
             }}
           >
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: enrolled ? c.brandText : c.muted }} />
-            <Text style={{ color: enrolled ? c.brandText : c.muted, fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>
-              {enrolled ? 'Active' : 'Not enrolled'}
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: chipFg }} />
+            <Text style={{ color: chipFg, fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>
+              {!enrolled ? 'Not enrolled' : paused ? 'Paused' : 'Active'}
             </Text>
           </View>
         </View>
         <Text style={{ color: c.muted, fontSize: 13, lineHeight: 17.5, fontFamily: 'Inter_400Regular' }}>
-          {enrolled
-            ? 'Palm veins captured · pay at any MiliPay terminal'
-            : 'Visit a MiliPay agent to enrol your palm.'}
+          {!enrolled
+            ? 'Visit a MiliPay agent to enrol your palm.'
+            : paused
+            ? 'Palm payments are paused. Tap to turn them back on.'
+            : paysFrom
+            ? `Palm veins captured · pays from ${paysFrom}`
+            : 'Palm veins captured · pay at any MiliPay terminal'}
         </Text>
       </View>
       <ChevronRight color={c.faint} size={20} />

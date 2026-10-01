@@ -42,6 +42,11 @@ interface PaymentBody {
   partitionKey?: string;
   pin?: string;
   reference?: string;
+  /**
+   * @deprecated ignored. Which of the customer's accounts pays is the
+   * customer's choice (Palm tab, "Palm payments come from"), never the
+   * terminal's.
+   */
   accountId?: string;
 }
 
@@ -182,7 +187,28 @@ serve(handler(async (req) => {
     throw new ApiError("Matched customer has no active MiliPay profile", 403, "CUSTOMER_PROFILE_MISSING");
   }
 
-  // 5. KYC tier caps, PIN challenge above the customer's threshold, daily cap.
+  // 5. The customer's own palm controls (Palm tab). A paused palm is
+  //    declined here, where the money moves, not just hidden in the app. If
+  //    the setting can't be read, decline: a pause that fails open is no pause.
+  const { data: palmSettings, error: palmError } = await admin
+    .from("customers")
+    .select("palm_paused")
+    .eq("id", profile.id)
+    .maybeSingle();
+  if (palmError || !palmSettings) {
+    console.error("[process-payment] palm settings unreadable", palmError);
+    throw new ApiError("Payment could not be checked and was declined. No funds were moved.", 503, "PALM_SETTINGS_UNAVAILABLE");
+  }
+  if (palmSettings.palm_paused) {
+    throw new ApiError(
+      "This customer has paused palm payments. They can turn them back on in the MiliPay app, or pay another way.",
+      403,
+      "PALM_PAUSED",
+    );
+  }
+  const { data: palmAccountId } = await admin.rpc("palm_account_for", { p_customer_id: profile.id });
+
+  // 6. KYC tier caps, PIN challenge above the customer's threshold, daily cap.
   await enforceTransactionLimits(admin, {
     authUserId: match.authUserId,
     customerId: profile.id,
@@ -194,7 +220,7 @@ serve(handler(async (req) => {
     pin: body.pin,
   });
 
-  // 6. Split settlement. Stored in Naira, numeric(12,2).
+  // 7. Split settlement. Stored in Naira, numeric(12,2).
   //    splitPayment derives the merchant's net by subtraction rather than
   //    rounding it independently, so fee + net is always exactly the amount
   //    charged. It lives in tier-math.ts, which the test suite exercises
@@ -205,14 +231,14 @@ serve(handler(async (req) => {
   );
   const authCode = `APPR-${100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000)}`;
 
-  // 7. Record the transaction. A ledger write that fails must decline the
+  // 8. Record the transaction. A ledger write that fails must decline the
   //    payment: previously this was a console.warn and still returned APPROVED.
   const { error: txError } = await admin.from("transactions").insert({
     merchant_id: merchant.id,
     merchant_name: merchant.business_name,
     user_id: match.authUserId,
     customer_id: profile.id,
-    account_used: body.accountId ?? null,
+    account_used: (typeof palmAccountId === "string" ? palmAccountId : null),
     terminal_id: terminal?.terminal_id ?? null,
     amount,
     // A merchant palm payment settles synchronously, so it goes straight to

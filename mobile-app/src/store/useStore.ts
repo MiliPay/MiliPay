@@ -8,6 +8,7 @@ import {
   setBiometricUnlockEnabled,
   wasFingerprintOffered,
 } from '../lib/deviceAuth';
+import { palmFromRpc, type PalmState } from '../lib/palmView';
 
 interface User {
   id: string;
@@ -299,6 +300,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // customer's history or inbox while their own is loading.
     useTransactionStore.setState({ transactions: [] });
     useNotificationStore.setState({ notifications: [] });
+    usePalmStore.setState({ palm: null });
   },
 
   /**
@@ -1207,5 +1209,56 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       next[index] = notification;
       return { notifications: next };
     });
+  },
+}));
+
+// ─── Palm ─────────────────────────────────────────────────────────────────────
+
+interface PalmStoreState {
+  palm: PalmState | null;
+  isLoading: boolean;
+  fetchPalm: () => Promise<void>;
+  /** Pause or resume palm payments. Enforced where palm money moves (process-payment). */
+  setPaused: (paused: boolean) => Promise<{ success: boolean; error?: string }>;
+  /** Which linked account palm payments come from. */
+  setAccount: (accountId: string) => Promise<{ success: boolean; error?: string }>;
+}
+
+/**
+ * The Palm tab's state, from get_my_palm. Changes go through the two RPCs,
+ * which answer with the new state, so the screen shows what the server holds
+ * rather than what it hoped to save.
+ */
+export const usePalmStore = create<PalmStoreState>((set, get) => ({
+  palm: null,
+  isLoading: false,
+
+  fetchPalm: async () => {
+    set({ isLoading: true });
+    const { data, error } = await supabase.rpc('get_my_palm');
+    if (error) console.warn('[palm] could not load', error.message);
+    set({ palm: error ? get().palm : palmFromRpc(data), isLoading: false });
+  },
+
+  setPaused: async (paused) => {
+    const before = get().palm;
+    // Shown at once; put back if the server says no.
+    if (before) set({ palm: { ...before, paused } });
+    const { data, error } = await supabase.rpc('set_palm_paused', { p_paused: paused });
+    if (error) {
+      set({ palm: before });
+      return { success: false, error: "Couldn't change this. Check your connection and try again." };
+    }
+    set({ palm: palmFromRpc(data) ?? before });
+    return { success: true };
+  },
+
+  setAccount: async (accountId) => {
+    const { data, error } = await supabase.rpc('set_palm_account', { p_account_id: accountId });
+    if (error || data?.error) {
+      return { success: false, error: data?.error ?? "Couldn't change this. Check your connection and try again." };
+    }
+    set({ palm: palmFromRpc(data) ?? get().palm });
+    return { success: true };
   },
 }));

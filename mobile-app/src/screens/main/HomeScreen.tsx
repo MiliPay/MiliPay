@@ -16,6 +16,7 @@ import {
   useAuthStore,
   useBankStore,
   useNotificationStore,
+  usePalmStore,
   useTransactionStore,
 } from '../../store/useStore';
 import { useThemeColors } from '../../theme/useThemeColors';
@@ -47,6 +48,9 @@ function HomeContent({ navigation }: any) {
   const fetchTransactions = useTransactionStore((s) => s.fetchTransactions);
   const subscribeToLive = useTransactionStore((s) => s.subscribeToLive);
 
+  const palm = usePalmStore((s) => s.palm);
+  const fetchPalm = usePalmStore((s) => s.fetchPalm);
+
   const notifications = useNotificationStore((s) => s.notifications);
   const fetchNotifications = useNotificationStore((s) => s.fetchNotifications);
 
@@ -60,6 +64,7 @@ function HomeContent({ navigation }: any) {
     void fetchAccounts(user.id);
     void fetchTransactions(user.id, user.customerId);
     void fetchNotifications();
+    void fetchPalm();
     // Live history, balance and inbox. A purchase settles asynchronously —
     // the bank confirms by webhook and the airtime follows — so rows really
     // do change while this screen is open. One channel per session, opened
@@ -119,7 +124,12 @@ function HomeContent({ navigation }: any) {
           <BankCarousel accounts={accounts} activeIndex={activeIndex} onSelect={setActiveBankIndex} onLink={startLink} />
         )}
 
-        <PalmCard enrolled={!!user?.hasPalm} onPress={() => navigation.navigate('PalmTab')} />
+        <PalmCard
+          enrolled={palm?.hasPalm ?? !!user?.hasPalm}
+          paused={!!palm?.paused}
+          paysFrom={palm?.account ? `${palm.account.bankName} ••${palm.account.last4}` : null}
+          onPress={() => navigation.navigate('PalmTab')}
+        />
 
         <PayBillsCard onOpen={openService} onAll={() => setServicesOpen(true)} />
 

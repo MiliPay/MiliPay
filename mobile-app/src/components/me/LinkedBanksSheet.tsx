@@ -11,7 +11,7 @@ import { QuickPayPanel } from '../ui/QuickPayPanel';
 import { MAX_LINKED } from '../banks/BankLinking';
 import { useThemeColors } from '../../theme/useThemeColors';
 import { bankCardTheme } from '../../theme/tokens';
-import { useBankStore, type LinkedAccount } from '../../store/useStore';
+import { useBankStore, usePalmStore, type LinkedAccount } from '../../store/useStore';
 import { stopQuickPay, useQuickPay } from '../../lib/quickPay';
 
 /**
@@ -38,6 +38,8 @@ export function LinkedBanksSheet({
   const c = useThemeColors();
   const accounts = useBankStore((s) => s.linkedAccounts);
   const unlinkAccount = useBankStore((s) => s.unlinkAccount);
+  const palmAccountId = usePalmStore((s) => s.palm?.account?.id ?? null);
+  const fetchPalm = usePalmStore((s) => s.fetchPalm);
   const [target, setTarget] = useState<LinkedAccount | null>(null);
   const [busy, setBusy] = useState(false);
   // Read while the sheet is open, and again whenever the app returns to the
@@ -47,8 +49,12 @@ export function LinkedBanksSheet({
 
   // Each opening starts on the list.
   useEffect(() => {
-    if (visible) setTarget(null);
-  }, [visible]);
+    if (visible) {
+      setTarget(null);
+      // Which account is the "Palm default" (palm_account_for on the server).
+      void fetchPalm();
+    }
+  }, [visible, fetchPalm]);
 
   // The unlink view keeps drawing the account it was about while it closes.
   const lastTarget = useRef<LinkedAccount | null>(null);
@@ -153,6 +159,11 @@ export function LinkedBanksSheet({
                       {acc.accountName} · ••{acc.accountNumber.slice(-4)}
                     </Text>
                   </View>
+                  {acc.id === palmAccountId ? (
+                    <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 6, backgroundColor: c.brandSoft }}>
+                      <Text style={{ color: c.brandText, fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>Palm default</Text>
+                    </View>
+                  ) : null}
                   {accounts.length > 1 ? (
                     <PressScale
                       scaleTo={0.92}

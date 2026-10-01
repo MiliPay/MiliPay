@@ -769,6 +769,14 @@
       "anon_execute": false,
       "args": "",
       "authenticated_execute": true,
+      "name": "get_my_palm",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "",
+      "authenticated_execute": true,
       "name": "get_onboarding_state",
       "search_path_pinned": true,
       "security_definer": true
@@ -838,6 +846,14 @@
       "security_definer": true
     },
     {
+      "anon_execute": true,
+      "args": "",
+      "authenticated_execute": true,
+      "name": "notify_palm_settings",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
       "anon_execute": false,
       "args": "",
       "authenticated_execute": false,
@@ -850,6 +866,14 @@
       "args": "",
       "authenticated_execute": false,
       "name": "on_staff_profile_delete_cascade_auth",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "p_customer_id uuid",
+      "authenticated_execute": false,
+      "name": "palm_account_for",
       "search_path_pinned": true,
       "security_definer": true
     },
@@ -922,6 +946,22 @@
       "args": "p_pin text",
       "authenticated_execute": true,
       "name": "set_customer_pin",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "p_account_id uuid",
+      "authenticated_execute": true,
+      "name": "set_palm_account",
+      "search_path_pinned": true,
+      "security_definer": true
+    },
+    {
+      "anon_execute": false,
+      "args": "p_paused boolean",
+      "authenticated_execute": true,
+      "name": "set_palm_paused",
       "search_path_pinned": true,
       "security_definer": true
     },

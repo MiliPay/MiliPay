@@ -27,7 +27,7 @@ import { BankLinkingProvider, MAX_LINKED, useBankLinking } from '../../component
 import { LinkedBanksSheet } from '../../components/me/LinkedBanksSheet';
 import { DoneSheet } from '../../components/me/DoneSheet';
 import { ConfirmIdentitySheet } from '../../components/ui/ConfirmIdentitySheet';
-import { useAuthStore, useBankStore } from '../../store/useStore';
+import { useAuthStore, useBankStore, usePalmStore } from '../../store/useStore';
 import { useThemeColors } from '../../theme/useThemeColors';
 import { brandFixed } from '../../theme/tokens';
 import { formatPhone, naira0 } from '../../lib/purchaseForm';
@@ -51,6 +51,7 @@ function MeContent({ navigation, route }: any) {
   const c = useThemeColors();
   const user = useAuthStore((s) => s.user);
   const onboarding = useAuthStore((s) => s.onboarding);
+  const palmPaused = usePalmStore((s) => !!s.palm?.paused);
   const logout = useAuthStore((s) => s.logout);
   const recordBiometricEnrolled = useAuthStore((s) => s.setBiometricEnrolled);
   const accounts = useBankStore((s) => s.linkedAccounts);
@@ -245,7 +246,11 @@ function MeContent({ navigation, route }: any) {
               label={user?.ninVerified ? 'Identity verified' : 'Identity check pending'}
               tone={user?.ninVerified ? 'brand' : 'muted'}
             />
-            <Badge icon={Hand} label={user?.hasPalm ? 'Palm enrolled' : 'Palm not enrolled'} tone={user?.hasPalm ? 'brand' : 'muted'} />
+            <Badge
+              icon={Hand}
+              label={!user?.hasPalm ? 'Palm not enrolled' : palmPaused ? 'Palm Pay paused' : 'Palm enrolled'}
+              tone={!user?.hasPalm ? 'muted' : palmPaused ? 'warn' : 'brand'}
+            />
           </View>
         </PressScale>
 
@@ -371,9 +376,9 @@ function MeContent({ navigation, route }: any) {
   );
 }
 
-function Badge({ icon: Icon, label, tone }: { icon: typeof ShieldCheck; label: string; tone: 'brand' | 'muted' }) {
+function Badge({ icon: Icon, label, tone }: { icon: typeof ShieldCheck; label: string; tone: 'brand' | 'muted' | 'warn' }) {
   const c = useThemeColors();
-  const [bg, fg] = tone === 'brand' ? [c.brandSoft, c.brandText] : [c.chip, c.muted];
+  const [bg, fg] = tone === 'brand' ? [c.brandSoft, c.brandText] : tone === 'warn' ? [c.warnSoft, c.warn] : [c.chip, c.muted];
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 10, backgroundColor: bg }}>
       <Icon color={fg} size={14} />
