@@ -28,7 +28,7 @@ export default function OnboardingNavigator() {
     : 'FingerprintSetup';
 
   return (
-    <Stack.Navigator initialRouteName={initialRouteName} screenOptions={{ headerShown: false, gestureEnabled: false }}>
+    <Stack.Navigator initialRouteName={initialRouteName} screenOptions={{ headerShown: false, gestureEnabled: false, animation: 'none' }}>
       <Stack.Screen name="CreatePassword" component={CreatePasswordScreen} />
       <Stack.Screen name="PinSetup" component={PinSetupScreen} />
       <Stack.Screen name="FingerprintSetup" component={FingerprintSetupScreen} />

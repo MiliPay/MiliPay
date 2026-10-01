@@ -20,9 +20,16 @@ import ReceiptScreen from '../screens/main/ReceiptScreen';
 const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator();
 
+/**
+ * The prototype's `screenIn` for pushed screens (fade in while moving 28 pt,
+ * 280 ms). Native stacks have no 28 pt shift, so this is the fade; the
+ * duration applies on iOS, Android uses its own.
+ */
+const PUSHED = { headerShown: false, animation: 'fade', animationDuration: 280 } as const;
+
 function HomeStackNavigator() {
   return (
-    <HomeStack.Navigator screenOptions={{ headerShown: false }}>
+    <HomeStack.Navigator screenOptions={PUSHED}>
       <HomeStack.Screen name="HomeScreen" component={HomeScreen} />
       <HomeStack.Screen name="QuickService" component={QuickServiceScreen} />
       {/* No swipe-back: a receipt is left with Done or Buy again, never by
@@ -39,7 +46,7 @@ const SettingsStack = createNativeStackNavigator();
 
 function SettingsStackNavigator() {
   return (
-    <SettingsStack.Navigator screenOptions={{ headerShown: false }}>
+    <SettingsStack.Navigator screenOptions={PUSHED}>
       <SettingsStack.Screen name="SettingsScreen" component={SettingsScreen} />
       <SettingsStack.Screen name="ProfileSettings" component={ProfileSettingsScreen} />
       <SettingsStack.Screen name="SupportScreen" component={SupportScreen} />
@@ -60,7 +67,11 @@ function SettingsStackNavigator() {
  */
 export default function TabNavigator() {
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={(props) => <AppTabBar {...props} />}>
+    <Tab.Navigator
+      // Tab changes fade over 250 ms, as in the prototype.
+      screenOptions={{ headerShown: false, animation: 'fade', transitionSpec: { animation: 'timing', config: { duration: 250 } } }}
+      tabBar={(props) => <AppTabBar {...props} />}
+    >
       <Tab.Screen name="HomeTab" component={HomeStackNavigator} />
       <Tab.Screen name="ActivityTab" component={ActivityScreen} />
       <Tab.Screen name="PalmTab" component={PalmScreen} />

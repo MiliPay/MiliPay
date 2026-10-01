@@ -14,7 +14,9 @@ const Stack = createNativeStackNavigator();
  */
 export default function AuthNavigator() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    // No stack slide: each step draws its own entrance (the prototype's
+    // screenIn), as they are one screen in the design.
+    <Stack.Navigator screenOptions={{ headerShown: false, animation: 'none' }}>
       <Stack.Screen name="Welcome" component={WelcomeScreen} />
       <Stack.Screen name="PhoneLogin" component={PhoneLoginScreen} />
       <Stack.Screen name="PasswordLogin" component={UnlockScreen} />
