@@ -103,13 +103,72 @@ async function sendViaTermii(
  * already minted an auth identity. The caller records the outcome and the
  * administrator can re-send.
  */
-export async function dispatchCredential(
+export function dispatchCredential(
+  phone: string,
+  message: string,
+): Promise<DispatchResult> {
+  return dispatchVia(configuredChannels(), phone, message);
+}
+
+/**
+ * A text the customer was told comes "by SMS" (a sign-in code): every
+ * configured channel except WhatsApp, in order.
+ */
+export function dispatchSms(phone: string, message: string): Promise<DispatchResult> {
+  const channels = configuredChannels().filter((c) => c !== "whatsapp");
+  return dispatchVia(channels.length > 0 ? channels : ["sms"], phone, message);
+}
+
+/**
+ * A notice the customer should get everywhere (account verified): every
+ * configured channel, not just the first that works. Delivered if any did.
+ */
+export async function dispatchEverywhere(phone: string, message: string): Promise<DispatchResult> {
+  const attempts: DispatchResult["attempts"] = [];
+  let first: Channel | null = null;
+  for (const channel of configuredChannels()) {
+    const result = channel === "console"
+      ? sendToConsole(phone, message)
+      : await sendViaTermii(channel, phone, message);
+    attempts.push({ channel, ...result });
+    if (result.ok && !first) first = channel;
+    if (!result.ok) console.warn(`[notify] ${channel} dispatch failed: ${result.detail}`);
+  }
+  return { delivered: first !== null, channel: first, attempts };
+}
+
+/** An email through Resend. Never throws; false when it was not sent. */
+export async function sendEmail(to: string, subject: string, text: string): Promise<boolean> {
+  const apiKey = Deno.env.get("RESEND_API_KEY");
+  const from = Deno.env.get("EMAIL_FROM");
+  if (!apiKey || !from) {
+    console.error("[notify] email not sent: RESEND_API_KEY or EMAIL_FROM is not set");
+    return false;
+  }
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from, to: [to], subject, text }),
+    });
+    if (response.ok) return true;
+    const body = await response.json().catch(() => ({}));
+    console.error(`[notify] email not sent: HTTP ${response.status} ${String(body?.message ?? "")}`);
+    return false;
+  } catch (err) {
+    console.error("[notify] email not sent", err);
+    return false;
+  }
+}
+
+async function dispatchVia(
+  channels: Channel[],
   phone: string,
   message: string,
 ): Promise<DispatchResult> {
   const attempts: DispatchResult["attempts"] = [];
 
-  for (const channel of configuredChannels()) {
+  for (const channel of channels) {
     const result = channel === "console"
       ? sendToConsole(phone, message)
       : await sendViaTermii(channel, phone, message);

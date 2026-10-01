@@ -162,18 +162,18 @@ export default function RegisterCustomerPage() {
                 Pending Admin KYC Verification
               </div>
               <p className="text-xs text-ink-muted leading-relaxed">
-                Biometric templates and NIN identity data have been uploaded to the network. An administrator will review and verify this enrollment. Once approved, a one-time password is sent to <strong className="text-white">{draft.phone}</strong> on WhatsApp, falling back to SMS.
+                Biometric templates and NIN identity data have been uploaded to the network. An administrator will review and verify this enrollment. Once approved, the customer is told by SMS, WhatsApp and email at <strong className="text-white">{draft.phone}</strong>, and logs in with that number and a one-time SMS code.
               </p>
             </div>
           ) : (
             <div className="mb-8 rounded-xl border border-white/[0.08] bg-ledger-line/50 p-5 text-left space-y-4">
               <div className="flex items-center gap-2 text-signal-bright text-xs font-semibold uppercase tracking-wider">
                 <Smartphone className="w-4 h-4" />
-                Credentials sent to the customer
+                Customer told they are verified
               </div>
               <p className="text-xs text-ink-muted leading-relaxed">
-                A one-time password has been sent to <strong className="text-white">{draft.phone}</strong>.
-                The customer signs in to the MiliPay app with their phone number and that password.
+                A message has been sent to <strong className="text-white">{draft.phone}</strong>.
+                The customer logs in to the MiliPay app with that number and a one-time SMS code.
               </p>
             </div>
           )}
@@ -181,9 +181,9 @@ export default function RegisterCustomerPage() {
           <div className="mb-6 rounded-xl border border-white/[0.08] bg-ledger-line/40 p-4 text-left flex gap-3">
             <Lock className="h-4 w-4 shrink-0 text-ink-faint mt-0.5" />
             <p className="text-xs leading-relaxed text-ink-muted">
-              The password is never shown here. It goes to the customer&apos;s phone and
-              nowhere else. If it does not arrive, an administrator can reissue it from
-              the customer&apos;s profile.
+              No password is issued. The customer creates their own after their first
+              code sign-in. If the message does not arrive, an administrator can resend it
+              from the customer&apos;s profile.
             </p>
           </div>
 
@@ -203,9 +203,9 @@ export default function RegisterCustomerPage() {
               What happens next
             </p>
             {[
-              "One-time password sent by WhatsApp, or SMS if that fails",
-              "Customer logs in with their phone number and that password",
-              "They must change the password before anything else",
+              "Customer is told by SMS, WhatsApp and email that they are verified",
+              "They log in with their phone number and a one-time SMS code",
+              "They create their own password before anything else",
               "They set a 4-digit PIN, then enable fingerprint unlock",
               "They link a bank account — confirmed by fingerprint or PIN",
             ].map((item, i) => (

@@ -22,6 +22,8 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 
 const ENROLLED_KEY = 'milipay.biometric.enabled';
+/** Set once the customer has been offered fingerprint unlock on this install. */
+const OFFERED_KEY = 'milipay.biometric.offered';
 
 export type DeviceAuthOutcome =
   | 'success'
@@ -82,20 +84,40 @@ export async function setBiometricUnlockEnabled(enabled: boolean): Promise<void>
   }
 }
 
+export async function wasFingerprintOffered(): Promise<boolean> {
+  try {
+    return (await SecureStore.getItemAsync(OFFERED_KEY)) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export async function markFingerprintOffered(offered = true): Promise<void> {
+  try {
+    if (offered) await SecureStore.setItemAsync(OFFERED_KEY, 'true');
+    else await SecureStore.deleteItemAsync(OFFERED_KEY);
+  } catch {
+    // A preference: losing it only means being asked again.
+  }
+}
+
 /**
  * Show the OS biometric prompt.
  *
  * Returns 'unavailable' rather than throwing when there is no sensor, so the
  * caller can fall through to the PIN without special-casing errors.
  */
-export async function promptBiometric(reason: string): Promise<DeviceAuthOutcome> {
+export async function promptBiometric(
+  reason: string,
+  cancelLabel = 'Use PIN instead',
+): Promise<DeviceAuthOutcome> {
   const { hasHardware, isEnrolled } = await getBiometricCapability();
   if (!hasHardware || !isEnrolled) return 'unavailable';
 
   try {
     const result = await LocalAuthentication.authenticateAsync({
       promptMessage: reason,
-      cancelLabel: 'Use PIN instead',
+      cancelLabel,
       // Fall back to the MiliPay PIN, not the device passcode.
       disableDeviceFallback: true,
       biometricsSecurityLevel: 'strong',

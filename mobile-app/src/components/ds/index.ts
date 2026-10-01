@@ -14,5 +14,6 @@ export { HeartbeatLoader, HeartbeatFill } from './HeartbeatLoader';
 export { PinDots, Keypad } from './PinPad';
 export { CodeBoxes } from './CodeBoxes';
 export { useShake } from './useShake';
+export { PulseRing, Enter } from './Motion';
 export { AnimatedSplash, SPLASH_MS } from './AnimatedSplash';
 export { FieldLabel, InputBox, OptionTile, Toggle } from './Form';

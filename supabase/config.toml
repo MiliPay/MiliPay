@@ -55,3 +55,8 @@ verify_jwt = false
 
 [functions.vtu-reconcile]
 verify_jwt = false
+
+# Called by people who are not signed in yet (that is its whole job); it is
+# rate-limited by phone and by address and issues nothing without the code.
+[functions.login-code]
+verify_jwt = false

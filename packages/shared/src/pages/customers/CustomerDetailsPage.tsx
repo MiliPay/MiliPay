@@ -163,7 +163,8 @@ export default function CustomerDetailsPage() {
    * customPassword — so the administrator's own UUID became the login password
    * of every customer they approved, and that UUID is visible to any staff
    * member as customers.verified_by. approveCustomer now takes the id alone
-   * and the password goes to the customer's phone.
+   * and no password exists at all: the customer is told they are verified
+   * and logs in with their phone number and an SMS code.
    */
   const handleApprove = async () => {
     if (!isAdmin || !customer || !id || !user) return;
@@ -201,7 +202,7 @@ export default function CustomerDetailsPage() {
       });
       setDispatchNotice(result.message);
     } catch (err: any) {
-      setDispatchNotice(err?.message || "Could not resend credentials.");
+      setDispatchNotice(err?.message || "Could not resend the message.");
     } finally {
       setIsResending(false);
     }
@@ -378,10 +379,10 @@ export default function CustomerDetailsPage() {
                 variant="secondary"
                 disabled={isResending}
                 className="gap-1.5 sm:gap-2 text-xs sm:text-sm"
-                title="Issue a fresh one-time password and send it to the customer's phone"
+                title="Tell the customer again, by SMS, WhatsApp and email, that they are verified and can log in"
               >
                 <Send className="w-4 h-4" />
-                {isResending ? "Sending…" : "Resend credentials"}
+                {isResending ? "Sending…" : "Resend message"}
               </Button>
             )}
 
@@ -563,13 +564,13 @@ export default function CustomerDetailsPage() {
 
               {customer.passwordDeliveryStatus && (
                 <div className="flex flex-col gap-1">
-                  <span className="text-xs text-ink-faint uppercase tracking-wider font-semibold">Credential delivery</span>
+                  <span className="text-xs text-ink-faint uppercase tracking-wider font-semibold">Verified message</span>
                   <div className="flex items-center gap-2 text-ink">
                     <Send className={customer.passwordDeliveryStatus === "delivered" ? "w-4 h-4 text-status-ok" : "w-4 h-4 text-status-fail"} />
                     <span className="text-sm">
                       {customer.passwordDeliveryStatus === "delivered"
                         ? "Sent by " + (customer.passwordDeliveryChannel ?? "unknown channel")
-                        : "Delivery failed — use Resend credentials"}
+                        : "Delivery failed — use Resend message"}
                     </span>
                   </div>
                 </div>
@@ -810,8 +811,8 @@ export default function CustomerDetailsPage() {
               <UserCheck className="w-5 h-5 shrink-0" />
               <p>
                 You are about to verify this customer's KYC data. This grants them full access
-                to the MiliPay network and sends a one-time password to their phone on
-                WhatsApp, falling back to SMS. The password is not shown to you.
+                to the MiliPay network and tells them by SMS, WhatsApp and email that they are
+                verified. They log in with their phone number and a one-time SMS code.
               </p>
             </div>
             {approvalError && <p className="text-status-fail text-sm font-medium">{approvalError}</p>}

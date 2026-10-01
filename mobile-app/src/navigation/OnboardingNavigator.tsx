@@ -1,41 +1,38 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import ChangePasswordScreen from '../screens/auth/ChangePasswordScreen';
+import CreatePasswordScreen from '../screens/auth/CreatePasswordScreen';
 import PinSetupScreen from '../screens/auth/PinSetupScreen';
-import BiometricSetupScreen from '../screens/auth/BiometricSetupScreen';
+import FingerprintSetupScreen from '../screens/auth/FingerprintSetupScreen';
+import AllSetScreen from '../screens/auth/AllSetScreen';
 import { useAuthStore } from '../store/useStore';
 
 const Stack = createNativeStackNavigator();
 
 /**
- * First-login setup: change the one-time password, set a PIN, then enrol
- * fingerprint unlock.
+ * First sign-in setup (design handoff, screen 3, steps 2–4 and done): create
+ * a password, set a PIN, offer fingerprint, then "You're all set".
  *
- * The initial route is whichever step is still outstanding, so a customer who
- * gets halfway and kills the app resumes where they left off rather than being
- * asked to change an already-changed password.
- *
- * `gestureEnabled: false` and no headers: these steps are not dismissible.
- * The only way out is forward, or signing out from the password screen.
+ * The first screen is whichever step is still outstanding, so a customer who
+ * gets halfway and closes the app resumes where they left off. These steps
+ * cannot be swiped away; the only way out is forward, or "Sign out" on the
+ * password step.
  */
 export default function OnboardingNavigator() {
   const onboarding = useAuthStore((state) => state.onboarding);
 
   const initialRouteName = onboarding?.mustChangePassword
-    ? 'ChangePassword'
+    ? 'CreatePassword'
     : !onboarding?.hasPin
     ? 'PinSetup'
-    : 'BiometricSetup';
+    : 'FingerprintSetup';
 
   return (
-    <Stack.Navigator
-      initialRouteName={initialRouteName}
-      screenOptions={{ headerShown: false, gestureEnabled: false }}
-    >
-      <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+    <Stack.Navigator initialRouteName={initialRouteName} screenOptions={{ headerShown: false, gestureEnabled: false }}>
+      <Stack.Screen name="CreatePassword" component={CreatePasswordScreen} />
       <Stack.Screen name="PinSetup" component={PinSetupScreen} />
-      <Stack.Screen name="BiometricSetup" component={BiometricSetupScreen} />
+      <Stack.Screen name="FingerprintSetup" component={FingerprintSetupScreen} />
+      <Stack.Screen name="AllSet" component={AllSetScreen} options={{ animation: 'fade' }} />
     </Stack.Navigator>
   );
 }

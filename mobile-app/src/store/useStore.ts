@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 
 import { supabase } from '../lib/supabase';
+import {
+  getBiometricCapability,
+  isBiometricUnlockEnabled,
+  markFingerprintOffered,
+  setBiometricUnlockEnabled,
+  wasFingerprintOffered,
+} from '../lib/deviceAuth';
 
 interface User {
   id: string;
@@ -52,6 +59,21 @@ interface AuthState {
   user: User | null;
   isLoading: boolean;
   onboarding: OnboardingState | null;
+  /**
+   * The app opened (or came back after a while) with a saved session and
+   * fingerprint unlock on: the Unlock screen shows until the customer proves
+   * it is them. Nothing behind it is mounted.
+   */
+  locked: boolean;
+  setLocked: (locked: boolean) => void;
+  /**
+   * Signed in on this phone without fingerprint unlock set up: offer it once
+   * (onboarding step 4's screen) before Home.
+   */
+  offerFingerprint: boolean;
+  /** Before a sign-in: decide whether that offer is due on this install. */
+  prepareFingerprintOffer: () => Promise<void>;
+  finishFingerprintOffer: () => void;
   initialize: () => void;
   login: (phoneOrEmail: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -92,6 +114,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isLoading: true,
   onboarding: null,
+  locked: false,
+  offerFingerprint: false,
+
+  setLocked: (locked) => set({ locked }),
+
+  prepareFingerprintOffer: async () => {
+    const [enabled, offered, capability] = await Promise.all([
+      isBiometricUnlockEnabled(),
+      wasFingerprintOffered(),
+      getBiometricCapability(),
+    ]);
+    set({ offerFingerprint: !enabled && !offered && capability.hasHardware && capability.isEnrolled });
+  },
+
+  finishFingerprintOffer: () => {
+    void markFingerprintOffered();
+    set({ offerFingerprint: false });
+  },
   
   initialize: async () => {
     try {
@@ -127,13 +167,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           }
         };
 
-        const [customerData] = await Promise.all([
+        const [customerData, , biometricOn] = await Promise.all([
           loadCustomer(),
           get().refreshOnboarding(),
+          isBiometricUnlockEnabled(),
         ]);
         
         set({ 
           isAuthenticated: true, 
+          // A returning customer with fingerprint unlock proves it is them
+          // before anything else shows (design: Unlock).
+          locked: biometricOn,
           user: {
             id: session.user.id,
             customerId: customerData?.id,
@@ -242,11 +286,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (error) {
       throw new Error(error.message);
     }
+    set({ locked: false });
   },
   
   logout: async () => {
     await supabase.auth.signOut();
-    set({ isAuthenticated: false, user: null, onboarding: null });
+    // Fingerprint unlock belongs to the person who turned it on: the next
+    // person to sign in on this phone is asked afresh.
+    await Promise.all([setBiometricUnlockEnabled(false), markFingerprintOffered(false)]);
+    set({ isAuthenticated: false, user: null, onboarding: null, locked: false, offerFingerprint: false });
     // A shared handset: the next person to sign in must not glimpse the last
     // customer's history or inbox while their own is loading.
     useTransactionStore.setState({ transactions: [] });

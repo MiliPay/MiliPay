@@ -6,6 +6,7 @@ import { Fingerprint, Lock, ScanFace } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Toggle } from '../ds/Form';
 import { Keypad, PinDots } from '../ds/PinPad';
+import { PulseRing } from '../ds/Motion';
 import { useThemeColors } from '../../theme/useThemeColors';
 import { useAuthStore } from '../../store/useStore';
 import {
@@ -169,7 +170,7 @@ export function AuthContent({
             accessibilityLabel={`Approve with ${bioLabel.toLowerCase()}`}
             style={{ width: 120, height: 120, borderRadius: 60, backgroundColor: c.brandSoft, alignItems: 'center', justifyContent: 'center' }}
           >
-            <PulseRing colour={c.brand} active={visible} />
+            <PulseRing colour={c.brand} active={visible} radius={60} />
             <BioIcon color={c.brand} size={58} strokeWidth={1.5} />
           </Pressable>
           <Text style={{ color: c.text, fontSize: 15, fontFamily: 'Inter_600SemiBold' }}>
@@ -218,20 +219,3 @@ export function AuthContent({
   );
 }
 
-/** The prototype's `ring`: scale .8 → 1.5 while fading .6 → 0, every 1.8 s. */
-function PulseRing({ colour, active }: { colour: string; active: boolean }) {
-  const t = useSharedValue(0);
-  useEffect(() => {
-    if (!active) return;
-    t.value = 0;
-    t.value = withRepeat(withTiming(1, { duration: 1800, easing: Easing.out(Easing.ease) }), -1);
-    return () => cancelAnimation(t);
-  }, [active, t]);
-  const style = useAnimatedStyle(() => ({ opacity: 0.6 * (1 - t.value), transform: [{ scale: 0.8 + 0.7 * t.value }] }));
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, borderRadius: 60, borderWidth: 2, borderColor: colour }, style]}
-    />
-  );
-}

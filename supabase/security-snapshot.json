@@ -1709,6 +1709,11 @@
       "rls_forced": false
     },
     {
+      "name": "login_codes",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
       "name": "merchants",
       "rls_enabled": true,
       "rls_forced": false

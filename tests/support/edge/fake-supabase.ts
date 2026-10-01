@@ -173,6 +173,12 @@ export class FakeSupabase {
   readonly authUpdates: { id: string; attributes: Record<string, unknown> }[] = [];
   /** Make auth.admin.updateUserById fail with this message. */
   authUpdateError: string | null = null;
+  /** Sign-in identities, for auth.admin.getUserById / listUsers. */
+  readonly authUsers = new Map<string, { id: string; email?: string | null; phone?: string | null }>();
+  /** auth.admin.generateLink calls, in order. */
+  readonly generatedLinks: { type: string; email: string; token: string }[] = [];
+  /** auth.admin.createUser calls, in order. */
+  readonly createdUsers: { id: string; attributes: Record<string, unknown> }[] = [];
 
   readonly auth = {
     getUser: async (token: string) => {
@@ -187,6 +193,23 @@ export class FakeSupabase {
         this.authUpdates.push({ id, attributes });
         return { data: { user: { id, ...attributes } }, error: null };
       },
+      getUserById: async (id: string) => {
+        const user = this.authUsers.get(id);
+        return user ? { data: { user }, error: null } : { data: { user: null }, error: { message: "User not found" } };
+      },
+      /** Records the link and answers with a one-time token, as GoTrue does; nothing is emailed. */
+      generateLink: async (params: { type: string; email: string }) => {
+        const token = `token-for-${params.email}-${this.generatedLinks.length + 1}`;
+        this.generatedLinks.push({ ...params, token });
+        return { data: { properties: { hashed_token: token }, user: null }, error: null };
+      },
+      createUser: async (attributes: Record<string, unknown>) => {
+        const id = `auth-${this.createdUsers.length + 1}`;
+        this.createdUsers.push({ id, attributes });
+        this.authUsers.set(id, { id, email: (attributes.email as string) ?? null });
+        return { data: { user: { id, ...attributes } }, error: null };
+      },
+      listUsers: async () => ({ data: { users: [...this.authUsers.values()] }, error: null }),
     },
   };
 

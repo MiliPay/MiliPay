@@ -298,9 +298,9 @@ export async function verifyCustomerIdentity(params: {
 
 export interface ApprovalResult {
   success: boolean;
-  /** Whether the one-time password reached the customer. */
+  /** Whether the "you are verified" message reached the customer. */
   delivered: boolean;
-  deliveryChannel: "whatsapp" | "sms" | null;
+  deliveryChannel: "whatsapp" | "sms" | "email" | null;
   message: string;
 }
 
@@ -334,24 +334,24 @@ export async function approveCustomer(customerId: string): Promise<ApprovalResul
   };
 }
 
-/** Reissue a fresh one-time password for a customer who never received theirs. */
+/** Send the "you are verified, log in with your phone number" message again. No password is involved. */
 export async function resendCustomerCredentials(customerId: string): Promise<ApprovalResult> {
   const { data, error } = await supabase.functions.invoke("approve-customer", {
     body: { customerId, action: "resend" },
   });
 
   if (error) {
-    throw new Error(await readFunctionError(error, "Failed to resend credentials."));
+    throw new Error(await readFunctionError(error, "Failed to resend the message."));
   }
   if (!data?.success) {
-    throw new Error(data?.error || "Failed to resend credentials.");
+    throw new Error(data?.error || "Failed to resend the message.");
   }
 
   return {
     success: true,
     delivered: Boolean(data.delivered),
     deliveryChannel: data.deliveryChannel ?? null,
-    message: data.message ?? "Credentials resent.",
+    message: data.message ?? "Message sent again.",
   };
 }
 

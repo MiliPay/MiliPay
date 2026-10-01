@@ -8,11 +8,8 @@ import {
   requireCaller,
   requireStaffRole,
 } from "../_shared/auth.ts";
-import {
-  credentialMessage,
-  dispatchCredential,
-  generateTempPassword,
-} from "../_shared/notify.ts";
+import { dispatchEverywhere, sendEmail } from "../_shared/notify.ts";
+import { verifiedEmailSubject, verifiedEmailText, verifiedNotice } from "../_shared/login-code.ts";
 
 /**
  * Administrator approval of a pending enrolment.
@@ -27,8 +24,13 @@ import {
  *      It now goes to the customer's phone and nowhere else.
  *   3. Passwords came from Math.random(). They now come from crypto.
  *
- * `action: "resend"` reissues a fresh password for a customer who never
- * received theirs, which is the only reason an administrator needed to see it.
+ * `action: "resend"` sends the verified message again.
+ *
+ * No password is issued any more (redesign phase 6). Approval creates the
+ * customer's sign-in identity with no password at all and tells them, by SMS,
+ * WhatsApp and email, that they are verified. They log in with their phone
+ * number and a one-time SMS code (the login-code function), then create their
+ * own password and PIN. Nothing secret travels in these messages.
  */
 
 const bodySchema = z.object({
@@ -76,7 +78,7 @@ serve(handler(async (req) => {
   if (action === "approve" && customer.status !== "pending") {
     throw new ApiError(
       `This enrolment is already ${customer.status} and cannot be approved again. ` +
-        "Use Resend credentials if the customer never received their password.",
+        "Use Resend message if the customer never heard they were verified.",
       409,
       "NOT_PENDING",
     );
@@ -84,7 +86,7 @@ serve(handler(async (req) => {
 
   if (action === "resend" && customer.status !== "active") {
     throw new ApiError(
-      "Only an active customer can have their credentials resent.",
+      "Only an active customer can be sent the verified message again.",
       409,
       "NOT_ACTIVE",
     );
@@ -95,15 +97,12 @@ serve(handler(async (req) => {
   // Supabase requires an email on an admin-created user; customers log in with
   // their phone, so this is a stable internal address, not a contact channel.
   const authEmail = customer.email || `${customer.phone.replace(/\D/g, "")}@customer.milipay.ng`;
-  const tempPassword = generateTempPassword();
-
   let authUserId: string | null = customer.auth_user_id;
 
   if (!authUserId) {
     const { data: created, error: createError } = await admin.auth.admin.createUser({
       email: authEmail,
       phone,
-      password: tempPassword,
       email_confirm: true,
       phone_confirm: true,
       user_metadata: { full_name: fullName, customer_id: customer.id },
@@ -125,26 +124,31 @@ serve(handler(async (req) => {
       }
 
       authUserId = existing.id;
-      await admin.auth.admin.updateUserById(existing.id, { password: tempPassword });
     } else {
       authUserId = created.user.id;
     }
-  } else {
-    await admin.auth.admin.updateUserById(authUserId, { password: tempPassword });
   }
 
-  // Send before recording, so password_delivery_status reflects reality.
-  const dispatch = await dispatchCredential(phone, credentialMessage(fullName, tempPassword));
+  // Send before recording, so the delivery columns reflect reality. Every
+  // channel, not the first that works: the customer should hear it wherever
+  // they look. (password_delivery_* now records this notice; no password is sent.)
+  const dispatch = await dispatchEverywhere(phone, verifiedNotice(customer.first_name ?? ""));
+  const emailed = customer.email
+    ? await sendEmail(customer.email, verifiedEmailSubject(), verifiedEmailText(customer.first_name ?? "", customer.phone))
+    : false;
+  const delivered = dispatch.delivered || emailed;
 
   const patch: Record<string, unknown> = {
     auth_user_id: authUserId,
-    must_change_password: true,
-    password_delivery_channel: dispatch.channel,
-    password_delivery_status: dispatch.delivered ? "delivered" : "failed",
-    password_delivered_at: dispatch.delivered ? new Date().toISOString() : null,
+    password_delivery_channel: dispatch.channel ?? (emailed ? "email" : null),
+    password_delivery_status: delivered ? "delivered" : "failed",
+    password_delivered_at: delivered ? new Date().toISOString() : null,
   };
 
   if (action === "approve") {
+    // The identity has no password: the customer creates one after their
+    // first code sign-in, and onboarding will not finish until they do.
+    patch.must_change_password = true;
     patch.status = "active";
     patch.verified_by = caller.id;
     patch.verified_at = new Date().toISOString();
@@ -166,22 +170,21 @@ serve(handler(async (req) => {
     );
   }
 
-  if (!dispatch.delivered) {
+  if (!delivered) {
     console.error(
-      `[approve-customer] credential dispatch failed for ${customerId}`,
+      `[approve-customer] verified notice not delivered for ${customerId}`,
       dispatch.attempts,
     );
   }
 
-  // The password is deliberately absent from this response.
   return json({
     success: true,
     customerId: customer.id,
     status: action === "approve" ? "active" : customer.status,
-    delivered: dispatch.delivered,
-    deliveryChannel: dispatch.channel,
-    message: dispatch.delivered
-      ? `A one-time password was sent to the customer by ${dispatch.channel}.`
-      : "The account is ready, but the password could not be delivered. Use Resend credentials.",
+    delivered,
+    deliveryChannel: dispatch.channel ?? (emailed ? "email" : null),
+    message: delivered
+      ? "The customer has been told they are verified and can log in with their phone number."
+      : "The account is ready, but the verified message could not be delivered. Use Resend message.",
   });
 }));
