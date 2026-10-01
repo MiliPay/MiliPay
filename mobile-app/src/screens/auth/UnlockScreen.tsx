@@ -22,16 +22,23 @@ const logoDark = require('../../../assets/logo-white.png');
  * unlock on. "Welcome back", the masked number, the 96 pt fingerprint button;
  * or "Log in with password", which is a real sign-in with Supabase Auth.
  * "Use another account" signs this one out and goes back to Welcome.
+ *
+ * Also the signed-out "Log in" route (PasswordLogin): the same password form,
+ * reached from "Log in with password instead" on the code screen, for when an
+ * SMS code can't be had. There it leads back to the code instead of to the
+ * fingerprint.
  */
-export default function UnlockScreen() {
+export default function UnlockScreen({ route, navigation }: any) {
+  const standalone = route?.name === 'PasswordLogin';
   const c = useThemeColors();
   const { colorScheme } = useColorScheme();
   const user = useAuthStore((s) => s.user);
   const setLocked = useAuthStore((s) => s.setLocked);
   const login = useAuthStore((s) => s.login);
   const logout = useAuthStore((s) => s.logout);
+  const prepareFingerprintOffer = useAuthStore((s) => s.prepareFingerprintOffer);
 
-  const [mode, setMode] = useState<'quick' | 'password'>('quick');
+  const [mode, setMode] = useState<'quick' | 'password'>(standalone ? 'password' : 'quick');
   const [unlocking, setUnlocking] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
   const [hint, setHint] = useState('');
@@ -59,7 +66,7 @@ export default function UnlockScreen() {
 
   // Ask straight away, as banking apps do; the button is there to try again.
   useEffect(() => {
-    if (asked.current) return;
+    if (asked.current || standalone) return;
     asked.current = true;
     void unlock();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -73,6 +80,7 @@ export default function UnlockScreen() {
     }
     setLoggingIn(true);
     try {
+      if (standalone) await prepareFingerprintOffer();
       await login(phone, password);
       // Signed in afresh: the store unlocks.
     } catch (err: any) {
@@ -185,15 +193,21 @@ export default function UnlockScreen() {
               {forgot ? (
                 <View style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: c.chip }}>
                   <Text style={{ color: c.muted, fontSize: 13, lineHeight: 19.5, fontFamily: 'Inter_400Regular' }}>
-                    You can log in with a code sent to your phone instead: tap Use another account, then "I've enrolled, log me in". If you're
-                    stuck, contact {SUPPORT_EMAIL}.
+                    {standalone
+                      ? 'You can log in with a code sent to your phone instead. '
+                      : `You can log in with a code sent to your phone instead: tap Use another account, then "I've enrolled, log me in". `}
+                    If you're stuck, contact {SUPPORT_EMAIL}.
                   </Text>
                 </View>
               ) : null}
               <View style={{ marginTop: 6 }}>
                 <Button label={loggingIn ? 'Logging in…' : 'Log in'} onPress={doLogin} />
               </View>
-              <TextButton label="Use fingerprint instead" padding={4} onPress={() => setMode('quick')} />
+              {standalone ? (
+                <TextButton label="Log in with a code instead" padding={4} onPress={() => navigation?.goBack()} />
+              ) : (
+                <TextButton label="Use fingerprint instead" padding={4} onPress={() => setMode('quick')} />
+              )}
             </ScrollView>
             <Text style={{ paddingHorizontal: 12, color: c.muted, fontSize: 12, lineHeight: 18, fontFamily: 'Inter_400Regular', textAlign: 'center' }}>
               Your password is the one you created when you first logged in to MiliPay.

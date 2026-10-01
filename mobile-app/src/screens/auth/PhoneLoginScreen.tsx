@@ -207,6 +207,11 @@ export default function PhoneLoginScreen({ navigation }: any) {
                   being checked.
                 </Text>
               </View>
+              {/* Not in the design: a way in when an SMS code can't be had
+                  (no signal, codes not configured yet). */}
+              <Tap onPress={() => navigation.navigate('PasswordLogin')} accessibilityRole="button" hitSlop={8} style={{ alignSelf: 'center' }}>
+                <Text style={{ color: c.brandText, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>Log in with password instead</Text>
+              </Tap>
             </>
           ) : (
             <>

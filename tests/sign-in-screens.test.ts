@@ -131,6 +131,15 @@ describe("wiring", () => {
     expect(client).toMatch(/supabase\.auth\.verifyOtp\(\{ token_hash: tokenHash, type: 'email' \}\)/);
   });
 
+  it("signed out, a password still gets you in when no SMS code can be had", () => {
+    const auth = read("mobile-app/src/navigation/AuthNavigator.tsx");
+    expect(auth).toMatch(/name="PasswordLogin" component=\{UnlockScreen\}/);
+    expect(read("mobile-app/src/screens/auth/PhoneLoginScreen.tsx")).toMatch(/navigation\.navigate\('PasswordLogin'\)/);
+    const unlock = read("mobile-app/src/screens/auth/UnlockScreen.tsx");
+    // That route never asks for a fingerprint it has no session for.
+    expect(unlock).toMatch(/if \(asked\.current \|\| standalone\) return;/);
+  });
+
   it("the password and PIN steps save on the server before moving on", () => {
     const pw = read("mobile-app/src/screens/auth/CreatePasswordScreen.tsx");
     expect(pw.indexOf("await changePassword(pw)")).toBeLessThan(pw.indexOf("navigation.navigate('PinSetup')"));
