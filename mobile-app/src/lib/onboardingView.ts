@@ -86,13 +86,15 @@ export function passwordValid(p: string, again: string): boolean {
 
 // ─── PIN ────────────────────────────────────────────────────────────────────
 
-export function pinCopy(confirming: boolean) {
-  return confirming
-    ? { title: 'Enter your PIN again', sub: 'Just to make sure you remember it.' }
-    : {
-        title: 'Set your 4-digit PIN',
-        sub: "You'll use it to approve payments when your palm or fingerprint isn't available.",
-      };
+export function pinCopy(confirming: boolean, signup = false) {
+  if (confirming) return { title: 'Enter your PIN again', sub: 'Just to make sure you remember it.' };
+  return {
+    title: 'Set your 4-digit PIN',
+    // A self-registered customer has no palm yet (design: signup pinSub).
+    sub: signup
+      ? "You'll use it to approve payments and unlock the app."
+      : "You'll use it to approve payments when your palm or fingerprint isn't available.",
+  };
 }
 
 export const PIN_MISMATCH = "The PINs didn't match. Start again.";
@@ -103,13 +105,13 @@ export const LOGIN_PIN_COPY = {
   sub: 'Your account is already set up. Enter your PIN to log in on this phone.',
 };
 
-// ─── Not yet enrolled ───────────────────────────────────────────────────────
+// ─── Upgrade to Tier 2 at an agent ─────────────────────────────────────────
 
 export const ENROL_STEPS = [
-  { icon: 'map-pin', colour: '#00C896', title: 'Visit a MiliPay agent', body: 'Bring your NIN. The agent records your email, home address and phone number.' },
+  { icon: 'map-pin', colour: '#00C896', title: 'Visit an agent with your NIN', body: 'Find a MiliPay agent near you and bring your NIN slip or card.' },
   { icon: 'hand', colour: '#3B82F6', title: 'Palm vein capture', body: 'The agent scans your palm veins to link your palm to your account.' },
-  { icon: 'shield-check', colour: '#A855F7', title: 'Get verified', body: "We'll tell you by email, SMS and WhatsApp when your account is verified." },
-  { icon: 'smartphone', colour: '#F97316', title: 'Log in with a code', body: 'Enter the phone number you registered with and we send you a one-time code.' },
+  { icon: 'shield-check', colour: '#A855F7', title: 'Get verified', body: "We text you when your palm is linked and you're on Tier 2." },
+  { icon: 'scan', colour: '#F97316', title: 'Pay with your palm', body: 'Pay at any MiliPay terminal with your open hand. No phone or card needed.' },
 ] as const;
 
 // ─── All set ────────────────────────────────────────────────────────────────
@@ -124,6 +126,17 @@ export function doneRows(opts: { hasPalm: boolean; fingerprint: boolean }): { la
     { label: 'Account verified', value: '' },
     { label: 'Password and PIN set', value: '' },
     ...(opts.fingerprint ? [{ label: 'Fingerprint unlock on', value: '' }] : []),
+  ];
+}
+
+/** The sign-up version's checklist (design: doneRows when signup). */
+export function signupDoneRows(fingerprint: boolean): string[] {
+  return [
+    'Phone number verified',
+    'NIN verified with NIMC',
+    'Selfie matched',
+    'Password and PIN set',
+    ...(fingerprint ? ['Fingerprint unlock on'] : []),
   ];
 }
 
@@ -148,4 +161,34 @@ export const LOCK_AFTER_MS = 5 * 60 * 1000;
 
 export function shouldLock(backgroundedAt: number | null, now: number, biometricOn: boolean): boolean {
   return biometricOn && backgroundedAt !== null && now - backgroundedAt >= LOCK_AFTER_MS;
+}
+
+// ─── Change password (Me › Security) ────────────────────────────────────────
+
+/**
+ * The checklist on Change password (design handoff, screen 9b). In a reset
+ * (code verified) there is no current password, so "Different from your
+ * current password" is left out.
+ */
+export function changePasswordRules(current: string, next: string, again: string, reset: boolean): { label: string; ok: boolean }[] {
+  const rules = [
+    { label: 'At least 8 characters', ok: next.length >= 8 },
+    { label: 'A number', ok: /\d/.test(next) },
+    { label: 'Different from your current password', ok: !!next && next !== current },
+    { label: 'Both new passwords match', ok: !!again && next === again },
+  ];
+  return reset ? rules.filter((_, i) => i !== 2) : rules;
+}
+
+/** Its 4-part bar: one segment each for length, a number, a capital, a symbol. */
+export function changePasswordStrength(next: string): { segments: number; colour: string } {
+  const score =
+    (next.length >= 8 ? 1 : 0) + (/\d/.test(next) ? 1 : 0) + (/[A-Z]/.test(next) ? 1 : 0) + (/[^A-Za-z0-9]/.test(next) ? 1 : 0);
+  return { segments: next ? score : 0, colour: score >= 3 ? '#00C896' : score === 2 ? '#FFB454' : '#FF5C5C' };
+}
+
+/** "803 123 4567" for the reset's +234 box (the design pre-fills the account's number). */
+export function resetPhoneDisplay(localPhone: string): string {
+  const d = (localPhone || '').replace(/\D/g, '').replace(/^234/, '').replace(/^0/, '');
+  return [d.slice(0, 3), d.slice(3, 6), d.slice(6, 10)].filter(Boolean).join(' ');
 }

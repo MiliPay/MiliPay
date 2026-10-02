@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Text, TextInput, View, type TextInputProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronLeft, Eye, EyeOff } from 'lucide-react-native';
+import { ChevronLeft, CircleAlert, Eye, EyeOff } from 'lucide-react-native';
 import { IconButton } from '../ds';
 import { Tap } from '../ds/Tap';
 import { useThemeColors } from '../../theme/useThemeColors';
@@ -29,30 +29,62 @@ export function OnbHeader({
   onBack,
   step,
   onSignOut,
+  signup,
 }: {
   onBack?: () => void;
   step?: 1 | 2 | 3;
   onSignOut?: () => void;
+  /** Self sign-up: these setup steps are all "Step 5 of 5", with the whole bar lit. */
+  signup?: boolean;
 }) {
   const c = useThemeColors();
+  const label = signup ? 'Step 5 of 5' : step ? `Step ${step} of 3` : null;
+  const bars = signup ? [1, 2, 3, 4, 5] : [1, 2, 3];
+  const lit = signup ? 5 : step ?? 0;
   return (
     <View>
       <View style={{ height: 42, marginTop: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         {onBack ? <IconButton icon={ChevronLeft} label="Back" onPress={onBack} /> : null}
-        {step ? <Text style={{ color: c.muted, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>{`Step ${step} of 3`}</Text> : null}
+        {label ? <Text style={{ color: c.muted, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>{label}</Text> : null}
         {onSignOut ? (
           <Tap onPress={onSignOut} accessibilityRole="button" hitSlop={10}>
             <Text style={{ color: c.muted, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>Sign out</Text>
           </Tap>
         ) : null}
       </View>
-      {step ? (
-        <View style={{ flexDirection: 'row', gap: 6, marginTop: 14 }} accessibilityElementsHidden>
-          {[1, 2, 3].map((i) => (
-            <View key={i} style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: step >= i ? c.brand : c.line }} />
-          ))}
-        </View>
-      ) : null}
+      {label ? <ProgressBar segments={bars.length} lit={lit} /> : null}
+    </View>
+  );
+}
+
+/** The 4 pt progress bar, 6 apart: the first `lit` segments in brand green. */
+export function ProgressBar({ segments, lit }: { segments: number; lit: number }) {
+  const c = useThemeColors();
+  return (
+    <View style={{ flexDirection: 'row', gap: 6, marginTop: 14 }} accessibilityElementsHidden>
+      {Array.from({ length: segments }, (_, i) => (
+        <View key={i} style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: i < lit ? c.brand : c.line }} />
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Sign-up's header (design handoff, "Header and progress"): back button,
+ * "Step N of 5", "Save & exit", then the 5-part bar.
+ */
+export function SignupHeader({ step, onBack, onSaveExit }: { step: number; onBack: () => void; onSaveExit: () => void }) {
+  const c = useThemeColors();
+  return (
+    <View>
+      <View style={{ height: 42, marginTop: 6, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <IconButton icon={ChevronLeft} label="Back" onPress={onBack} />
+        <Text style={{ flex: 1, color: c.muted, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>{`Step ${step} of 5`}</Text>
+        <Tap onPress={onSaveExit} accessibilityRole="button" hitSlop={10}>
+          <Text style={{ color: c.muted, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>Save & exit</Text>
+        </Tap>
+      </View>
+      <ProgressBar segments={5} lit={step} />
     </View>
   );
 }
@@ -70,13 +102,38 @@ export function OnbTitle({ title, sub }: { title: string; sub: string }) {
   );
 }
 
-/** The soft red box errors sit in. */
-export function ErrorBox({ message, line = 1.4 }: { message: string; line?: number }) {
+/**
+ * The soft red box errors sit in. Sign-up's version (`icon`) leads with an
+ * alert icon and can carry an underlined action ("Log in instead").
+ */
+export function ErrorBox({
+  message,
+  line = 1.4,
+  icon,
+  action,
+}: {
+  message: string;
+  line?: number;
+  icon?: boolean;
+  action?: { label: string; onPress: () => void };
+}) {
   const c = useThemeColors();
   if (!message) return null;
   return (
-    <View accessibilityLiveRegion="polite" style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: c.failSoft }}>
-      <Text style={{ color: c.fail, fontSize: 14, lineHeight: 14 * line, fontFamily: 'Inter_400Regular' }}>{message}</Text>
+    <View accessibilityLiveRegion="polite" style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: c.failSoft, gap: 6 }}>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {icon ? (
+          <View style={{ paddingTop: 1 }}>
+            <CircleAlert color={c.fail} size={16} />
+          </View>
+        ) : null}
+        <Text style={{ flex: 1, color: c.fail, fontSize: 14, lineHeight: 14 * line, fontFamily: 'Inter_400Regular' }}>{message}</Text>
+      </View>
+      {action ? (
+        <Tap onPress={action.onPress} accessibilityRole="button" hitSlop={8} style={{ marginLeft: icon ? 24 : 0, alignSelf: 'flex-start' }}>
+          <Text style={{ color: c.fail, fontSize: 14, fontFamily: 'Inter_700Bold', textDecorationLine: 'underline' }}>{action.label}</Text>
+        </Tap>
+      ) : null}
     </View>
   );
 }

@@ -19,6 +19,7 @@ export default function CreatePasswordScreen({ navigation }: any) {
   const c = useThemeColors();
   const changePassword = useAuthStore((s) => s.changePassword);
   const logout = useAuthStore((s) => s.logout);
+  const signup = useAuthStore((s) => s.onboarding?.signupSource === 'self');
 
   const [pw, setPw] = useState('');
   const [again, setAgain] = useState('');
@@ -45,7 +46,8 @@ export default function CreatePasswordScreen({ navigation }: any) {
 
   return (
     <OnbFrame>
-      <OnbHeader step={1} onSignOut={() => void logout()} />
+      {/* Sign-up's step 5 has no "Sign out" (the account was just made). */}
+      <OnbHeader step={1} signup={signup} onSignOut={signup ? undefined : () => void logout()} />
       <Enter kind="screenIn" style={{ flex: 1, marginTop: 22 }}>
         <ScrollView
           style={{ flex: 1 }}

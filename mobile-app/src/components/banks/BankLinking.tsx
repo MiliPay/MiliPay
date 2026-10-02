@@ -1,8 +1,12 @@
 import React, { createContext, useCallback, useContext, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Text, View } from 'react-native';
+import { UserX } from 'lucide-react-native';
 import { MonoProvider, useMonoConnect } from '@mono.co/connect-react-native';
 
 import { ConfirmIdentitySheet } from '../ui/ConfirmIdentitySheet';
+import { BottomSheet } from '../ds/BottomSheet';
+import { Button } from '../ds/Button';
+import { useThemeColors } from '../../theme/useThemeColors';
 import { useAuthStore, useBankStore } from '../../store/useStore';
 
 /** The prototype links at most three accounts. */
@@ -28,6 +32,8 @@ export function BankLinkingProvider({
 }) {
   const user = useAuthStore((s) => s.user);
   const linkMonoAccount = useBankStore((s) => s.linkMonoAccount);
+  // The server refused the account as not in the customer's name.
+  const [mismatch, setMismatch] = useState<{ accountName: string; customerName: string } | null>(null);
 
   // Mono records this as the identity behind the bank connection, and under
   // the Direct Debit model it is the identity a mandate is signed against. It
@@ -48,7 +54,11 @@ export function BankLinkingProvider({
       try {
         await linkMonoAccount(data.getAuthCode());
         onLinked?.();
-      } catch (err) {
+      } catch (err: any) {
+        if (err?.code === 'NAME_MISMATCH') {
+          setMismatch({ accountName: String(err.accountName ?? ''), customerName: String(err.customerName ?? '') });
+          return;
+        }
         console.error('Mono link error', err);
         Alert.alert('Could not link account', err instanceof Error ? err.message : 'Please try again.');
       }
@@ -57,13 +67,24 @@ export function BankLinkingProvider({
 
   return (
     <MonoProvider {...monoConfig}>
-      <LinkController>{children}</LinkController>
+      <LinkController mismatch={mismatch} onMismatchDone={() => setMismatch(null)}>
+        {children}
+      </LinkController>
     </MonoProvider>
   );
 }
 
-function LinkController({ children }: { children: React.ReactNode }) {
+function LinkController({
+  children,
+  mismatch,
+  onMismatchDone,
+}: {
+  children: React.ReactNode;
+  mismatch: { accountName: string; customerName: string } | null;
+  onMismatchDone: () => void;
+}) {
   const { init } = useMonoConnect();
+  const c = useThemeColors();
   const user = useAuthStore((s) => s.user);
   const accounts = useBankStore((s) => s.linkedAccounts);
   const [confirming, setConfirming] = useState(false);
@@ -105,6 +126,33 @@ function LinkController({ children }: { children: React.ReactNode }) {
         }}
         onCancel={() => setConfirming(false)}
       />
+      {/* Design: "Bank name doesn't match". The check itself is the server's
+          (link-mono-account); nothing was saved. */}
+      <BottomSheet visible={!!mismatch} onClose={onMismatchDone}>
+        <View style={{ alignItems: 'center', gap: 6, paddingTop: 6 }}>
+          <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: c.failSoft, alignItems: 'center', justifyContent: 'center' }}>
+            <UserX color={c.fail} size={28} />
+          </View>
+          <Text accessibilityRole="header" style={{ marginTop: 10, color: c.text, fontSize: 20, fontFamily: 'Inter_800ExtraBold', letterSpacing: -0.4, textAlign: 'center' }}>
+            This account isn't in your name
+          </Text>
+          <Text style={{ paddingHorizontal: 8, color: c.muted, fontSize: 14, lineHeight: 21, fontFamily: 'Inter_400Regular', textAlign: 'center' }}>
+            The name on this bank account (<Text style={{ color: c.text, fontFamily: 'Inter_700Bold' }}>{mismatch?.accountName}</Text>) doesn't
+            match your NIN name (<Text style={{ color: c.text, fontFamily: 'Inter_700Bold' }}>{mismatch?.customerName}</Text>). You can only link
+            accounts in your own name.
+          </Text>
+        </View>
+        <View style={{ gap: 10, marginTop: 20 }}>
+          <Button
+            label="Link a different account"
+            onPress={() => {
+              onMismatchDone();
+              init();
+            }}
+          />
+          <Button label="Cancel" variant="outline" onPress={onMismatchDone} />
+        </View>
+      </BottomSheet>
     </LinkContext.Provider>
   );
 }

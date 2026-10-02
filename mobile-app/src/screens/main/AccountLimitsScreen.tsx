@@ -22,6 +22,7 @@ import {
   pinCeiling,
   spentToday,
   tierStatus,
+  tierNeeds,
 } from '../../lib/limitsView';
 
 const naira0 = (n: number) => '₦' + Math.round(n).toLocaleString('en-NG');
@@ -274,7 +275,7 @@ export default function AccountLimitsScreen({ navigation }: any) {
                     </View>
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={{ color: c.text, fontSize: 15, fontFamily: 'Inter_700Bold' }}>{TIER_INFO[n].name}</Text>
-                      <Text style={{ marginTop: 2, color: c.muted, fontSize: 12, fontFamily: 'Inter_400Regular' }}>{TIER_INFO[n].needs}</Text>
+                      <Text style={{ marginTop: 2, color: c.muted, fontSize: 12, fontFamily: 'Inter_400Regular' }}>{tierNeeds(n, tier)}</Text>
                     </View>
                     <View style={{ paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, backgroundColor: current ? c.brandSoft : c.chip }}>
                       <Text style={{ color: current ? c.brandText : c.muted, fontSize: 11, fontFamily: 'Inter_700Bold' }}>{status}</Text>

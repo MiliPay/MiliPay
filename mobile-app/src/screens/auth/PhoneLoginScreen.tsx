@@ -23,12 +23,13 @@ const RESEND_GAP_MS = 30_000;
  * is already set up also asks for its PIN here, so a code on its own — say,
  * on a swapped SIM — is never enough to get in.
  */
-export default function PhoneLoginScreen({ navigation }: any) {
+export default function PhoneLoginScreen({ navigation, route }: any) {
   const c = useThemeColors();
   const prepareFingerprintOffer = useAuthStore((s) => s.prepareFingerprintOffer);
 
   const [stage, setStage] = useState<Stage>('phone');
-  const [phone, setPhone] = useState('');
+  // "Log in instead" from sign-up arrives with the number already typed.
+  const [phone, setPhone] = useState(phoneDigits(String(route?.params?.phone ?? '')));
   const [code, setCode] = useState('');
   const [pin, setPin] = useState('');
   const [requestId, setRequestId] = useState<string | null>(null);

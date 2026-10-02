@@ -17,6 +17,7 @@ import { PIN_MISMATCH, pinCopy } from '../../lib/onboardingView';
 export default function PinSetupScreen({ navigation }: any) {
   const c = useThemeColors();
   const setPinOnServer = useAuthStore((s) => s.setPin);
+  const signup = useAuthStore((s) => s.onboarding?.signupSource === 'self');
 
   const [pin, setPin] = useState('');
   const [first, setFirst] = useState('');
@@ -24,7 +25,7 @@ export default function PinSetupScreen({ navigation }: any) {
   const [shake, setShake] = useState(0);
   const [busy, setBusy] = useState(false);
 
-  const copy = pinCopy(!!first);
+  const copy = pinCopy(!!first, signup);
 
   const reject = (message: string) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
@@ -64,7 +65,7 @@ export default function PinSetupScreen({ navigation }: any) {
 
   return (
     <OnbFrame>
-      <OnbHeader step={2} />
+      <OnbHeader step={2} signup={signup} />
       <Enter kind="screenIn" style={{ flex: 1, marginTop: 22 }}>
         <OnbTitle title={copy.title} sub={copy.sub} />
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 }}>

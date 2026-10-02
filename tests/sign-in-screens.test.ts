@@ -68,12 +68,12 @@ describe("the design's words and rules", () => {
     expect(pinCopy(true)).toEqual({ title: "Enter your PIN again", sub: "Just to make sure you remember it." });
   });
 
-  it("not yet enrolled: the 4 steps", () => {
+  it("upgrade to Tier 2 at an agent: the 4 steps", () => {
     expect(ENROL_STEPS.map((s) => s.title)).toEqual([
-      "Visit a MiliPay agent",
+      "Visit an agent with your NIN",
       "Palm vein capture",
       "Get verified",
-      "Log in with a code",
+      "Pay with your palm",
     ]);
   });
 

@@ -25,10 +25,17 @@ export function capsFor(tier: number | null | undefined) {
 
 /** The prototype's tier list: what each needs, and its badge on the hero. */
 export const TIER_INFO: Record<number, { name: string; badge: string; needs: string; confirmed: string }> = {
-  1: { name: 'Basic', badge: 'Basic', needs: 'Phone number and profile', confirmed: 'Phone number and profile confirmed' },
+  // Self sign-up (design handoff, "Tier 1 across the app").
+  1: { name: 'Basic', badge: 'Basic', needs: 'Phone, NIN and selfie', confirmed: 'Phone, NIN and selfie verified' },
   2: { name: 'Biometric', badge: 'Biometric', needs: 'NIN and palm vein capture', confirmed: 'NIN and palm vein confirmed' },
   3: { name: 'Enterprise', badge: 'Enterprise', needs: 'BVN and proof of address', confirmed: 'BVN and proof of address confirmed' },
 };
+
+/** What a tier asks for, as the list shows it to someone on `current`. */
+export function tierNeeds(tier: number, current: number): string {
+  if (current === 1 && tier === 2) return 'Visit an agent with your NIN for palm capture';
+  return TIER_INFO[tier]?.needs ?? '';
+}
 
 export type TierStatus = 'Completed' | 'Current' | 'Next step' | 'Coming soon';
 

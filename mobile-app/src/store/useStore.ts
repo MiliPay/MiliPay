@@ -45,6 +45,8 @@ export interface OnboardingState {
   singleLimit: number | null;
   dailyLimit: number | null;
   status: string;
+  /** 'self': opened from the app (Tier 1); setup is then "Step 5 of 5" of sign-up. */
+  signupSource: 'agent' | 'self';
 }
 
 export interface TransactionLimits {
@@ -72,6 +74,8 @@ interface AuthState {
    * (onboarding step 4's screen) before Home.
    */
   offerFingerprint: boolean;
+  /** "Link your bank account" on the sign-up done screen: Home opens linking once. */
+  linkBankOnArrival: boolean;
   /** Before a sign-in: decide whether that offer is due on this install. */
   prepareFingerprintOffer: () => Promise<void>;
   finishFingerprintOffer: () => void;
@@ -117,6 +121,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   onboarding: null,
   locked: false,
   offerFingerprint: false,
+  linkBankOnArrival: false,
 
   setLocked: (locked) => set({ locked }),
 
@@ -399,6 +404,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           ? null
           : Number(data.dailyLimit),
         status: data?.status || 'active',
+        signupSource: data?.signupSource === 'self' ? 'self' : 'agent',
       };
 
       set({ onboarding: state });
@@ -655,7 +661,13 @@ export const useBankStore = create<BankState>((set, get) => ({
 
       if (error) throw error;
       if (data && data.success === false) {
-        throw new Error(data.error || "Unknown Edge Function Error");
+        // The reason travels with the error: NAME_MISMATCH opens the design's
+        // "This account isn't in your name" sheet, with both names.
+        throw Object.assign(new Error(data.error || "Unknown Edge Function Error"), {
+          code: data.code,
+          accountName: data.accountName,
+          customerName: data.customerName,
+        });
       }
 
       // Re-read the list from the server instead of appending the new account

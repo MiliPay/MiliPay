@@ -14,6 +14,7 @@ import SupportScreen from '../screens/main/SupportScreen';
 import SupportChatScreen from '../screens/main/SupportChatScreen';
 import AccountLimitsScreen from '../screens/main/AccountLimitsScreen';
 import ChangePinScreen from '../screens/main/ChangePinScreen';
+import ChangePasswordScreen from '../screens/main/ChangePasswordScreen';
 import QuickServiceScreen from '../screens/main/QuickServiceScreen';
 import ReceiptScreen from '../screens/main/ReceiptScreen';
 
@@ -53,6 +54,7 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen name="SupportChat" component={SupportChatScreen} />
       <SettingsStack.Screen name="AccountLimits" component={AccountLimitsScreen} />
       <SettingsStack.Screen name="ChangePin" component={ChangePinScreen} />
+      <SettingsStack.Screen name="ChangePassword" component={ChangePasswordScreen} />
     </SettingsStack.Navigator>
   );
 }

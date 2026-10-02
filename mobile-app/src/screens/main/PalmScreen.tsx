@@ -10,6 +10,7 @@ import { PAGE_PADDING, TabTitle } from '../../components/ds/Layout';
 import { Switch } from '../../components/ds';
 import { Tap } from '../../components/ds/Tap';
 import { LimitsCard } from '../../components/me/LimitsCard';
+import { AgentSheet } from '../../components/onboarding/AgentSheet';
 import { TxDetailSheet } from '../../components/activity/TxDetailSheet';
 import { useTxHelp } from '../../components/activity/useTxHelp';
 import { useThemeColors } from '../../theme/useThemeColors';
@@ -90,11 +91,18 @@ export default function PalmScreen({ navigation }: any) {
   const hasPalm = palm?.hasPalm ?? Boolean(user?.hasPalm);
   const paused = palm?.paused ?? false;
   const state = { hasPalm, paused };
-  const chip = palmChip(state);
-  const chipColours =
-    chip.tone === 'warn' ? [c.warnSoft, c.warn] : chip.tone === 'brand' ? [c.brandSoft, c.brandText] : [c.chip, c.muted];
-
   const tier = onboarding?.kycTier ?? user?.kycTier ?? 2;
+  const chip = palmChip(state, tier);
+  const chipColours =
+    chip.tone === 'gold'
+      ? ['transparent', brandFixed.goldText]
+      : chip.tone === 'warn'
+      ? [c.warnSoft, c.warn]
+      : chip.tone === 'brand'
+      ? [c.brandSoft, c.brandText]
+      : [c.chip, c.muted];
+  const [agentOpen, setAgentOpen] = useState(false);
+
   const dailyLimit = onboarding?.dailyLimit ?? capsFor(tier).maxDaily;
   const today = palmToday(palm?.spentToday ?? 0, dailyLimit);
   const enrolled = enrolledLine(palm?.enrolledAt ?? null, palm?.agentName ?? null);
@@ -141,20 +149,16 @@ export default function PalmScreen({ navigation }: any) {
         <ScrollView contentContainerStyle={{ paddingBottom: 28 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={{ paddingTop: 10, paddingHorizontal: PAGE_PADDING, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <TabTitle>Palm Pay</TabTitle>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                paddingVertical: 5,
-                paddingHorizontal: 11,
-                borderRadius: 999,
-                backgroundColor: chipColours[0],
-              }}
+            <LinearGradient
+              // Gold for Tier 1 (the design's gradient); otherwise one colour.
+              colors={chip.tone === 'gold' ? (brandFixed.gold as unknown as [string, string]) : [chipColours[0], chipColours[0]]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 5, paddingHorizontal: 11, borderRadius: 999 }}
             >
               <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: chipColours[1] }} />
               <Text style={{ color: chipColours[1], fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>{chip.label}</Text>
-            </View>
+            </LinearGradient>
           </View>
 
           {/* Hero */}
@@ -166,6 +170,54 @@ export default function PalmScreen({ navigation }: any) {
           >
             <View style={{ position: 'absolute', right: -80, bottom: -110, width: 260, height: 260, borderRadius: 130, backgroundColor: 'rgba(255,255,255,0.05)' }} />
             <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 15, lineHeight: 21.75, fontFamily: 'Inter_400Regular' }}>{palmHeroLine(state)}</Text>
+            {!hasPalm ? (
+              <>
+                {/* No palm on file (Tier 1, or not captured yet): how to add one. */}
+                <View
+                  style={{
+                    marginTop: 16,
+                    padding: 16,
+                    borderRadius: 20,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 16,
+                    backgroundColor: 'rgba(255,255,255,0.07)',
+                    borderWidth: 1,
+                    borderStyle: 'dashed',
+                    borderColor: 'rgba(255,255,255,0.22)',
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 60,
+                      height: 60,
+                      borderRadius: 30,
+                      borderWidth: 2,
+                      borderStyle: 'dashed',
+                      borderColor: 'rgba(51,224,181,0.5)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Hand color="#33E0B5" size={26} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+                    <Text style={{ color: '#FFFFFF', fontSize: 16, fontFamily: 'Inter_700Bold' }}>Palm not set up</Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 13, lineHeight: 18.2, fontFamily: 'Inter_400Regular' }}>
+                      Bring your NIN to an agent. It takes about 5 minutes.
+                    </Text>
+                  </View>
+                </View>
+                <Tap
+                  onPress={() => setAgentOpen(true)}
+                  accessibilityRole="button"
+                  style={{ marginTop: 14, minHeight: 52, borderRadius: 14, backgroundColor: '#FFFFFF', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                >
+                  <MapPin color={brandFixed.onBrand} size={18} />
+                  <Text style={{ color: brandFixed.onBrand, fontSize: 15, fontFamily: 'Inter_700Bold' }}>Find an agent</Text>
+                </Tap>
+              </>
+            ) : (
             <View
               style={{
                 marginTop: 16,
@@ -200,9 +252,11 @@ export default function PalmScreen({ navigation }: any) {
                 ) : null}
               </View>
             </View>
+            )}
           </LinearGradient>
 
-          {/* Pays from · today · pause */}
+          {/* Pays from · today · pause: only once there is a palm to pay with. */}
+          {hasPalm ? (
           <View style={cardStyle}>
             <Tap
               onPress={changeAccount}
@@ -248,6 +302,8 @@ export default function PalmScreen({ navigation }: any) {
               <Switch value={paused} onChange={togglePause} label="Pause palm payments" />
             </Tap>
           </View>
+
+          ) : null}
 
           <LimitsCard onTierDetails={() => navigation.navigate('MeTab', { screen: 'AccountLimits', initial: false })} />
 
@@ -322,6 +378,7 @@ export default function PalmScreen({ navigation }: any) {
         </ScrollView>
       </KeyboardAvoidingView>
 
+      <AgentSheet visible={agentOpen} onClose={() => setAgentOpen(false)} />
       <TxDetailSheet
         tx={selected}
         accountLabel={accountLabelFor(selected?.account_used)}

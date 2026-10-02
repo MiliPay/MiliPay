@@ -6,7 +6,7 @@ import { ChevronRight, Hand, LayoutGrid } from 'lucide-react-native';
 
 import { PressScale } from '../ds/PressScale';
 import { useThemeColors, withAlpha } from '../../theme/useThemeColors';
-import { serviceColors } from '../../theme/tokens';
+import { brandFixed, serviceColors } from '../../theme/tokens';
 import { HOME_ROW_SERVICES, SERVICE_GROUPS, SERVICE_TILES, type ServiceTile, type ServiceType } from '../../lib/services';
 
 /**
@@ -20,6 +20,7 @@ export function PalmCard({
   enrolled,
   paused = false,
   paysFrom = null,
+  tier = 2,
   onPress,
 }: {
   enrolled: boolean;
@@ -27,10 +28,19 @@ export function PalmCard({
   paused?: boolean;
   /** "GTBank ••6789", the account palm payments come from. */
   paysFrom?: string | null;
+  /** Tier 1 (self sign-up): "Palm Pay · Not set up" with a gold "Tier 1" chip. */
+  tier?: number;
   onPress: () => void;
 }) {
   const c = useThemeColors();
-  const [chipBg, chipFg] = !enrolled ? [c.chip, c.muted] : paused ? [c.warnSoft, c.warn] : [c.brandSoft, c.brandText];
+  const tier1 = tier === 1 && !enrolled;
+  const [chipBg, chipFg] = tier1
+    ? ['transparent', brandFixed.goldText]
+    : !enrolled
+    ? [c.chip, c.muted]
+    : paused
+    ? [c.warnSoft, c.warn]
+    : [c.brandSoft, c.brandText];
   return (
     <PressScale
       scaleTo={0.99}
@@ -61,8 +71,12 @@ export function PalmCard({
       </LinearGradient>
       <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={{ color: c.text, fontSize: 15, fontFamily: 'Inter_700Bold' }}>Palm Pay</Text>
-          <View
+          <Text style={{ color: c.text, fontSize: 15, fontFamily: 'Inter_700Bold' }}>{tier1 ? 'Palm Pay · Not set up' : 'Palm Pay'}</Text>
+          <LinearGradient
+            // Gold for Tier 1 (the design's gradient); otherwise one colour.
+            colors={tier1 ? (brandFixed.gold as unknown as [string, string]) : [chipBg, chipBg]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
             style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -70,17 +84,18 @@ export function PalmCard({
               paddingHorizontal: 8,
               paddingVertical: 2,
               borderRadius: 999,
-              backgroundColor: chipBg,
             }}
           >
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: chipFg }} />
             <Text style={{ color: chipFg, fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>
-              {!enrolled ? 'Not enrolled' : paused ? 'Paused' : 'Active'}
+              {tier1 ? 'Tier 1' : !enrolled ? 'Not enrolled' : paused ? 'Paused' : 'Active'}
             </Text>
-          </View>
+          </LinearGradient>
         </View>
         <Text style={{ color: c.muted, fontSize: 13, lineHeight: 17.5, fontFamily: 'Inter_400Regular' }}>
-          {!enrolled
+          {tier1
+            ? 'Visit an agent to add your palm'
+            : !enrolled
             ? 'Visit a MiliPay agent to enrol your palm.'
             : paused
             ? 'Palm payments are paused. Tap to turn them back on.'

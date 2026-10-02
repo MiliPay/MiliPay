@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Constants from 'expo-constants';
 import {
+  Check,
   ChevronRight,
   CircleHelp,
   FileText,
@@ -22,7 +23,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { useColorScheme } from 'nativewind';
 
-import { Avatar, PressScale, Segmented, SettingsGroup, SettingsRow, Switch } from '../../components/ds';
+import { Avatar, Enter, PressScale, Segmented, SettingsGroup, SettingsRow, Switch } from '../../components/ds';
 import { BankLinkingProvider, MAX_LINKED, useBankLinking } from '../../components/banks/BankLinking';
 import { LinkedBanksSheet } from '../../components/me/LinkedBanksSheet';
 import { DoneSheet } from '../../components/me/DoneSheet';
@@ -64,6 +65,16 @@ function MeContent({ navigation, route }: any) {
   const [banksOpen, setBanksOpen] = useState(false);
   const [confirmingPin, setConfirmingPin] = useState(false);
   const [pinDone, setPinDone] = useState(false);
+
+  // Back from Change password: "Password updated" for about 4 s (design).
+  const passwordUpdated = route?.params?.passwordUpdated;
+  const [pwBanner, setPwBanner] = useState(false);
+  useEffect(() => {
+    if (!passwordUpdated) return;
+    setPwBanner(true);
+    const t = setTimeout(() => setPwBanner(false), 4200);
+    return () => clearTimeout(t);
+  }, [passwordUpdated]);
 
   // Back from Change PIN with a new PIN saved.
   const pinChanged = route?.params?.pinChanged;
@@ -211,6 +222,30 @@ function MeContent({ navigation, route }: any) {
           </View>
         </View>
 
+        {pwBanner ? (
+          <Enter kind="rise" duration={300}>
+            <View
+              accessibilityLiveRegion="polite"
+              style={{
+                marginTop: 14,
+                marginHorizontal: 20,
+                paddingVertical: 12,
+                paddingHorizontal: 14,
+                borderRadius: 16,
+                backgroundColor: c.brandSoft,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+              }}
+            >
+              <Check color={c.brandText} size={18} />
+              <Text style={{ flex: 1, color: c.brandText, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>
+                Password updated. Use it next time you log in.
+              </Text>
+            </View>
+          </Enter>
+        ) : null}
+
         <PressScale
           scaleTo={0.99}
           onPress={() => navigation.navigate('ProfileSettings')}
@@ -248,7 +283,7 @@ function MeContent({ navigation, route }: any) {
             />
             <Badge
               icon={Hand}
-              label={!user?.hasPalm ? 'Palm not enrolled' : palmPaused ? 'Palm Pay paused' : 'Palm enrolled'}
+              label={!user?.hasPalm ? 'Palm not set up' : palmPaused ? 'Palm Pay paused' : 'Palm enrolled'}
               tone={!user?.hasPalm ? 'muted' : palmPaused ? 'warn' : 'brand'}
             />
           </View>
@@ -278,6 +313,13 @@ function MeContent({ navigation, route }: any) {
             sub="Used at terminals and to approve payments"
             chevron
             onPress={() => setConfirmingPin(true)}
+          />
+          <SettingsRow
+            icon={ShieldCheck}
+            label="Change password"
+            sub="Used to log in on a new phone"
+            chevron
+            onPress={() => navigation.navigate('ChangePassword')}
           />
         </SettingsGroup>
 

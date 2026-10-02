@@ -59,6 +59,15 @@ function HomeContent({ navigation }: any) {
   const { startLink } = useBankLinking();
   const card = useCardSize();
 
+  // "Link your bank account" on the sign-up done screen: open it once Home is up.
+  const linkBankOnArrival = useAuthStore((s) => s.linkBankOnArrival);
+  useEffect(() => {
+    if (!linkBankOnArrival) return;
+    useAuthStore.setState({ linkBankOnArrival: false });
+    const t = setTimeout(startLink, 400);
+    return () => clearTimeout(t);
+  }, [linkBankOnArrival, startLink]);
+
   useEffect(() => {
     if (!user?.id) return;
     void fetchAccounts(user.id);
@@ -128,6 +137,7 @@ function HomeContent({ navigation }: any) {
           enrolled={palm?.hasPalm ?? !!user?.hasPalm}
           paused={!!palm?.paused}
           paysFrom={palm?.account ? `${palm.account.bankName} ••${palm.account.last4}` : null}
+          tier={user?.kycTier}
           onPress={() => navigation.navigate('PalmTab')}
         />
 

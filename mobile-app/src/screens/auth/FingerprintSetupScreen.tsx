@@ -23,6 +23,7 @@ export default function FingerprintSetupScreen({ navigation, mode = 'onboarding'
   const c = useThemeColors();
   const setBiometricEnrolled = useAuthStore((s) => s.setBiometricEnrolled);
   const finishFingerprintOffer = useAuthStore((s) => s.finishFingerprintOffer);
+  const signup = useAuthStore((s) => s.onboarding?.signupSource === 'self');
 
   const [on, setOn] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -63,7 +64,7 @@ export default function FingerprintSetupScreen({ navigation, mode = 'onboarding'
 
   return (
     <OnbFrame>
-      {mode === 'onboarding' ? <OnbHeader step={3} /> : <View style={{ height: 48 }} />}
+      {mode === 'onboarding' ? <OnbHeader step={3} signup={signup} /> : <View style={{ height: 48 }} />}
       <Enter kind="screenIn" style={{ flex: 1, marginTop: 22 }}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
           <Tap

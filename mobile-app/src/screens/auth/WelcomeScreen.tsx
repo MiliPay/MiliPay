@@ -1,35 +1,56 @@
-import React, { useState } from 'react';
-import { Alert, Image, Text, View } from 'react-native';
-import { Hand, MapPin, ShieldCheck, Smartphone, type LucideIcon } from 'lucide-react-native';
+import React, { useCallback, useState } from 'react';
+import { Image, Text, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { Hand } from 'lucide-react-native';
 
-import { BottomSheet, Button, Enter, PulseRing } from '../../components/ds';
-import { OnbFrame, TextButton } from '../../components/onboarding/OnbParts';
-import { useThemeColors, withAlpha } from '../../theme/useThemeColors';
-import { ENROL_STEPS } from '../../lib/onboardingView';
-import { SUPPORT_EMAIL } from '../../lib/brand';
+import { Button, Enter, PulseRing } from '../../components/ds';
+import { Tap } from '../../components/ds/Tap';
+import { OnbFrame } from '../../components/onboarding/OnbParts';
+import { AgentSheet } from '../../components/onboarding/AgentSheet';
+import { useThemeColors } from '../../theme/useThemeColors';
+import { abandonSignup, loadSavedSignup, saveSignup, signupStatus, type SavedSignup } from '../../lib/signupClient';
+import { barFilled } from '../../lib/signupView';
 
 const MARK = require('../../../assets/splash-mark.png');
 
-const ICONS: Record<(typeof ENROL_STEPS)[number]['icon'], LucideIcon> = {
-  'map-pin': MapPin,
-  hand: Hand,
-  'shield-check': ShieldCheck,
-  smartphone: Smartphone,
-};
-
 /**
- * Welcome (design handoff, screen 3): the logo tile, "MiliPay", and the two
- * ways in — "I've enrolled, log me in" to sign in by SMS code, or "Not yet
- * enrolled" for how registration works.
+ * Welcome (design handoff, "Self sign-up" screen 1): the logo tile, then
+ * "Create an account" and "I already have an account", and "Have a palm?
+ * Enrol at an agent".
+ *
+ * A sign-up left half-way (its session kept on the server, the key to it in
+ * SecureStore) shows "Pick up where you left off — Step N of 5" with
+ * "Continue signing up" and "Start again".
  */
 export default function WelcomeScreen({ navigation }: any) {
   const c = useThemeColors();
-  const [enrol, setEnrol] = useState(false);
+  const [agent, setAgent] = useState(false);
+  const [resume, setResume] = useState<{ saved: SavedSignup; step: number } | null>(null);
 
-  const logIn = () => {
-    setEnrol(false);
-    navigation.navigate('PhoneLogin');
-  };
+  // Read whenever Welcome shows: "Save & exit" lands back here.
+  useFocusEffect(
+    useCallback(() => {
+      let live = true;
+      (async () => {
+        const saved = await loadSavedSignup();
+        if (!saved) return live && setResume(null);
+        const status = await signupStatus(saved);
+        if (!live) return;
+        if (status.ok && ['nin', 'selfie', 'confirm', 'addr'].includes(status.view.step)) {
+          setResume({ saved, step: status.view.stepNumber });
+        } else {
+          // Finished, in review, expired or gone: nothing to resume.
+          if (!status.ok || ['done', 'review', 'abandoned'].includes(status.ok ? status.view.step : '')) await saveSignup(null);
+          setResume(null);
+        }
+      })();
+      return () => {
+        live = false;
+      };
+    }, []),
+  );
+
+  const logIn = () => navigation.navigate('PhoneLogin');
 
   return (
     <OnbFrame>
@@ -59,81 +80,64 @@ export default function WelcomeScreen({ navigation }: any) {
           <Text style={{ color: c.muted, fontSize: 15, fontFamily: 'Inter_400Regular' }}>Payments in milliseconds</Text>
         </Enter>
       </View>
+
       <Enter kind="rise" delay={350} style={{ gap: 10 }}>
-        <Button label="I've enrolled, log me in" onPress={logIn} />
-        <Button label="Not yet enrolled" variant="outline" onPress={() => setEnrol(true)} />
+        {resume ? (
+          <>
+            <View
+              style={{
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                borderRadius: 16,
+                backgroundColor: c.card,
+                borderWidth: 1,
+                borderColor: c.cardLine,
+                boxShadow: c.shadow,
+                gap: 10,
+                marginBottom: 4,
+              }}
+            >
+              <Text style={{ color: c.text, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>
+                {`Pick up where you left off — Step ${resume.step} of 5`}
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {barFilled(resume.step - 1).map((on, i) => (
+                  <View key={i} style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: on ? c.brand : c.line }} />
+                ))}
+              </View>
+            </View>
+            <Button label="Continue signing up" onPress={() => navigation.navigate('Signup', { resume: true })} />
+            <Button label="I already have an account" variant="outline" onPress={logIn} />
+            <Tap
+              onPress={async () => {
+                await abandonSignup(resume.saved);
+                setResume(null);
+                navigation.navigate('Signup', {});
+              }}
+              accessibilityRole="button"
+              style={{ paddingTop: 6, alignItems: 'center' }}
+            >
+              <Text style={{ color: c.muted, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>Start again</Text>
+            </Tap>
+          </>
+        ) : (
+          <>
+            <Button label="Create an account" onPress={() => navigation.navigate('Signup', {})} />
+            <Button label="I already have an account" variant="outline" onPress={logIn} />
+          </>
+        )}
+        <Tap
+          onPress={() => setAgent(true)}
+          accessibilityRole="button"
+          hitSlop={6}
+          style={{ paddingTop: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+        >
+          <Hand color={c.brandText} size={16} />
+          <Text style={{ color: c.brandText, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>Have a palm? Enrol at an agent</Text>
+        </Tap>
       </Enter>
 
-      <BottomSheet visible={enrol} onClose={() => setEnrol(false)} title="Get registered in 4 steps">
-        <Text style={{ marginTop: 4, color: c.muted, fontSize: 14, lineHeight: 20.3, fontFamily: 'Inter_400Regular' }}>
-          You register in person with a MiliPay agent, so your palm is linked to you.
-        </Text>
-        <View style={{ marginTop: 18 }}>
-          {ENROL_STEPS.map((e, i) => {
-            const Icon = ICONS[e.icon];
-            const last = i === ENROL_STEPS.length - 1;
-            return (
-              <View key={e.title} style={{ flexDirection: 'row', gap: 14 }}>
-                <View style={{ alignItems: 'center' }}>
-                  <View
-                    style={{
-                      width: 42,
-                      height: 42,
-                      borderRadius: 14,
-                      backgroundColor: withAlpha(e.colour, 0.14),
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Icon color={e.colour} size={20} />
-                    <View
-                      style={{
-                        position: 'absolute',
-                        top: -5,
-                        right: -5,
-                        width: 18,
-                        height: 18,
-                        borderRadius: 9,
-                        backgroundColor: e.colour,
-                        borderWidth: 2,
-                        borderColor: c.sheet,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Text style={{ color: '#FFFFFF', fontSize: 10, fontFamily: 'Inter_800ExtraBold', lineHeight: 12 }}>{i + 1}</Text>
-                    </View>
-                  </View>
-                  {!last ? (
-                    <View style={{ flex: 1, minHeight: 10, marginVertical: 4, borderLeftWidth: 2, borderStyle: 'dashed', borderColor: c.line }} />
-                  ) : null}
-                </View>
-                <View style={{ flex: 1, paddingTop: 2, paddingBottom: 14 }}>
-                  <Text style={{ color: c.text, fontSize: 15, fontFamily: 'Inter_700Bold' }}>{e.title}</Text>
-                  <Text style={{ marginTop: 3, color: c.muted, fontSize: 13, lineHeight: 18.2, fontFamily: 'Inter_400Regular' }}>{e.body}</Text>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-        <View style={{ marginTop: 4 }}>
-          <Button
-            label="Find an agent near me"
-            icon={MapPin}
-            onPress={() =>
-              // There is no agent directory yet (agents have a state on file,
-              // no address), so this says so rather than showing a made-up map.
-              Alert.alert(
-                'Find an agent',
-                `We're putting MiliPay agents on a map. Until then, email ${SUPPORT_EMAIL} with your town and we'll point you to the nearest one.`,
-              )
-            }
-          />
-        </View>
-        <View style={{ paddingTop: 6 }}>
-          <TextButton label="My account is verified, log me in" onPress={logIn} />
-        </View>
-      </BottomSheet>
+      <AgentSheet visible={agent} onClose={() => setAgent(false)} />
     </OnbFrame>
   );
 }

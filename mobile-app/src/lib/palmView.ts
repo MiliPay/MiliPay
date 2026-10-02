@@ -33,14 +33,17 @@ export function palmFromRpc(data: any): PalmState | null {
 }
 
 /** The chip beside "Palm Pay". */
-export function palmChip(p: Pick<PalmState, 'paused' | 'hasPalm'>): { label: string; tone: 'brand' | 'warn' | 'muted' } {
-  if (!p.hasPalm) return { label: 'Not set up', tone: 'muted' };
+export function palmChip(
+  p: Pick<PalmState, 'paused' | 'hasPalm'>,
+  tier = 2,
+): { label: string; tone: 'brand' | 'warn' | 'muted' | 'gold' } {
+  if (!p.hasPalm) return tier === 1 ? { label: 'Tier 1', tone: 'gold' } : { label: 'Not set up', tone: 'muted' };
   return p.paused ? { label: 'Paused', tone: 'warn' } : { label: 'Active', tone: 'brand' };
 }
 
 /** The hero's opening line. */
 export function palmHeroLine(p: Pick<PalmState, 'paused' | 'hasPalm'>): string {
-  if (!p.hasPalm) return 'Visit a MiliPay agent to add your palm. Then pay at any MiliPay terminal with your open hand.';
+  if (!p.hasPalm) return 'You can pay bills and buy airtime and data now. To pay at MiliPay terminals with your palm, add it at an agent.';
   return p.paused
     ? 'Palm payments are paused. Terminals will decline your palm until you switch this back on.'
     : 'Pay at any MiliPay terminal with your open hand. No phone, card or PIN needed.';
