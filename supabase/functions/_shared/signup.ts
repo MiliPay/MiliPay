@@ -244,7 +244,7 @@ export function reviewSummary(payload: Record<string, any> | null, expected: { n
   };
 }
 
-export type ReviewDecision = "approve" | "retry" | "reject";
+export type ReviewDecision = "approve" | "retry" | "reject" | "agent";
 
 /** The text the customer gets after a decision. Nothing secret in it. */
 export function reviewSms(decision: ReviewDecision, reason?: string): string {
@@ -254,6 +254,14 @@ export function reviewSms(decision: ReviewDecision, reason?: string): string {
   if (decision === "retry") {
     return "Your MiliPay sign-up needs a clearer selfie. Open the MiliPay app, tap Continue signing up and take it again in good light.";
   }
+  if (decision === "agent") {
+    return "We couldn't finish checking your identity in the app. Visit any MiliPay agent with your NIN and they'll open your account in a few minutes.";
+  }
   const why = reason?.trim() ? ` Reason: ${reason.trim()}.` : "";
   return `We couldn't verify your identity for a MiliPay account.${why} If you think this is a mistake, contact support@milipay.ng.`;
+}
+
+/** The nudge for a sign-up left half-way. */
+export function reminderSms(): string {
+  return "You started opening a MiliPay account. Open the MiliPay app and tap Continue signing up to finish; it takes about two minutes.";
 }

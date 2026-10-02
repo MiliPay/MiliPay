@@ -3,7 +3,7 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3
 import { ApiError, adminClient, handler, json, requireCaller, requireStaffRole, type Caller } from "../_shared/auth.ts";
 import { recordAudit } from "../_shared/audit.ts";
 import { dispatchSms } from "../_shared/notify.ts";
-import { evaluateSmile, reviewSms, reviewSummary, type ReviewDecision } from "../_shared/signup.ts";
+import { evaluateSmile, reminderSms, reviewSms, reviewSummary, type ReviewDecision } from "../_shared/signup.ts";
 
 /**
  * Self sign-ups waiting for a person (admin portal › Customers › Sign-up
@@ -61,10 +61,16 @@ async function list(admin: SupabaseClient) {
 async function decide(admin: SupabaseClient, req: Request, caller: Caller, body: Record<string, unknown>) {
   const staffId = caller.id;
   const decision = body.decision as ReviewDecision;
-  if (!["approve", "retry", "reject"].includes(decision)) throw new ApiError("Choose approve, retry or reject.", 400, "BAD_DECISION");
+  if (!["approve", "retry", "reject", "agent"].includes(decision)) {
+    throw new ApiError("Choose approve, retry, reject or send to an agent.", 400, "BAD_DECISION");
+  }
   const id = typeof body.sessionId === "string" ? body.sessionId : "";
+  // reason: what the customer is told (rejections). note: what the reviewer
+  // checked or why — required to approve, kept on the audit log.
   const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 200) : "";
+  const note = typeof body.note === "string" ? body.note.trim().slice(0, 500) : "";
   if (decision === "reject" && reason.length < 3) throw new ApiError("Give the customer a reason.", 400, "NO_REASON");
+  if (decision === "approve" && note.length < 3) throw new ApiError("Say what you checked before approving.", 400, "NO_NOTE");
 
   const { data: s } = await admin.from(TABLE).select("*").eq("id", id).maybeSingle();
   if (!s) throw new ApiError("That sign-up was not found.", 404, "NOT_FOUND");
@@ -100,6 +106,7 @@ async function decide(admin: SupabaseClient, req: Request, caller: Caller, body:
       id_dob: f.dob ?? s.date_of_birth,
       id_photo_url: f.photoUrl,
       expires_at: new Date(Date.now() + WEEK_MS).toISOString(),
+      decision: "approved",
     };
   } else if (decision === "retry") {
     patch = {
@@ -110,9 +117,12 @@ async function decide(admin: SupabaseClient, req: Request, caller: Caller, body:
       smile_job_id: null,
       evaluated_job_id: null,
       expires_at: new Date(Date.now() + WEEK_MS).toISOString(),
+      decision: "retry",
     };
+  } else if (decision === "agent") {
+    patch = { ...reviewed, step: "abandoned", decision: "agent" };
   } else {
-    patch = { ...reviewed, step: "abandoned", review_reason: `rejected: ${reason}` };
+    patch = { ...reviewed, step: "abandoned", review_reason: `rejected: ${reason}`, decision: "rejected" };
   }
 
   // Only if it is still in review: two reviewers can't both decide.
@@ -125,10 +135,15 @@ async function decide(admin: SupabaseClient, req: Request, caller: Caller, body:
 
   await recordAudit(admin, req, caller, {
     category: "Sign-ups",
-    action: decision === "approve" ? "approved sign-up" : decision === "retry" ? "gave another selfie try to" : "rejected sign-up",
+    action: {
+      approve: "approved sign-up",
+      retry: "gave another selfie try to",
+      reject: "rejected sign-up",
+      agent: "sent sign-up to an agent",
+    }[decision],
     target: (patch.id_full_name as string | undefined) || s.id_full_name || s.phone,
     targetId: s.id,
-    reason: reason || null,
+    reason: [reason, note].filter(Boolean).join(" — ") || null,
     before: { step: "review", reason: s.review_reason },
     after: { step: patch.step },
   });
@@ -136,6 +151,34 @@ async function decide(admin: SupabaseClient, req: Request, caller: Caller, body:
   const sms = await dispatchSms(s.phone, reviewSms(decision, reason));
   if (!sms.delivered) console.error("[signup-review] customer not told", sms.attempts);
   return json({ success: true, decision, customerTold: sms.delivered });
+}
+
+/** A text to finish signing up, for one left half-way. At most once a day. */
+async function remind(admin: SupabaseClient, req: Request, caller: Caller, body: Record<string, unknown>) {
+  const id = typeof body.sessionId === "string" ? body.sessionId : "";
+  const { data: s } = await admin.from(TABLE).select("*").eq("id", id).maybeSingle();
+  if (!s) throw new ApiError("That sign-up was not found.", 404, "NOT_FOUND");
+  // Unfinished only. One the person ended themselves ("Start again") stays ended.
+  if (!["phone", "nin", "selfie", "confirm", "addr"].includes(s.step)) {
+    throw new ApiError("Only an unfinished sign-up can be reminded.", 409, "NOT_UNFINISHED");
+  }
+  if (s.reminded_at && Date.now() - Date.parse(s.reminded_at) < 24 * 3600 * 1000) {
+    throw new ApiError("They were reminded in the last 24 hours.", 429, "REMINDED_RECENTLY");
+  }
+  const sms = await dispatchSms(s.phone, reminderSms());
+  if (sms.delivered) {
+    const now = new Date().toISOString();
+    // One that ran out of time gets another week to finish.
+    await admin.from(TABLE).update({ reminded_at: now, updated_at: now, expires_at: new Date(Date.now() + WEEK_MS).toISOString() }).eq("id", s.id);
+  }
+  await recordAudit(admin, req, caller, {
+    category: "Sign-ups",
+    action: "sent sign-up reminder to",
+    target: s.id_full_name || s.phone,
+    targetId: s.id,
+    after: { delivered: sms.delivered },
+  });
+  return json({ success: true, customerTold: sms.delivered });
 }
 
 serve(handler(async (req) => {
@@ -146,5 +189,6 @@ serve(handler(async (req) => {
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   if (body.action === "list") return list(admin);
   if (body.action === "decide") return decide(admin, req, caller, body);
+  if (body.action === "remind") return remind(admin, req, caller, body);
   throw new ApiError(`Unknown action: ${String(body.action ?? "")}`, 400, "UNKNOWN_ACTION");
 }));

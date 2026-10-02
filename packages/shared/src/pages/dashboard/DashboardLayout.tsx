@@ -68,7 +68,7 @@ export default function DashboardLayout() {
       title: "Network",
       items: [
         { label: "Customers", icon: Users, to: ROUTES.customers, badge: counts.pendingCustomers, badgeTone: "warn" },
-        { label: "Sign-ups", icon: UserRoundPlus, to: ROUTES.signupReviews, badge: counts.signupReviews, badgeTone: "warn" },
+        { label: "Sign-ups", icon: UserRoundPlus, to: ROUTES.signups, badge: counts.signupReviews, badgeTone: "warn" },
         { label: "Merchants", icon: Store, to: ROUTES.merchants },
         { label: "POS terminals", icon: MonitorSmartphone, to: ROUTES.terminals, badge: counts.offlineTerminals, badgeTone: "fail" },
       ],

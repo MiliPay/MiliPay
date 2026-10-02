@@ -36,12 +36,12 @@ export interface CreatedStaffResult {
 export type CustomerStatus = "pending" | "active" | "suspended" | "rejected";
 
 export const DEFAULT_REJECTION_REASONS = [
-  "NIN Identity Mismatch: Name or Date of Birth does not match National Identity Database.",
-  "Unclear Biometric Capture: Fingerprint scan quality is below standard threshold.",
-  "Invalid Phone Number: Unable to reach customer via phone/SMS.",
-  "Incomplete Residential Address: Street number or local government area missing.",
-  "Duplicate Registration: Customer identity already exists in system.",
-  "Other Reason",
+  "NIN identity mismatch: name or date of birth does not match NIMC.",
+  "Unclear biometric capture: palm scan quality below threshold.",
+  "Invalid phone number: unable to reach customer.",
+  "Incomplete residential address.",
+  "Duplicate registration: identity already exists.",
+  "Other reason",
 ] as const;
 
 export interface Customer {

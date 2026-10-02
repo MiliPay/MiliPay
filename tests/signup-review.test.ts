@@ -125,7 +125,7 @@ describe("the list", () => {
 
 describe("decisions", () => {
   it("approve: NIMC's record becomes theirs, they go on to 'Is this you?', and they are texted", async () => {
-    const res = await call({ action: "decide", sessionId: "s-flagged", decision: "approve" });
+    const res = await call({ action: "decide", sessionId: "s-flagged", decision: "approve", note: "Selfie matches the NIMC photo" });
     expect(res.body).toMatchObject({ success: true, customerTold: true });
     expect(session("s-flagged")).toMatchObject({
       step: "confirm",
@@ -138,7 +138,7 @@ describe("decisions", () => {
   });
 
   it("approve is refused when the NIMC record is for another NIN", async () => {
-    const res = await call({ action: "decide", sessionId: "s-other", decision: "approve" });
+    const res = await call({ action: "decide", sessionId: "s-other", decision: "approve", note: "Selfie matches the NIMC photo" });
     expect(res.status).toBe(409);
     expect(res.body.code).toBe("NOTHING_TO_APPROVE");
     expect(session("s-other").step).toBe("review");
@@ -160,7 +160,7 @@ describe("decisions", () => {
 
   it("one decision per sign-up", async () => {
     await call({ action: "decide", sessionId: "s-flagged", decision: "retry" });
-    const again = await call({ action: "decide", sessionId: "s-flagged", decision: "approve" });
+    const again = await call({ action: "decide", sessionId: "s-flagged", decision: "approve", note: "Selfie matches the NIMC photo" });
     expect(again.status).toBe(409);
     expect((await call({ action: "decide", sessionId: "s-done", decision: "retry" })).status).toBe(409);
   });

@@ -265,8 +265,8 @@ function Attention({ data, onGo }: { data: DashboardData; onGo: (to: string) => 
       to: ROUTES.support,
     },
     { key: "pending", label: "Agent registrations", icon: UserCheck, tone: "warn", hint: "Awaiting KYC review", to: `${ROUTES.customers}?tab=pending` },
-    { key: "signups", label: "Sign-up reviews", icon: ScanFace, tone: "warn", hint: "Selfie failed or flagged", to: ROUTES.signupReviews },
-    { key: "mismatch", label: "Bank name mismatches", icon: Unlink, tone: "info", hint: "Last 7 days", to: ROUTES.signupReviews },
+    { key: "signups", label: "Sign-up reviews", icon: ScanFace, tone: "warn", hint: "Selfie failed or flagged", to: ROUTES.signups },
+    { key: "mismatch", label: "Bank name mismatches", icon: Unlink, tone: "info", hint: "Last 7 days", to: ROUTES.signups },
   ];
   const total = cards.reduce((n, c) => n + (Number(a[c.key]) || 0), 0);
 
@@ -380,7 +380,7 @@ function Funnel({ counts }: { counts: number[] }) {
       <div className="flex flex-wrap items-center gap-2.5">
         <h2 className="flex-1 text-[15px] font-bold">Sign-up funnel</h2>
         {conv !== null && <div className="text-xs text-muted">{conv}% of people who start open an account</div>}
-        <PanelLink to={ROUTES.signupReviews}>Sign-ups</PanelLink>
+        <PanelLink to={ROUTES.signups}>Sign-ups</PanelLink>
       </div>
       {counts[0] ? (
         <div className="mt-4 grid grid-cols-3 gap-2.5 sm:grid-cols-6">

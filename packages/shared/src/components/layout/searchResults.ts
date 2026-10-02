@@ -64,7 +64,7 @@ export function groupResults(r: SearchResult): Group[] {
       items: (r.signups ?? []).map((s) => ({
         title: s.name || s.phone,
         sub: [s.name ? s.phone : null, SIGNUP_STEP[s.step] ?? s.step].filter(Boolean).join(" · "),
-        to: ROUTES.signupReviews,
+        to: `${ROUTES.signups}?id=${encodeURIComponent(s.id)}`,
       })),
     },
     {

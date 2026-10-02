@@ -1,493 +1,213 @@
-import { useState, useEffect, useCallback } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { DataTable, type Column } from "@milipay/shared/components/ui/DataTable";
-import { SearchInput } from "@milipay/shared/components/ui/SearchInput";
-import { FilterChips } from "@milipay/shared/components/ui/FilterChips";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { ChevronLeft, ChevronRight, Hand, ScanFace, Search, UserPlus } from "lucide-react";
+import clsx from "clsx";
+import { Tabs, ToolbarSearch } from "@milipay/shared/components/ui/Tabs";
 import { StatusBadge } from "@milipay/shared/components/ui/StatusBadge";
-import { Button } from "@milipay/shared/components/ui/Button";
-import { Modal } from "@milipay/shared/components/ui/Modal";
-import { Input } from "@milipay/shared/components/ui/Input";
-import { 
-  fetchCustomers, 
-  deleteCustomer, 
-  approveCustomer, 
-  rejectCustomer, 
-  fetchPendingCustomerCount 
-} from "@milipay/shared/features/customers/api";
-import { formatDate } from "@milipay/shared/lib/utils/format";
-import { 
-  DEFAULT_REJECTION_REASONS,
-  type Customer, 
-  type CustomerStatus, 
-  type PaginatedResult 
-} from "@milipay/shared/types";
 import { useAuth } from "@milipay/shared/features/auth/AuthContext";
-import { Trash2, AlertTriangle, CheckCircle, XCircle, Smartphone, ShieldCheck, UserCheck, ScanFace } from "lucide-react";
+import { fetchStaffCustomers, type CustomerList, type CustomerRow, type CustomerTab } from "@milipay/shared/features/customers/admin";
 import { ROUTES } from "@milipay/shared/lib/constants";
+import { initials } from "@milipay/shared/lib/utils/format";
+
+/**
+ * Customers (design handoff, admin "Customers"): tabs by status with counts,
+ * including Tier 1 without a palm; search by name, phone or the last 4 of the
+ * NIN; 20 a page. Shared by the admin, support and agent portals — agents see
+ * only the people they registered, and only admins see "Register customer".
+ */
+
+const PER_PAGE = 20;
+const TABS: { id: CustomerTab; label: string; hot?: boolean }[] = [
+  { id: "all", label: "All" },
+  { id: "pending", label: "Pending review", hot: true },
+  { id: "active", label: "Active" },
+  { id: "tier1", label: "Tier 1 · no palm" },
+  { id: "suspended", label: "Suspended" },
+  { id: "rejected", label: "Rejected" },
+];
+const COLS = "grid grid-cols-[minmax(0,1.6fr)_90px_90px_80px_90px_70px_130px_minmax(0,1fr)_90px] gap-3.5";
+
+/** The detail path in whichever portal this list is showing in. */
+export function customerPath(pathname: string, id: string): string {
+  return pathname.startsWith("/dashboard/") ? ROUTES.customerDetails.replace(":id", id) : `/customers/${id}`;
+}
+
+const joined = (iso: string) => {
+  const d = new Date(iso);
+  const day = (x: Date) => new Intl.DateTimeFormat("en-GB", { dateStyle: "short", timeZone: "Africa/Lagos" }).format(x);
+  return day(d) === day(new Date()) ? "Today" : new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Lagos" }).format(d);
+};
 
 export default function CustomersPage() {
-  const [data, setData] = useState<PaginatedResult<Customer> | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<CustomerStatus | "all">("all");
-  const [pendingCount, setPendingCount] = useState(0);
-  const navigate = useNavigate();
-  const location = useLocation();
   const { user } = useAuth();
-
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const [params, setParams] = useSearchParams();
   const isAdmin = user?.role === "admin" || user?.role === "super_admin";
-
-  // Deletion state
-  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  // Approval state
-  const [customerToApprove, setCustomerToApprove] = useState<Customer | null>(null);
-  const [isApproving, setIsApproving] = useState(false);
-  const [approvalError, setApprovalError] = useState<string | null>(null);
-
-  // Rejection state
-  const [customerToReject, setCustomerToReject] = useState<Customer | null>(null);
-  const [rejectReason, setRejectReason] = useState<string>(DEFAULT_REJECTION_REASONS[0]);
-  const [isRejecting, setIsRejecting] = useState(false);
-  const [rejectError, setRejectError] = useState<string | null>(null);
-
-  const agentId = user?.role === 'agent' ? user.id : undefined;
-
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [result, count] = await Promise.all([
-        fetchCustomers({ 
-          page, 
-          pageSize: 10, 
-          search, 
-          status: statusFilter === "all" ? "" : statusFilter,
-          registeredBy: agentId 
-        }),
-        fetchPendingCustomerCount(agentId)
-      ]);
-      setData(result);
-      setPendingCount(count);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [page, search, statusFilter, agentId]);
+  const tab = (TABS.some((t) => t.id === params.get("tab")) ? params.get("tab") : "all") as CustomerTab;
+  const [q, setQ] = useState("");
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(0);
+  const [data, setData] = useState<CustomerList | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    const t = setTimeout(() => {
+      setQuery(q.trim());
+      setPage(0);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [q]);
 
-  const handleConfirmDelete = async () => {
-    if (!isAdmin || !customerToDelete) return;
-    setIsDeleting(true);
-    setDeleteError(null);
+  const load = useCallback(async () => {
     try {
-      await deleteCustomer(customerToDelete.id);
-      setCustomerToDelete(null);
-      loadData();
-    } catch (err: any) {
-      setDeleteError(err.message || "Failed to delete customer");
-    } finally {
-      setIsDeleting(false);
+      setData(await fetchStaffCustomers({ tab, q: query, offset: page * PER_PAGE, limit: PER_PAGE }));
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load customers.");
     }
+  }, [tab, query, page]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const setTab = (t: CustomerTab) => {
+    setPage(0);
+    setParams(t === "all" ? {} : { tab: t }, { replace: true });
   };
 
-  const handleConfirmApprove = async () => {
-    if (!isAdmin || !customerToApprove) return;
-    setIsApproving(true);
-    setApprovalError(null);
-    try {
-      await approveCustomer(customerToApprove.id);
-      setCustomerToApprove(null);
-      loadData();
-    } catch (err: any) {
-      setApprovalError(err.message || "Failed to approve customer");
-    } finally {
-      setIsApproving(false);
-    }
-  };
-
-  const handleConfirmReject = async () => {
-    if (!isAdmin || !customerToReject) return;
-    setIsRejecting(true);
-    setRejectError(null);
-    try {
-      await rejectCustomer(customerToReject.id, rejectReason);
-      setCustomerToReject(null);
-      setRejectReason(DEFAULT_REJECTION_REASONS[0]);
-      loadData();
-    } catch (err: any) {
-      setRejectError(err.message || "Failed to reject customer");
-    } finally {
-      setIsRejecting(false);
-    }
-  };
-
-  const columns: Column<Customer>[] = [
-    {
-      key: "name",
-      header: "Customer",
-      render: (row) => (
-        <div>
-          <span className="text-sm font-medium text-ink block">{row.fullName}</span>
-          <span className="text-xs text-ink-muted">NIN: ••••{row.ninLast4}</span>
-        </div>
-      ),
-    },
-    {
-      key: "phone",
-      header: "Phone",
-      render: (row) => <span className="font-data text-sm text-ink-muted">{row.phone}</span>,
-    },
-    {
-      key: "enrolled_by",
-      header: "Enrolled By",
-      render: (row) => (
-        row.registeredByName ? (
-          <div>
-            <span className="text-xs font-medium text-white block">{row.registeredByName}</span>
-            <span className="text-[10px] text-signal-bright uppercase font-semibold flex items-center gap-1">
-              <UserCheck className="w-3 h-3" />
-              {row.registeredByRole || "Agent"} {row.registeredByState ? `• ${row.registeredByState}` : ""}
-            </span>
-          </div>
-        ) : (
-          <span className="text-xs text-ink-muted italic">Direct Admin</span>
-        )
-      ),
-    },
-    {
-      key: "state",
-      header: "Territory / State",
-      render: (row) => <span className="text-sm text-ink-muted">{row.state}</span>,
-    },
-    {
-      key: "status",
-      header: "KYC Status",
-      render: (row) => (
-        <div className="space-y-0.5">
-          <StatusBadge status={row.status} />
-          {row.status === "rejected" && row.rejectionReason && (
-            <p className="text-[10px] text-status-fail line-clamp-1 max-w-[160px]" title={row.rejectionReason}>
-              {row.rejectionReason}
-            </p>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: "registered",
-      header: "Registered",
-      render: (row) => <span className="text-sm text-ink-faint">{formatDate(row.createdAt)}</span>,
-    },
-    {
-      key: "actions",
-      header: "Actions",
-      render: (row) => (
-        isAdmin ? (
-          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-            {row.status === "pending" && (
-              <>
-                <button
-                  onClick={() => {
-                    setCustomerToApprove(row);
-                    setApprovalError(null);
-                  }}
-                  className="p-1.5 rounded-lg text-status-ok hover:bg-status-ok/10 transition-colors"
-                  title="Approve & Send SMS Password"
-                >
-                  <CheckCircle className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => {
-                    setCustomerToReject(row);
-                    setRejectReason(DEFAULT_REJECTION_REASONS[0]);
-                    setRejectError(null);
-                  }}
-                  className="p-1.5 rounded-lg text-status-warn hover:bg-status-warn/10 transition-colors"
-                  title="Reject Enrollment"
-                >
-                  <XCircle className="w-4 h-4" />
-                </button>
-              </>
-            )}
-            <button
-              onClick={() => {
-                setCustomerToDelete(row);
-                setDeleteError(null);
-              }}
-              className="p-1.5 rounded-lg text-status-fail hover:bg-status-fail/10 transition-colors"
-              title="Delete Customer"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        ) : (
-          <span className="text-ink-faint text-xs">—</span>
-        )
-      ),
-    }
-  ];
+  const total = data?.total ?? 0;
+  const pages = Math.max(1, Math.ceil(total / PER_PAGE));
+  const subtitle =
+    user?.role === "agent"
+      ? "The people you've registered. New registrations wait for a KYC review before they can pay."
+      : "Everyone with a MiliPay account. Self sign-ups start on Tier 1; agent registrations need a KYC review before they can pay.";
 
   return (
-    <div className="p-4 sm:p-6 md:p-10 max-w-6xl mx-auto animate-rise-in">
-      <div className="mb-6 sm:mb-8">
-        <h1 className="text-xl sm:text-2xl font-display font-bold text-ink">
-          {user?.role === "agent" ? "Your Enrolled Customers" : "Customer KYC & Verification"}
-        </h1>
-        <p className="text-ink-muted mt-1 text-xs sm:text-sm">
-          {user?.role === "agent" 
-            ? "Track and manage identity verification for customers you have enrolled." 
-            : "Manage biometric identity enrollments and customer verifications."}
-        </p>
-      </div>
-
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 mb-6">
-        <div className="w-full lg:w-80">
-          <SearchInput 
-            onSearch={(val) => { setSearch(val); setPage(1); }} 
-            placeholder="Search by name or phone..." 
-          />
+    <div className="flex max-w-[1480px] animate-fade-in flex-col gap-[18px] p-4 sm:p-7">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-[260px] flex-1">
+          <h1 className="text-2xl font-bold tracking-[-.02em]">Customers</h1>
+          <div className="mt-1 text-muted">{subtitle}</div>
         </div>
-        {isAdmin ? (
-          <Button variant="secondary" size="sm" onClick={() => navigate(ROUTES.signupReviews)}>
-            <ScanFace className="h-4 w-4" /> Sign-up reviews
-          </Button>
-        ) : null}
-        <FilterChips
-          options={[
-            { label: "All Customers", value: "all" },
-            { 
-              label: pendingCount > 0 ? `Pending Verification (${pendingCount})` : "Pending Verification", 
-              value: "pending" 
-            },
-            { label: "Active", value: "active" },
-            { label: "Rejected", value: "rejected" },
-            { label: "Suspended", value: "suspended" },
-          ]}
-          selected={statusFilter}
-          onChange={(val) => { setStatusFilter(val as CustomerStatus | "all"); setPage(1); }}
-        />
+        {isAdmin && (
+          <Link
+            to={ROUTES.registerCustomer}
+            className="flex h-[38px] items-center gap-2 rounded-[10px] bg-brand px-3.5 font-bold text-brand-ink"
+          >
+            <UserPlus size={16} aria-hidden="true" />
+            Register customer
+          </Link>
+        )}
       </div>
 
-      <DataTable
-        columns={columns}
-        data={data?.items || []}
-        isLoading={isLoading}
-        page={data?.page}
-        pageSize={10}
-        totalCount={data?.totalCount}
-        onPageChange={setPage}
-        onRowClick={(row) => {
-          const basePath = location.pathname.startsWith('/dashboard') ? '/dashboard/customers' : '/customers';
-          navigate(`${basePath}/${row.id}`);
-        }}
-        rowKey={(row) => row.id}
-        emptyMessage="No customers found matching your criteria."
-      />
+      <div className="overflow-hidden rounded-card border border-line bg-panel shadow-card">
+        <Tabs tabs={TABS.map((t) => ({ ...t, count: data?.counts[t.id] ?? null }))} value={tab} onChange={setTab} />
+        <div className="flex flex-wrap items-center gap-2.5 border-b border-line px-4 py-3">
+          <ToolbarSearch value={q} onChange={setQ} width={340} placeholder="Name, phone or last 4 of NIN" icon={<Search size={15} aria-hidden="true" />} />
+          <div className="flex-1" />
+          {data && <div className="text-[13px] text-muted">{total.toLocaleString("en-NG")} customer{total === 1 ? "" : "s"}</div>}
+        </div>
 
-      {/* Approve Customer Modal - Admin Only */}
-      {isAdmin && customerToApprove && (
-        <Modal
-          isOpen={!!customerToApprove}
-          onClose={() => {
-            if (!isApproving) setCustomerToApprove(null);
-          }}
-          title="Approve Customer & Send Verified Message"
-        >
-          <div className="space-y-4">
-            <div className="flex items-start gap-3 p-4 bg-status-ok/10 border border-status-ok/25 rounded-xl">
-              <ShieldCheck className="w-5 h-5 text-status-ok shrink-0 mt-0.5" />
-              <div className="text-sm">
-                <p className="font-semibold text-white">Verification Approval</p>
-                <p className="text-xs text-ink-muted mt-1 leading-relaxed">
-                  Approving <strong className="text-white">{customerToApprove.fullName}</strong> ({customerToApprove.phone}) will create their sign-in account and tell them by SMS, WhatsApp and email that they are verified. They log in with their phone number and a one-time code; no password is sent.
-                </p>
-              </div>
+        <div className="overflow-x-auto">
+          <div className="min-w-[1100px]">
+            <div className={clsx(COLS, "border-b border-line bg-field px-5 py-2.5 text-[11px] font-semibold uppercase tracking-[.06em] text-faint")}>
+              <div>Customer</div>
+              <div>NIN</div>
+              <div>State</div>
+              <div>Tier</div>
+              <div>Biometrics</div>
+              <div>Banks</div>
+              <div>Status</div>
+              <div>Registered by</div>
+              <div className="text-right">Joined</div>
             </div>
-
-            <div className="rounded-xl border border-white/[0.08] bg-ledger-line/50 p-4 space-y-2 text-xs">
-              <div className="flex justify-between py-1 border-b border-white/[0.05]">
-                <span className="text-ink-muted">Customer Name</span>
-                <span className="text-white font-medium">{customerToApprove.fullName}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-white/[0.05]">
-                <span className="text-ink-muted">Enrolled By</span>
-                <span className="text-signal-bright font-medium">{customerToApprove.registeredByName || "Direct Admin Enrollment"}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-white/[0.05]">
-                <span className="text-ink-muted">Phone Number (SMS Recipient)</span>
-                <span className="text-signal-bright font-data">{customerToApprove.phone}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-white/[0.05]">
-                <span className="text-ink-muted">Verified NIN</span>
-                <span className="text-white font-data">••••••••{customerToApprove.ninLast4}</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span className="text-ink-muted">Biometric Status</span>
-                <span className="text-status-ok font-medium">4 Fingers Enrolled</span>
-              </div>
-            </div>
-
-            {approvalError && (
-              <div className="p-3 bg-status-fail/10 border border-status-fail/30 rounded-lg text-xs text-status-fail">
-                {approvalError}
-              </div>
-            )}
-
-            <div className="flex justify-end gap-3 pt-3 border-t border-white/[0.05]">
-              <Button
-                variant="secondary"
-                onClick={() => setCustomerToApprove(null)}
-                disabled={isApproving}
-              >
-                Cancel
-              </Button>
-              <button
-                type="button"
-                onClick={handleConfirmApprove}
-                disabled={isApproving}
-                className="px-4 py-2 bg-status-ok hover:bg-status-ok/90 text-ledger font-semibold text-sm rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
-              >
-                <Smartphone className="w-4 h-4" />
-                {isApproving ? "Approving & Sending SMS..." : "Approve & Send SMS"}
-              </button>
-            </div>
+            {error && <div className="p-12 text-center text-fail">{error}</div>}
+            {!error && data && data.rows.length === 0 && <div className="p-12 text-center text-muted">No customers match.</div>}
+            {!error && !data && <div className="p-12 text-center text-muted">Loading…</div>}
+            {data?.rows.map((c) => (
+              <Row key={c.id} c={c} onOpen={() => navigate(customerPath(pathname, c.id))} />
+            ))}
           </div>
-        </Modal>
-      )}
+        </div>
 
-      {/* Reject Customer Modal with Standard Default Reasons - Admin Only */}
-      {isAdmin && customerToReject && (
-        <Modal
-          isOpen={!!customerToReject}
-          onClose={() => {
-            if (!isRejecting) setCustomerToReject(null);
-          }}
-          title="Reject Customer Enrollment"
-        >
-          <div className="space-y-4">
-            <p className="text-xs text-ink-muted leading-relaxed">
-              Rejecting enrollment for <strong className="text-white">{customerToReject.fullName}</strong>. Select a standard rejection reason or specify a custom reason below:
-            </p>
-
-            <div>
-              <label className="block text-[11px] font-semibold text-ink-muted uppercase tracking-wider mb-2">
-                Standard Rejection Reason (Click to select)
-              </label>
-              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                {DEFAULT_REJECTION_REASONS.map((r, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setRejectReason(r === "Other Reason" ? "" : r)}
-                    className={`w-full text-left p-2.5 rounded-lg text-xs transition-all border ${
-                      rejectReason === r 
-                        ? "bg-status-warn/20 border-status-warn text-white font-medium shadow-sm" 
-                        : "bg-white/[0.02] border-white/[0.06] text-ink-muted hover:text-ink hover:bg-white/[0.06]"
-                    }`}
-                  >
-                    {r}
-                  </button>
-                ))}
-              </div>
+        {total > PER_PAGE && (
+          <div className="flex items-center gap-2.5 px-5 py-3">
+            <div className="flex-1 text-[13px] text-muted">
+              Showing {page * PER_PAGE + 1}–{Math.min(total, page * PER_PAGE + PER_PAGE)} of {total.toLocaleString("en-NG")}
             </div>
-
-            <Input
-              label="Selected Reason / Additional Message"
-              placeholder="e.g. NIN name mismatch, unclear fingerprint capture..."
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              required
-            />
-
-            <div className="p-3 bg-ledger-line rounded-lg border border-white/[0.08] flex items-center gap-2 text-xs text-ink-muted">
-              <Smartphone className="w-4 h-4 text-signal-bright shrink-0" />
-              <span>
-                An SMS with this rejection explanation will be dispatched to <strong className="text-white">{customerToReject.phone}</strong>.
-              </span>
-            </div>
-
-            {rejectError && (
-              <div className="p-3 bg-status-fail/10 border border-status-fail/30 rounded-lg text-xs text-status-fail">
-                {rejectError}
-              </div>
-            )}
-
-            <div className="flex justify-end gap-3 pt-3 border-t border-white/[0.05]">
-              <Button
-                variant="secondary"
-                onClick={() => setCustomerToReject(null)}
-                disabled={isRejecting}
-              >
-                Cancel
-              </Button>
-              <button
-                type="button"
-                onClick={handleConfirmReject}
-                disabled={isRejecting || !rejectReason.trim()}
-                className="px-4 py-2 bg-status-warn hover:bg-status-warn/90 text-ledger font-semibold text-sm rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
-              >
-                <XCircle className="w-4 h-4" />
-                {isRejecting ? "Rejecting & Sending SMS..." : "Confirm Rejection & Send SMS"}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setPage(page - 1)}
+              disabled={page === 0}
+              className="flex h-8 items-center gap-1 rounded-lg border border-line px-3 text-[13px] font-semibold disabled:opacity-40"
+            >
+              <ChevronLeft size={15} aria-hidden="true" />
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage(page + 1)}
+              disabled={page >= pages - 1}
+              className="flex h-8 items-center gap-1 rounded-lg border border-line px-3 text-[13px] font-semibold disabled:opacity-40"
+            >
+              Next
+              <ChevronRight size={15} aria-hidden="true" />
+            </button>
           </div>
-        </Modal>
-      )}
-
-      {/* Delete Customer Confirmation Modal - Admin Only */}
-      {isAdmin && customerToDelete && (
-        <Modal
-          isOpen={!!customerToDelete}
-          onClose={() => {
-            if (!isDeleting) setCustomerToDelete(null);
-          }}
-          title="Delete Customer Account"
-        >
-          <div className="space-y-4">
-            <div className="flex items-start gap-3 p-4 bg-status-fail/10 border border-status-fail/25 rounded-xl">
-              <AlertTriangle className="w-5 h-5 text-status-fail shrink-0 mt-0.5" />
-              <div className="text-sm">
-                <p className="font-semibold text-white">Permanent Deletion Warning</p>
-                <p className="text-xs text-ink-muted mt-1 leading-relaxed">
-                  Are you sure you want to delete <strong className="text-white">{customerToDelete.fullName}</strong> ({customerToDelete.phone})? 
-                  This will permanently wipe their customer record, biometric templates, and linked bank accounts.
-                </p>
-              </div>
-            </div>
-
-            {deleteError && (
-              <div className="p-3 bg-status-fail/10 border border-status-fail/30 rounded-lg text-xs text-status-fail">
-                {deleteError}
-              </div>
-            )}
-
-            <div className="flex justify-end gap-3 pt-3 border-t border-white/[0.05]">
-              <Button
-                variant="secondary"
-                onClick={() => setCustomerToDelete(null)}
-                disabled={isDeleting}
-              >
-                Cancel
-              </Button>
-              <button
-                type="button"
-                onClick={handleConfirmDelete}
-                disabled={isDeleting}
-              >
-                <Trash2 className="w-4 h-4" />
-                {isDeleting ? "Deleting..." : "Permanently Delete"}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+        )}
+      </div>
     </div>
+  );
+}
+
+function Row({ c, onOpen }: { c: CustomerRow; onOpen: () => void }) {
+  const self = c.source === "self";
+  return (
+    <button type="button" onClick={onOpen} className={clsx(COLS, "h-14 w-full items-center border-b border-line2 px-5 text-left hover:bg-hover")}>
+      <div className="flex min-w-0 items-center gap-2.5">
+        <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-brand-soft text-[11px] font-bold text-brand-text">
+          {initials(c.name) || "?"}
+        </div>
+        <div className="min-w-0">
+          <div className="truncate font-semibold">{c.name || "No name yet"}</div>
+          <div className="font-mono text-xs text-muted">{c.phone}</div>
+        </div>
+      </div>
+      <div className="font-mono text-[12.5px] text-muted">{c.ninLast4 ? `••${c.ninLast4}` : "—"}</div>
+      <div className="truncate text-muted">{c.state || "—"}</div>
+      <div>
+        <span className="inline-flex rounded-md bg-chip px-2 py-0.5 text-xs font-semibold text-muted">Tier {c.tier ?? "—"}</span>
+      </div>
+      <div className="flex gap-1.5">
+        <Bio on={c.palm} title={c.palm ? "Palm vein on file" : "No palm"} icon={<Hand size={14} />} />
+        <Bio on={c.face} title={c.face ? "Face on file" : "No face"} icon={<ScanFace size={14} />} />
+      </div>
+      <div className="tabular-nums text-muted">{c.banks}</div>
+      <div>
+        <StatusBadge status={c.status} />
+      </div>
+      <div className="min-w-0 truncate text-[13px]">
+        {self ? (
+          <>
+            Self sign-up <span className="text-faint">· App</span>
+          </>
+        ) : (
+          <>
+            {c.registeredBy || "—"} {c.registeredState && <span className="text-faint">· {c.registeredState}</span>}
+          </>
+        )}
+      </div>
+      <div className="text-right text-[13px] text-muted">{joined(c.createdAt)}</div>
+    </button>
+  );
+}
+
+function Bio({ on, title, icon }: { on: boolean; title: string; icon: ReactNode }) {
+  return (
+    <span title={title} aria-label={title} className={clsx("flex h-[26px] w-[26px] items-center justify-center rounded-[7px]", on ? "bg-brand-soft text-brand-text" : "bg-chip text-faint")}>
+      {icon}
+    </span>
   );
 }

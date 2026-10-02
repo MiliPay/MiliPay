@@ -37,6 +37,8 @@ import { verifiedEmailSubject, verifiedEmailText, verifiedNotice } from "../_sha
 const bodySchema = z.object({
   customerId: z.string().uuid(),
   action: z.enum(["approve", "resend"]).default("approve"),
+  /** Optional: what the reviewer checked. Kept on the audit log. */
+  note: z.string().trim().max(500).optional(),
 });
 
 function normaliseNigerianPhone(phone: string): string {
@@ -178,6 +180,7 @@ serve(handler(async (req) => {
     targetId: customer.id,
     before: action === "approve" ? { status: customer.status } : null,
     after: action === "approve" ? { status: "active" } : { delivered },
+    reason: parsed.data.note || null,
   });
 
   if (!delivered) {

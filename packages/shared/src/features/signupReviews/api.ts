@@ -29,7 +29,7 @@ export interface SignupReview {
   smile: SignupReviewSmile | null;
 }
 
-export type ReviewDecision = "approve" | "retry" | "reject";
+export type ReviewDecision = "approve" | "retry" | "reject" | "agent";
 
 async function readError(error: unknown, fallback: string): Promise<string> {
   const context = (error as { context?: Response })?.context;
@@ -55,12 +55,21 @@ export async function decideSignupReview(
   sessionId: string,
   decision: ReviewDecision,
   reason?: string,
+  note?: string,
 ): Promise<{ customerTold: boolean }> {
   const { data, error } = await supabase.functions.invoke("signup-review", {
-    body: { action: "decide", sessionId, decision, reason },
+    body: { action: "decide", sessionId, decision, reason, note },
   });
   if (error) throw new Error(await readError(error, "Could not save the decision."));
   if (!data?.success) throw new Error(data?.error || "Could not save the decision.");
+  return { customerTold: Boolean(data.customerTold) };
+}
+
+/** Text an unfinished sign-up to finish. At most once a day. */
+export async function remindSignup(sessionId: string): Promise<{ customerTold: boolean }> {
+  const { data, error } = await supabase.functions.invoke("signup-review", { body: { action: "remind", sessionId } });
+  if (error) throw new Error(await readError(error, "Could not send the reminder."));
+  if (!data?.success) throw new Error(data?.error || "Could not send the reminder.");
   return { customerTold: Boolean(data.customerTold) };
 }
 

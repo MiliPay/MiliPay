@@ -314,9 +314,9 @@ export interface ApprovalResult {
  * or direct-table fallback — a fallback that only flipped `status` used to
  * report the literal "Password12$" as the customer's password.
  */
-export async function approveCustomer(customerId: string): Promise<ApprovalResult> {
+export async function approveCustomer(customerId: string, note?: string): Promise<ApprovalResult> {
   const { data, error } = await supabase.functions.invoke("approve-customer", {
-    body: { customerId, action: "approve" },
+    body: { customerId, action: "approve", note: note || undefined },
   });
 
   if (error) {

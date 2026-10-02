@@ -13,6 +13,7 @@ export const ROUTES = {
   customers: "/dashboard/customers",
   customerDetails: "/dashboard/customers/:id",
   signupReviews: "/dashboard/customers/signup-reviews",
+  signups: "/dashboard/signups",
   transactions: "/dashboard/transactions",
   transactionDetails: "/dashboard/transactions/:id",
   register: "/dashboard/register",
