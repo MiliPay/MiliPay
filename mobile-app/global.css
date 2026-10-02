@@ -23,7 +23,7 @@
   --mp-input: #F4F7F6;
   --mp-text: #0B1A15;
   --mp-muted: #56695F;
-  --mp-faint: #8A9C95;
+  --mp-faint: #64716C; /* design: #8A9C95, darkened for 4.5:1 contrast */
   --mp-brand: #00C896;
   --mp-brand-text: #0A6650;
   --mp-brand-soft: rgba(0, 200, 150, 0.12);
@@ -45,7 +45,7 @@
   --mp-input: #16211D;
   --mp-text: #E8FFF6;
   --mp-muted: #86B3A4;
-  --mp-faint: #5E8577;
+  --mp-faint: #648E7F; /* design: #5E8577, lightened for 4.5:1 contrast */
   --mp-brand: #00C896;
   --mp-brand-text: #33E0B5;
   --mp-brand-soft: rgba(0, 200, 150, 0.16);

@@ -88,3 +88,38 @@ describe("large text", () => {
     expect(read("components/onboarding/OnbParts.tsx")).toMatch(/minHeight: 56,/);
   });
 });
+
+describe("readable text colours", () => {
+  // WCAG contrast ratio between two #RRGGBB colours.
+  const luminance = (hex: string) => {
+    const h = hex.replace("#", "");
+    const [r, g, b] = [0, 2, 4]
+      .map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+      .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a: string, b: string) => {
+    const [x, y] = [luminance(a), luminance(b)];
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+  };
+
+  it("text, muted, faint and brand text pass 4.5:1 on the page, cards and chips, in both themes", async () => {
+    const { themeColors } = await import("../mobile-app/src/theme/tokens");
+    const failures: string[] = [];
+    for (const [theme, t] of Object.entries(themeColors)) {
+      for (const fg of ["text", "muted", "faint", "brandText"] as const) {
+        for (const bg of ["bg", "card", "chip"] as const) {
+          const ratio = contrast((t as any)[fg], (t as any)[bg]);
+          if (ratio < 4.5) failures.push(`${theme} ${fg} on ${bg}: ${ratio.toFixed(2)}`);
+        }
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  it("the CSS variables say the same as the tokens", () => {
+    const css = readFileSync(join(SRC, "..", "global.css"), "utf8");
+    expect(css).toMatch(/--mp-faint: #64716C;/);
+    expect(css).toMatch(/--mp-faint: #648E7F;/);
+  });
+});

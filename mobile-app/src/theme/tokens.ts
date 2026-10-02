@@ -74,7 +74,9 @@ export const themeColors: { light: ThemeColors; dark: ThemeColors } = {
     input: '#F4F7F6',
     text: '#0B1A15',
     muted: '#56695F',
-    faint: '#8A9C95',
+    // Darkened from the design's #8A9C95 (2.6:1) to pass WCAG AA (4.5:1) on
+    // the page, cards and chips; still lighter than muted.
+    faint: '#64716C',
     brand: '#00C896',
     brandText: '#0A6650',
     brandSoft: 'rgba(0, 200, 150, 0.12)',
@@ -96,7 +98,8 @@ export const themeColors: { light: ThemeColors; dark: ThemeColors } = {
     input: '#16211D',
     text: '#E8FFF6',
     muted: '#86B3A4',
-    faint: '#5E8577',
+    // Lightened from the design's #5E8577 (4.0:1 on chips) to pass 4.5:1.
+    faint: '#648E7F',
     brand: '#00C896',
     brandText: '#33E0B5',
     brandSoft: 'rgba(0, 200, 150, 0.16)',
