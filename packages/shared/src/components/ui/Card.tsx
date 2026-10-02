@@ -5,14 +5,12 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
   raised?: boolean;
 }
 
-export function Card({ children, raised, className = "", ...props }: CardProps) {
+/** A panel: white (or dark panel) on the page colour, 18px corners. `raised`
+ *  is kept for older callers and looks the same. */
+export function Card({ children, raised: _raised, className = "", ...props }: CardProps) {
   return (
     <div
-      className={`
-        rounded-lg border border-ledger-line
-        ${raised ? "bg-ledger-raised" : "bg-white/[0.02]"}
-        ${className}
-      `}
+      className={`rounded-card border border-line bg-panel shadow-card ${className}`}
       {...props}
     >
       {children}

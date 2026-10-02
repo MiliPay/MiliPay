@@ -1,4 +1,5 @@
 import { forwardRef, type SelectHTMLAttributes } from "react";
+import { ChevronDown } from "lucide-react";
 
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
@@ -16,34 +17,37 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         {label && (
           <label
             htmlFor={selectId}
-            className="text-xs font-semibold text-ink-muted uppercase tracking-wide"
+            className="text-xs font-semibold text-muted"
           >
-            {label} {required && <span className="text-status-warn">*</span>}
+            {label} {required && <span className="text-warn">*</span>}
           </label>
         )}
-        <select
-          ref={ref}
-          id={selectId}
-          aria-invalid={Boolean(error)}
-          className={`
-            w-full rounded bg-white/[0.03] border px-4 py-3 text-[15px]
-            text-ink outline-none transition-colors appearance-none
-            focus:border-signal/60 focus:ring-1 focus:ring-signal/30
-            ${error ? "border-status-fail/60" : "border-ledger-line2"}
-            ${className}
-          `}
-          {...props}
-        >
-          <option value="" disabled className="text-ink-faint">
-            {placeholder}
-          </option>
-          {options.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
+        <div className="relative">
+          <select
+            ref={ref}
+            id={selectId}
+            aria-invalid={Boolean(error)}
+            className={`
+              w-full h-11 rounded-[10px] bg-field border pl-3 pr-10 text-sm
+            text-fg outline-none transition-colors appearance-none cursor-pointer
+              focus:border-brand
+              ${error ? "border-fail" : "border-line"}
+              ${className}
+            `}
+            {...props}
+          >
+            <option value="" disabled className="text-faint">
+              {placeholder}
             </option>
-          ))}
-        </select>
-        {error && <p className="text-xs text-status-fail">{error}</p>}
+            {options.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
+        </div>
+        {error && <p className="text-xs text-fail">{error}</p>}
       </div>
     );
   }

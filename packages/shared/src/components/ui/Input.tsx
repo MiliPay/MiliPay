@@ -16,9 +16,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="text-xs font-semibold text-ink-muted uppercase tracking-wide"
+            className="text-xs font-semibold text-muted"
           >
-            {label} {required && <span className="text-status-warn">*</span>}
+            {label} {required && <span className="text-warn">*</span>}
           </label>
         )}
         <input
@@ -27,22 +27,22 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           aria-invalid={Boolean(error)}
           aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
           className={`
-            w-full rounded bg-white/[0.03] border px-4 py-3 text-[15px]
-            text-ink placeholder-ink-faint outline-none transition-colors
-            focus:border-signal/60 focus:ring-1 focus:ring-signal/30
-            ${error ? "border-status-fail/60" : "border-ledger-line2"}
-            ${mono ? "font-data tracking-wider" : "font-body"}
+            w-full h-11 rounded-[10px] bg-field border px-3 text-sm
+            text-fg outline-none transition-colors
+            focus:border-brand
+            ${error ? "border-fail" : "border-line"}
+            ${mono ? "font-mono" : "font-body"}
             ${className}
           `}
           {...props}
         />
         {error && (
-          <p id={`${inputId}-error`} className="text-xs text-status-fail">
+          <p id={`${inputId}-error`} className="text-xs text-fail">
             {error}
           </p>
         )}
         {hint && !error && (
-          <p id={`${inputId}-hint`} className="text-xs text-ink-faint">
+          <p id={`${inputId}-hint`} className="text-xs text-muted">
             {hint}
           </p>
         )}

@@ -4,7 +4,11 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon-cropped.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      try { var t = localStorage.getItem("milipay.theme.admin"); document.documentElement.dataset.theme = t === "dark" ? "dark" : "light"; }
+      catch (e) { document.documentElement.dataset.theme = "light"; }
+    </script>
     <title>MiliPay Admin Console</title>
     <meta name="description" content="Manage registered customers and monitor transactions." />
   </head>

@@ -8,52 +8,40 @@ interface LoadingStateProps {
   className?: string;
 }
 
+/**
+ * Loading: the MiliPay mark beating (design handoff, 1.3s). Full-page loads
+ * show the mark alone on the page colour; loads inside a page show a smaller
+ * mark with the title under it. The title is always there for screen readers.
+ */
 export function LoadingState({
-  title = "Loading...",
-  description = "Please wait while we retrieve the latest information from the secure network.",
+  title = "Loading",
+  description,
   fullScreen = false,
   minHeight = "min-h-[360px]",
   className,
 }: LoadingStateProps) {
+  if (fullScreen) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className={clsx("fixed inset-0 z-[96] flex animate-fade-in items-center justify-center bg-canvas", className)}
+      >
+        <img src="/brand/splash-mark.png" alt="" className="h-[120px] w-[120px] animate-heartbeat object-contain" />
+        <span className="sr-only">{title}</span>
+      </div>
+    );
+  }
+
   return (
     <div
-      className={clsx(
-        "flex flex-col items-center justify-center p-6 text-center select-none",
-        fullScreen ? "fixed inset-0 z-50 bg-ledger" : clsx("w-full", minHeight),
-        className
-      )}
+      role="status"
+      aria-live="polite"
+      className={clsx("flex w-full select-none flex-col items-center justify-center gap-3 p-6 text-center", minHeight, className)}
     >
-      {/* Brand Holographic / Radar Pulse Container */}
-      <div className="relative flex items-center justify-center mb-6">
-        {/* Ambient Ring Glow */}
-        <div className="absolute w-20 h-20 rounded-full bg-signal/10 blur-xl animate-pulse" />
-        
-        {/* Pulsing Concentric Radar Rings */}
-        <div className="absolute w-16 h-16 rounded-full border border-signal/20 animate-ping opacity-30" />
-        <div className="absolute w-12 h-12 rounded-full border border-signal/30 animate-pulse" />
-
-        {/* Central Glowing Icon Emblem */}
-        <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-b from-ledger-raised to-ledger border border-signal/40 flex items-center justify-center shadow-[0_0_25px_rgba(var(--color-signal),0.35)]">
-          <div className="w-5 h-5 rounded-lg bg-signal/20 border border-signal/50 flex items-center justify-center">
-            <div className="w-2 h-2 rounded-full bg-signal shadow-[0_0_8px_rgba(var(--color-signal),1)]" />
-          </div>
-        </div>
-      </div>
-
-      {/* Typography */}
-      <h3 className="text-base sm:text-lg font-display font-medium text-ink tracking-tight mb-1.5">
-        {title}
-      </h3>
-      {description && (
-        <p className="text-xs sm:text-sm text-ink-muted max-w-sm leading-relaxed mb-5">
-          {description}
-        </p>
-      )}
-
-      {/* Shimmer Progress Beam */}
-      <div className="w-36 sm:w-48 h-1 bg-white/[0.05] rounded-full overflow-hidden relative">
-        <div className="absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-transparent via-signal to-transparent rounded-full animate-scan-sweep" />
-      </div>
+      <img src="/brand/splash-mark.png" alt="" className="h-14 w-14 animate-heartbeat object-contain" />
+      <div className="text-[13px] font-semibold text-muted">{title}</div>
+      {description && <div className="max-w-sm text-xs text-faint">{description}</div>}
     </div>
   );
 }

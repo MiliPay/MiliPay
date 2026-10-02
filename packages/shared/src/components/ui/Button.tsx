@@ -9,21 +9,19 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   isLoading?: boolean;
 }
 
+// Design handoff: brand fill with near-black text for the main action, a
+// bordered panel button for the rest, red text for destructive ones.
 const VARIANT_CLASSES: Record<Variant, string> = {
-  primary:
-    "bg-signal text-signal-ink hover:bg-signal-bright disabled:bg-signal-dim disabled:text-ink-faint",
-  secondary:
-    "bg-transparent text-ink border border-ledger-line2 hover:border-signal/50 hover:text-signal-bright disabled:opacity-40",
-  danger:
-    "bg-transparent text-status-fail border border-status-fail/30 hover:bg-status-fail/10 disabled:opacity-40",
-  ghost:
-    "bg-transparent text-ink-muted hover:text-ink hover:bg-white/[0.04] disabled:opacity-40",
+  primary: "bg-brand text-brand-ink font-bold hover:brightness-[.97] disabled:opacity-45",
+  secondary: "bg-panel text-fg border border-line font-semibold hover:bg-hover disabled:opacity-45",
+  danger: "bg-transparent text-fail border border-line font-semibold hover:bg-fail-soft disabled:opacity-45",
+  ghost: "bg-transparent text-muted font-semibold hover:text-fg hover:bg-hover disabled:opacity-45",
 };
 
 const SIZE_CLASSES: Record<Size, string> = {
-  sm: "text-sm px-3 py-2 gap-1.5",
-  md: "text-sm px-5 py-3 gap-2",
-  lg: "text-base px-7 py-3.5 gap-2",
+  sm: "h-[34px] px-3 text-[13px] gap-1.5 rounded-[9px]",
+  md: "h-[38px] px-3.5 text-sm gap-2 rounded-[10px]",
+  lg: "h-12 px-5 text-[15px] gap-2 rounded-xl",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -33,9 +31,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || isLoading}
         className={`
-          inline-flex items-center justify-center font-display font-semibold rounded
+          inline-flex items-center justify-center whitespace-nowrap
           transition-colors duration-150
-          focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal focus-visible:outline-offset-2
+          focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand focus-visible:outline-offset-2
           disabled:cursor-not-allowed
           ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${className}
         `}

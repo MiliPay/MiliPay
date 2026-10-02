@@ -1,26 +1,119 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Theme tokens from the portal design handoff. Light is the default; dark is
+ * `data-theme="dark"` on <html> (set before first paint by each portal's
+ * index.html, then kept by ThemeProvider). Solid colours are RGB channels so
+ * Tailwind's opacity modifiers work; the soft tints are full colours.
+ */
 @layer base {
-  body {
-    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  :root {
+    color-scheme: light;
+    --bg: 242 245 244;
+    --panel: 255 255 255;
+    --side: 255 255 255;
+    --line: 227 234 231;
+    --line2: 237 242 240;
+    --chip: 237 242 240;
+    --input: 247 249 248;
+    --hover: 244 247 246;
+    --text: 11 26 21;
+    --muted: 86 105 95;
+    --faint: 138 156 149;
+    --brand: 0 200 150;
+    --brand-text: 10 102 80;
+    --brand-soft: rgba(0, 200, 150, 0.12);
+    --warn: 168 100 0;
+    --warn-soft: rgba(255, 180, 84, 0.2);
+    --fail: 210 56 62;
+    --fail-soft: rgba(255, 92, 92, 0.12);
+    --info: 37 99 235;
+    --info-soft: rgba(59, 130, 246, 0.12);
+    --shadow: 0 1px 2px rgba(10, 40, 30, 0.04), 0 6px 20px rgba(10, 40, 30, 0.05);
+    --scrim: rgba(8, 12, 10, 0.4);
+
+    /* Screens not yet rebuilt (see tailwind.preset.js). */
+    --overlay: 11 26 21;
+    --legacy-ledger: 242 245 244;
+    --legacy-raised: 255 255 255;
+    --legacy-line: 227 234 231;
+    --legacy-line2: 227 234 231;
+    --legacy-faint: 138 156 149;
+    --legacy-info: 37 99 235;
   }
 
-  h1, h2, h3, .font-display {
-    font-family: "Space Grotesk", sans-serif;
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: 8 12 10;
+    --panel: 15 23 20;
+    --side: 11 17 15;
+    --line: 30 45 39;
+    --line2: 22 33 29;
+    --chip: 22 33 29;
+    --input: 11 17 15;
+    --hover: 19 29 25;
+    --text: 232 255 246;
+    --muted: 134 179 164;
+    --faint: 94 133 119;
+    --brand-text: 51 224 181;
+    --brand-soft: rgba(0, 200, 150, 0.16);
+    --warn: 255 180 84;
+    --warn-soft: rgba(255, 180, 84, 0.14);
+    --fail: 255 92 92;
+    --fail-soft: rgba(255, 92, 92, 0.14);
+    --info: 96 165 250;
+    --info-soft: rgba(59, 130, 246, 0.16);
+    --shadow: none;
+    --scrim: rgba(0, 0, 0, 0.6);
+
+    --overlay: 255 255 255;
+    --legacy-ledger: 8 12 10;
+    --legacy-raised: 10 31 26;
+    --legacy-line: 26 58 48;
+    --legacy-line2: 35 69 57;
+    --legacy-faint: 79 117 104;
+    --legacy-info: 59 130 246;
+  }
+
+  html,
+  body {
+    background: rgb(var(--bg));
+    color: rgb(var(--text));
+  }
+
+  body {
+    margin: 0;
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
   }
 
   .font-data {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
     letter-spacing: 0.04em;
   }
 
-  /* Custom scrollbar matching dark theme */
+  input::placeholder,
+  textarea::placeholder {
+    color: rgb(var(--faint));
+  }
+
   * {
-    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+    scrollbar-color: rgb(var(--line)) transparent;
     scrollbar-width: thin;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgb(var(--line));
+    border-radius: 10px;
+    border: 3px solid transparent;
+    background-clip: content-box;
   }
 }

@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "@milipay/shared/features/auth/AuthContext";
+import { ThemeProvider } from "@milipay/shared/lib/theme";
 import { ProtectedRoute } from "@milipay/shared/components/layout/ProtectedRoute";
 import { ROUTES } from "@milipay/shared/lib/constants";
 
@@ -29,6 +30,7 @@ import NotFoundPage from "@milipay/shared/pages/not-found/NotFoundPage";
 
 export default function App() {
   return (
+    <ThemeProvider portal="admin">
     <AuthProvider allowedRoles={["super_admin", "admin"]}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
@@ -68,5 +70,6 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+    </ThemeProvider>
   );
 }

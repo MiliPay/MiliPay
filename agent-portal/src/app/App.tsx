@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@milipay/shared/features/auth/AuthContext";
+import { ThemeProvider } from "@milipay/shared/lib/theme";
 import { ProtectedRoute } from "@milipay/shared/components/layout/ProtectedRoute";
 import { AgentLayout } from "@milipay/shared/components/layout/AgentLayout";
 import LoginPage from "@milipay/shared/pages/login/LoginPage";
@@ -16,6 +17,7 @@ import SettingsPage from "@milipay/shared/pages/settings/SettingsPage";
 
 export default function App() {
   return (
+    <ThemeProvider portal="agent" defaultTheme="dark">
     <AuthProvider allowedRoles={["agent", "super_admin"]}>
       <BrowserRouter>
         <Routes>
@@ -52,5 +54,6 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+    </ThemeProvider>
   );
 }

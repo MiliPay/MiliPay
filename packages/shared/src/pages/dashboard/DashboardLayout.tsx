@@ -1,73 +1,70 @@
-import { useState } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
 import {
-  LayoutGrid,
-  Users,
-  TrendingUp,
-  UserPlus,
-  Shield,
-  Ticket,
-  Settings,
-  Store,
-  Cpu,
   Activity,
-  ScanFace,
+  ArrowLeftRight,
+  Building2,
+  LayoutDashboard,
+  LifeBuoy,
+  MonitorSmartphone,
+  Settings,
+  Shield,
+  Store,
+  UserPlus,
+  UserRoundPlus,
+  Users,
 } from "lucide-react";
-import { Sidebar } from "@milipay/shared/components/layout/Sidebar";
-import { MobileNav } from "@milipay/shared/components/layout/MobileNav";
-import { MobileHeader, type MobileNavItem } from "@milipay/shared/components/layout/MobileHeader";
-import { LogoutModal } from "@milipay/shared/components/layout/LogoutModal";
-import { useAuth } from "@milipay/shared/features/auth/AuthContext";
+import { AppShell, ThemeToggle, type NavGroup } from "@milipay/shared/components/layout/AppShell";
+import { useAdminNavCounts } from "@milipay/shared/features/navCounts/useNavCounts";
 import { ROUTES } from "@milipay/shared/lib/constants";
 
+/** The admin console: the shared shell with the admin navigation. */
 export default function DashboardLayout() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const counts = useAdminNavCounts();
 
-  const navItems: MobileNavItem[] = [
-    { name: "Dashboard", path: ROUTES.dashboard, icon: LayoutGrid, end: true },
-    { name: "Customers", path: ROUTES.customers, icon: Users },
-    { name: "Sign-up reviews", path: ROUTES.signupReviews, icon: ScanFace },
-    { name: "Merchants", path: ROUTES.merchants, icon: Store },
-    { name: "POS terminals", path: ROUTES.terminals, icon: Cpu },
-    { name: "Transactions", path: ROUTES.transactions, icon: TrendingUp },
-    { name: "Operations", path: ROUTES.operations, icon: Activity },
-    { name: "Register", path: ROUTES.register, icon: UserPlus },
-    { name: "Staff", path: ROUTES.staff, icon: Shield },
-    { name: "Support", path: ROUTES.support, icon: Ticket },
-    { name: "Settings", path: ROUTES.settings, icon: Settings },
+  const nav: NavGroup[] = [
+    { items: [{ label: "Dashboard", icon: LayoutDashboard, to: ROUTES.dashboard, end: true }] },
+    {
+      title: "Monitor",
+      items: [
+        { label: "Transactions", icon: ArrowLeftRight, to: ROUTES.transactions },
+        { label: "Operations", icon: Activity, to: ROUTES.operations, badge: counts.operations, badgeTone: "fail" },
+      ],
+    },
+    {
+      title: "Network",
+      items: [
+        { label: "Customers", icon: Users, to: ROUTES.customers, badge: counts.pendingCustomers, badgeTone: "warn" },
+        { label: "Sign-ups", icon: UserRoundPlus, to: ROUTES.signupReviews, badge: counts.signupReviews, badgeTone: "warn" },
+        { label: "Merchants", icon: Store, to: ROUTES.merchants },
+        { label: "POS terminals", icon: MonitorSmartphone, to: ROUTES.terminals, badge: counts.offlineTerminals, badgeTone: "fail" },
+      ],
+    },
+    {
+      title: "Register",
+      items: [
+        { label: "Customer", icon: UserPlus, to: ROUTES.registerCustomer },
+        { label: "Merchant", icon: Building2, to: ROUTES.registerMerchant },
+      ],
+    },
+    {
+      title: "Team",
+      items: [
+        { label: "Staff", icon: Shield, to: ROUTES.staff },
+        { label: "Support", icon: LifeBuoy, to: ROUTES.support, badge: counts.openTickets, badgeTone: "info" },
+      ],
+    },
+    { title: "System", items: [{ label: "Settings", icon: Settings, to: ROUTES.settings }] },
   ];
 
-  const handleConfirmLogout = async () => {
-    await logout();
-    navigate(ROUTES.login, { replace: true });
-  };
-
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-ledger">
-      <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        <MobileHeader
-          portalName="Admin"
-          portalBadge="Admin"
-          navItems={navItems}
-          user={user}
-          onLogout={() => setIsLogoutModalOpen(true)}
-        />
-        <main className="flex-1 min-w-0 overflow-y-auto pb-24 md:pb-0">
-          <Outlet />
-        </main>
-      </div>
-      <MobileNav />
-
-      <LogoutModal
-        isOpen={isLogoutModalOpen}
-        onClose={() => setIsLogoutModalOpen(false)}
-        onConfirm={handleConfirmLogout}
-        portalName="Admin Panel"
-        user={user}
-      />
-    </div>
+    <AppShell
+      portal="admin"
+      nav={nav}
+      header={
+        <>
+          <div className="flex-1" />
+          <ThemeToggle />
+        </>
+      }
+    />
   );
 }

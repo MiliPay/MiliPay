@@ -1,109 +1,95 @@
-import { useState } from "react";
-import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
-import { Search, MessageSquareWarning, Users, LogOut, UserCheck, Settings } from "lucide-react";
-import clsx from "clsx";
-import { useAuth } from "@milipay/shared/features/auth/AuthContext";
-import { MobileHeader, type MobileNavItem } from "@milipay/shared/components/layout/MobileHeader";
-import { LogoutModal } from "@milipay/shared/components/layout/LogoutModal";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Inbox, LayoutDashboard, Search, Users } from "lucide-react";
+import { AppShell, type NavGroup } from "@milipay/shared/components/layout/AppShell";
+import { supabase } from "@milipay/shared/lib/supabase";
 
+// First match wins, so the longer paths come first.
+const TITLES: [string, string][] = [
+  ["/dashboard/customers/", "Customer"],
+  ["/dashboard/customers", "Customers"],
+  ["/dashboard/settings", "Settings"],
+  ["/dashboard", "Dashboard"],
+  ["/settings", "Settings"],
+  ["/complaints", "Complaints desk"],
+  ["/cases", "Complaints desk"],
+  ["/customers/", "Customer"],
+  ["/customers", "Customers"],
+  ["/calls", "Call log"],
+  ["/replies", "Saved replies"],
+];
+
+/** New tickets nobody has picked up yet: the Complaints desk badge. */
+function useUnassignedCount(): number | null {
+  const [n, setN] = useState<number | null>(null);
+  useEffect(() => {
+    let live = true;
+    const load = async () => {
+      const { count, error } = await supabase
+        .from("support_tickets")
+        .select("id", { count: "exact", head: true })
+        .neq("status", "resolved")
+        .is("assigned_to", null);
+      if (live) setN(error ? null : count ?? 0);
+    };
+    void load();
+    const timer = setInterval(load, 60_000);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, []);
+  return n;
+}
+
+/** The support portal: the shared shell with the support navigation. */
 export function ServiceLayout() {
-  const location = useLocation();
+  const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
-  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const unassigned = useUnassignedCount();
+  const title = TITLES.find(([p]) => pathname === p || pathname.startsWith(p))?.[1] ?? "";
 
-  const navItems: MobileNavItem[] = [
-    { name: "Search & Lookup", path: "/dashboard", icon: Search, end: true },
-    { name: "Customers", path: "/customers", icon: Users },
-    { name: "Complaints Desk", path: "/complaints", icon: MessageSquareWarning },
-    { name: "My Cases", path: "/cases", icon: Users },
-    { name: "Settings", path: "/settings", icon: Settings },
+  // "/" jumps to customer search from anywhere except a text field.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const typing = el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
+      if (e.key === "/" && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        navigate("/customers");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navigate]);
+
+  const nav: NavGroup[] = [
+    { items: [{ label: "Dashboard", icon: LayoutDashboard, to: "/dashboard", end: true }] },
+    {
+      title: "Tickets",
+      items: [{ label: "Complaints desk", icon: Inbox, to: "/complaints", alsoActive: ["/cases"], badge: unassigned, badgeTone: "fail" }],
+    },
+    { title: "Lookup", items: [{ label: "Customers", icon: Users, to: "/customers", alsoActive: ["/dashboard/customers"] }] },
   ];
 
-  const handleConfirmLogout = async () => {
-    await logout();
-    navigate("/login", { replace: true });
-  };
-
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-ledger text-ink font-sans">
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-64 border-r border-white/[0.05] bg-ledger-line flex-col shrink-0">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-9 mt-4 relative h-10 w-full -ml-2">
-            <div className="relative h-10 w-32">
-              <img src="/main.png" alt="MiliPay Service" className="absolute top-1/2 -translate-y-1/2 left-0 h-28 w-auto object-contain scale-125 origin-left" />
-            </div>
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-status-info/15 text-status-info border border-status-info/25 shrink-0 mr-2">
-              Support
-            </span>
-          </div>
-        </div>
-
-        <nav className="flex-1 px-4 space-y-1 mt-4">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.path || (item.path !== "/" && item.path !== "/dashboard" && location.pathname.startsWith(item.path));
-            return (
-              <Link
-                key={item.name}
-                to={item.path}
-                className={clsx(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200",
-                  isActive
-                    ? "bg-signal/10 text-signal border border-signal/20 font-semibold"
-                    : "text-ink-muted hover:text-ink hover:bg-white/[0.03]"
-                )}
-              >
-                <item.icon className="w-5 h-5" />
-                <span className="font-medium text-sm">{item.name}</span>
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="p-4 border-t border-white/[0.05] space-y-2">
-          {user && (
-            <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-signal/10 border border-signal/20 flex items-center justify-center text-signal">
-                <UserCheck className="w-4 h-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium text-white truncate">{user.fullName || "Support Staff"}</p>
-                <p className="text-[10px] text-ink-muted uppercase font-semibold">{user.role}</p>
-              </div>
-            </div>
-          )}
-          <button 
-            onClick={() => setIsLogoutModalOpen(true)}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:text-status-warn hover:bg-status-warn/10 transition-colors w-full text-left text-xs font-medium"
+    <AppShell
+      portal="support"
+      nav={nav}
+      header={
+        <>
+          <div className="flex-none whitespace-nowrap text-base font-bold">{title}</div>
+          <Link
+            to="/customers"
+            className="ml-[18px] hidden h-9 min-w-[220px] flex-[0_1_380px] items-center gap-2.5 rounded-[10px] border border-line bg-field px-3 text-faint sm:flex"
           >
-            <LogOut className="w-5 h-5" />
-            <span className="font-medium text-sm">Log Out</span>
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        <MobileHeader
-          portalName="Service"
-          portalBadge="Support Staff"
-          navItems={navItems}
-          user={user}
-          onLogout={() => setIsLogoutModalOpen(true)}
-        />
-        <main className="flex-1 min-w-0 overflow-y-auto pb-16 md:pb-0">
-          <Outlet />
-        </main>
-      </div>
-
-      <LogoutModal
-        isOpen={isLogoutModalOpen}
-        onClose={() => setIsLogoutModalOpen(false)}
-        onConfirm={handleConfirmLogout}
-        portalName="Support Service Portal"
-        user={user}
-      />
-    </div>
+            <Search size={15} aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate">Find a customer by phone, NIN or name</span>
+            <span className="rounded-[5px] border border-line px-1.5 py-px text-[11px] font-semibold text-muted">/</span>
+          </Link>
+          <div className="flex-1" />
+        </>
+      }
+    />
   );
 }
