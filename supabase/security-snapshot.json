@@ -1774,6 +1774,11 @@
       "rls_forced": true
     },
     {
+      "name": "password_resets",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
       "name": "pos_terminals",
       "rls_enabled": true,
       "rls_forced": false
@@ -1797,6 +1802,16 @@
       "name": "refund_queue",
       "rls_enabled": true,
       "rls_forced": true
+    },
+    {
+      "name": "signup_sessions",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "name": "smile_results",
+      "rls_enabled": true,
+      "rls_forced": false
     },
     {
       "name": "staff_profiles",

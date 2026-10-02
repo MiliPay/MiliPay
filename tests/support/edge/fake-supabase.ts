@@ -21,7 +21,7 @@ interface Result {
 
 class Query implements PromiseLike<Result> {
   private filters: Filter[] = [];
-  private mode: "select" | "update" | "insert" = "select";
+  private mode: "select" | "update" | "insert" | "upsert" = "select";
   private patch: Row = {};
   private inserted: Row[] = [];
   private limitTo: number | null = null;
@@ -38,6 +38,13 @@ class Query implements PromiseLike<Result> {
 
   insert(values: Row | Row[]): this {
     this.mode = "insert";
+    this.inserted = (Array.isArray(values) ? values : [values]).map((v) => ({ ...v }));
+    return this;
+  }
+
+  /** Insert, or update the row with the same key (the table's uniqueKeys, else id). */
+  upsert(values: Row | Row[]): this {
+    this.mode = "upsert";
     this.inserted = (Array.isArray(values) ? values : [values]).map((v) => ({ ...v }));
     return this;
   }
@@ -119,6 +126,18 @@ class Query implements PromiseLike<Result> {
       return stored;
     }
 
+    if (this.mode === "upsert") {
+      const key = this.db.uniqueKeys.get(this.table) ?? ["id"];
+      const stored: Row[] = [];
+      for (const row of this.inserted) {
+        const existing = rows.find((r) => key.every((col) => r[col] === row[col]));
+        if (existing) Object.assign(existing, row);
+        else rows.push({ id: `${this.table}-${rows.length + 1}`, ...row });
+        stored.push(existing ?? rows[rows.length - 1]);
+      }
+      return stored;
+    }
+
     const matched = rows.filter((row) => this.filters.every((f) => f(row)));
     if (this.mode === "update") {
       for (const row of matched) Object.assign(row, this.patch);
@@ -177,6 +196,10 @@ export class FakeSupabase {
   readonly authUsers = new Map<string, { id: string; email?: string | null; phone?: string | null }>();
   /** auth.admin.generateLink calls, in order. */
   readonly generatedLinks: { type: string; email: string; token: string }[] = [];
+  /** auth.admin.signOut calls, in order. */
+  readonly signOuts: { jwt: string; scope: string }[] = [];
+  /** auth.admin.deleteUser calls, in order. */
+  readonly deletedUsers: string[] = [];
   /** auth.admin.createUser calls, in order. */
   readonly createdUsers: { id: string; attributes: Record<string, unknown> }[] = [];
 
@@ -210,6 +233,15 @@ export class FakeSupabase {
         return { data: { user: { id, ...attributes } }, error: null };
       },
       listUsers: async () => ({ data: { users: [...this.authUsers.values()] }, error: null }),
+      signOut: async (jwt: string, scope?: string) => {
+        this.signOuts.push({ jwt, scope: scope ?? "global" });
+        return { data: null, error: null };
+      },
+      deleteUser: async (id: string) => {
+        this.deletedUsers.push(id);
+        this.authUsers.delete(id);
+        return { data: {}, error: null };
+      },
     },
   };
 

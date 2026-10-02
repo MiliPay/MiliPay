@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3"
 import { monoAppTag } from "../_shared/mono-app-tag.ts"
+import { namesMatch } from "../_shared/signup.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -122,6 +123,32 @@ serve(async (req) => {
     // used to be the thing vtu-service spent from, which meant MiliPay was
     // vending real airtime against a number copied out of a read-only API.
     const balanceNgn = Math.round((Number(acct.balance) || 0)) / 100;
+
+    // --- Whose account is it? ---
+    // A customer who signed up themselves was verified by their NIN and a
+    // selfie, so the account they pay from must be in that same name. Without
+    // this, someone verified as themselves could pay out of anyone's account
+    // they could log in to. (Agent-enrolled customers are checked in person.)
+    const { data: customer } = await adminClient
+      .from('customers')
+      .select('first_name, last_name, signup_source')
+      .eq('auth_user_id', user.id)
+      .maybeSingle();
+    if (customer?.signup_source === 'self' &&
+        !namesMatch({ firstName: customer.first_name ?? '', lastName: customer.last_name ?? '' }, accountName)) {
+      // Nothing is stored, and Mono is told to forget the link.
+      await fetch(`https://api.withmono.com/v2/accounts/${accountId}/unlink`, {
+        method: 'POST',
+        headers: { 'Accept': 'application/json', 'mono-sec-key': monoSecretKey },
+      }).catch(() => {});
+      return new Response(JSON.stringify({
+        success: false,
+        code: 'NAME_MISMATCH',
+        error: "This account isn't in your name. You can only link accounts in your own name.",
+        accountName,
+        customerName: `${customer.first_name} ${customer.last_name}`.trim(),
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     // --- Database: save everything using admin client (bypasses RLS) ---
 

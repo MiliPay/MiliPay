@@ -60,3 +60,13 @@ verify_jwt = false
 # rate-limited by phone and by address and issues nothing without the code.
 [functions.login-code]
 verify_jwt = false
+
+# Self sign-up: the caller has no account yet. Every step after the phone
+# code needs the resume token the code earns; all of it is rate-limited.
+[functions.signup]
+verify_jwt = false
+
+# Smile ID results. Authenticated by Smile ID's Response-Signature (HMAC
+# with the API key), checked before the body is read.
+[functions.smile-webhook]
+verify_jwt = false
