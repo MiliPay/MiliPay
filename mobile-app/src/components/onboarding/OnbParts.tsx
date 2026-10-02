@@ -107,7 +107,7 @@ export function OnbField({
       </View>
       <View
         style={{
-          height: 56,
+          minHeight: 56,
           borderRadius: 16,
           backgroundColor: c.card,
           borderWidth: 1.5,
@@ -126,7 +126,7 @@ export function OnbField({
           secureTextEntry={secret && !shown}
           accessibilityLabel={label}
           {...input}
-          style={[{ flex: 1, height: '100%', color: c.text, fontSize, fontFamily: 'Inter_400Regular' }, input.style]}
+          style={[{ flex: 1, alignSelf: 'stretch', color: c.text, fontSize, fontFamily: 'Inter_400Regular' }, input.style]}
         />
         {secret ? (
           <Tap

@@ -38,7 +38,8 @@ export function InputBox({
         {
           marginTop: 8,
           marginHorizontal: 20,
-          height,
+          // Grows with large system text instead of clipping it.
+          minHeight: height,
           borderRadius: 16,
           backgroundColor: c.card,
           borderWidth: 1.5,
@@ -57,7 +58,7 @@ export function InputBox({
         placeholderTextColor={c.faint}
         {...input}
         style={[
-          { flex: 1, height: '100%', color: c.text, fontSize: 18, fontFamily: 'Inter_600SemiBold', fontVariant: ['tabular-nums'] },
+          { flex: 1, alignSelf: 'stretch', color: c.text, fontSize: 18, fontFamily: 'Inter_600SemiBold', fontVariant: ['tabular-nums'] },
           inputStyle,
         ]}
       />

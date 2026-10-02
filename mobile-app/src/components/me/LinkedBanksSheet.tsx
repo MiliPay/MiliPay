@@ -167,6 +167,7 @@ export function LinkedBanksSheet({
                   {accounts.length > 1 ? (
                     <PressScale
                       scaleTo={0.92}
+                      hitSlop={5}
                       onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                         setTarget(acc);

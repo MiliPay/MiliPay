@@ -53,7 +53,10 @@ export function Button({
       disabled={disabled}
       onPress={disabled ? undefined : onPress}
       style={{
-        height,
+        // A minimum, not a fixed height: with the phone's text made larger the
+        // label may need two lines, and must not be cut off.
+        minHeight: height,
+        paddingVertical: 6,
         borderRadius: radius,
         backgroundColor: bg,
         borderWidth: variant === 'outline' ? 1.5 : 0,

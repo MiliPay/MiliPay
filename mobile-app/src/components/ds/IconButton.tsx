@@ -32,6 +32,8 @@ export function IconButton({
       accessibilityRole="button"
       accessibilityLabel={badge ? `${label}, ${badge} unread` : label}
       onPress={onPress}
+      // Drawn at 42 pt (the design); touchable at 48.
+      hitSlop={3}
       style={{
         width: size,
         height: size,

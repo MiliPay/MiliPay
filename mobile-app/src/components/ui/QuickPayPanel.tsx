@@ -147,6 +147,7 @@ export function QuickPayPanel({
         ) : actionLabel && !choosing ? (
           <Tap
             onPress={onAction}
+            accessibilityRole="button"
             className={`px-3 py-1.5 rounded-full border ${
               copy.action === 'turn_off' || copy.action === 'cancel_setup'
                 ? 'border-slate-300 dark:border-white/15'
@@ -181,6 +182,8 @@ export function QuickPayPanel({
               return (
                 <Pressable
                   key={amount}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: chosen }}
                   onPress={() => {
                     Haptics.selectionAsync();
                     setAllowance(amount);
@@ -209,12 +212,15 @@ export function QuickPayPanel({
 
           <View className="flex-row gap-2">
             <Pressable
+              accessibilityRole="button"
               onPress={() => setChoosing(false)}
               className="flex-1 h-11 rounded-xl items-center justify-center border border-slate-200 dark:border-white/10"
             >
               <Text className="text-slate-700 dark:text-white font-inter-semibold text-sm">Not now</Text>
             </Pressable>
             <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: busy || !allowance }}
               disabled={busy || !allowance}
               onPress={() => setConfirming(true)}
               className={`flex-1 h-11 rounded-xl items-center justify-center bg-signal ${busy ? 'opacity-60' : ''}`}

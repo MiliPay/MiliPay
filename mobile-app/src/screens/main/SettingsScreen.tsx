@@ -196,7 +196,7 @@ function MeContent({ navigation, route }: any) {
             <Text numberOfLines={1} style={{ color: c.text, fontSize: 19, fontFamily: 'Inter_800ExtraBold', letterSpacing: -0.38 }}>
               Hi, {user?.firstName || 'there'}
             </Text>
-            <PressScale scaleTo={0.96} onPress={() => navigation.navigate('AccountLimits')} accessibilityRole="button" accessibilityLabel={`Tier ${tier}, account limits`}>
+            <PressScale scaleTo={0.96} hitSlop={12} onPress={() => navigation.navigate('AccountLimits')} accessibilityRole="button" accessibilityLabel={`Tier ${tier}, account limits`}>
               <LinearGradient
                 colors={brandFixed.gold as unknown as [string, string]}
                 start={{ x: 0, y: 0 }}

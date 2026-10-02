@@ -193,6 +193,8 @@ function BankCard({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
       accessibilityLabel={`${account.bankName}, ${account.accountName}${active ? ', paying from this account' : ''}`}
       style={{ width, height, borderRadius: 26, boxShadow: `0px 12px 28px -12px ${theme.shadow}` }}
     >

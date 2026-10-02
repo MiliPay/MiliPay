@@ -154,7 +154,7 @@ export default function SupportScreen({ navigation }: any) {
           >
             <Text style={{ color: c.text, fontSize: 15, fontFamily: 'Inter_700Bold' }}>{open.title}</Text>
             <Text style={{ marginTop: 4, color: c.muted, fontSize: 13, lineHeight: 19.5, fontFamily: 'Inter_400Regular' }}>{open.body}</Text>
-            <Tap onPress={startChat} accessibilityRole="button" style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}>
+            <Tap onPress={startChat} accessibilityRole="button" hitSlop={12} style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}>
               <Text style={{ color: c.brandText, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>Still need help? Chat with us</Text>
               <ChevronRight color={c.brandText} size={14} />
             </Tap>

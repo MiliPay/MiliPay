@@ -69,7 +69,9 @@ export function FilterChips<T extends string | number | null>({
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
             onPress={() => onChange(o.value)}
-            style={{ paddingHorizontal: 14, height: 34, borderRadius: 999, borderWidth: 1, borderColor: bd, backgroundColor: bg, justifyContent: 'center' }}
+            // 34 pt chips, touchable at 46.
+            hitSlop={{ top: 6, bottom: 6 }}
+            style={{ paddingHorizontal: 14, minHeight: 34, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: bd, backgroundColor: bg, justifyContent: 'center' }}
           >
             <Text style={{ color: fg, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>{o.label}</Text>
           </PressScale>

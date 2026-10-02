@@ -66,6 +66,7 @@ export function PhoneSection({
         right={
           <Tap
             onPress={onPickContact}
+            hitSlop={5}
             accessibilityRole="button"
             accessibilityLabel="Choose from contacts"
             style={({ pressed }) => ({
