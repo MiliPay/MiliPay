@@ -14,7 +14,6 @@ import CustomersPage from "@milipay/shared/pages/customers/CustomersPage";
 import CustomerDetailsPage from "@milipay/shared/pages/customers/CustomerDetailsPage";
 import SignupReviewsPage from "@milipay/shared/pages/customers/SignupReviewsPage";
 import TransactionsPage from "@milipay/shared/pages/transactions/TransactionsPage";
-import TransactionDetailsPage from "@milipay/shared/pages/transactions/TransactionDetailsPage";
 import SettingsPage from "@milipay/shared/pages/settings/SettingsPage";
 import StaffPage from "@milipay/shared/pages/staff/StaffPage";
 import StaffDetailsPage from "@milipay/shared/pages/staff/StaffDetailsPage";
@@ -26,6 +25,7 @@ import { AdminSupportPage } from "@milipay/shared/pages/dashboard/AdminSupportPa
 import { OperationsPage } from "@milipay/shared/pages/operations/OperationsPage";
 import { TicketDetailsPage } from "@milipay/shared/pages/complaints/TicketDetailsPage";
 import NotFoundPage from "@milipay/shared/pages/not-found/NotFoundPage";
+import AuditLogPage from "@milipay/shared/pages/audit/AuditLogPage";
 
 
 export default function App() {
@@ -54,7 +54,7 @@ export default function App() {
             <Route path="merchants/:id" element={<MerchantDetailsPage />} />
             <Route path="terminals" element={<TerminalsPage />} />
             <Route path="transactions" element={<TransactionsPage />} />
-            <Route path="transactions/:id" element={<TransactionDetailsPage />} />
+            <Route path="transactions/:id" element={<TransactionsPage />} />
             <Route path="register" element={<RegisterHubPage />} />
             <Route path="register/customer" element={<RegisterCustomerPage />} />
             <Route path="register/merchant" element={<RegisterMerchantPage />} />
@@ -63,6 +63,7 @@ export default function App() {
             <Route path="staff" element={<StaffPage />} />
             <Route path="staff/:id" element={<StaffDetailsPage />} />
             <Route path="operations" element={<OperationsPage />} />
+            <Route path="audit" element={<AuditLogPage />} />
             <Route path="support" element={<AdminSupportPage />} />
             <Route path="support/:id" element={<TicketDetailsPage />} />
           </Route>

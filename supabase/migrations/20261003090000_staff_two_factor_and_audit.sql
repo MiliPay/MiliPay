@@ -126,7 +126,22 @@ CREATE INDEX IF NOT EXISTS audit_events_target_idx ON public.audit_events (targe
 CREATE INDEX IF NOT EXISTS audit_events_category_idx ON public.audit_events (category, occurred_at DESC);
 
 -- Each row's hash covers its content and the previous row's hash, so
--- removing or editing any row breaks every hash after it.
+-- removing or editing any row breaks every hash after it. One function
+-- computes it, for writing and for verify_audit_chain() to check later. The
+-- time goes in as epoch microseconds so the session's time zone can't
+-- change the text being hashed.
+CREATE OR REPLACE FUNCTION public.audit_event_hash(e public.audit_events)
+RETURNS text
+LANGUAGE sql IMMUTABLE
+AS $$
+  SELECT encode(sha256(convert_to(concat_ws('|',
+    coalesce(e.prev_hash, ''), (extract(epoch FROM e.occurred_at) * 1000000)::bigint::text,
+    coalesce(e.actor_id::text, ''), e.actor_name, e.actor_role, e.category, e.action,
+    coalesce(e.target, ''), coalesce(e.target_id, ''), e.result, coalesce(e.reason, ''),
+    coalesce(e.before::text, ''), coalesce(e.after::text, ''), coalesce(e.ip, ''),
+    coalesce(e.user_agent, ''), coalesce(e.session_id, '')), 'UTF8')), 'hex');
+$$;
+
 CREATE OR REPLACE FUNCTION public.audit_events_chain()
 RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
@@ -135,11 +150,7 @@ BEGIN
   PERFORM pg_advisory_xact_lock(hashtext('public.audit_events'));
   SELECT hash INTO NEW.prev_hash FROM public.audit_events ORDER BY id DESC LIMIT 1;
   NEW.occurred_at := now();
-  NEW.hash := encode(sha256(convert_to(concat_ws('|',
-    coalesce(NEW.prev_hash, ''), NEW.occurred_at::text, coalesce(NEW.actor_id::text, ''), NEW.actor_name,
-    NEW.actor_role, NEW.category, NEW.action, coalesce(NEW.target, ''), coalesce(NEW.target_id, ''), NEW.result,
-    coalesce(NEW.reason, ''), coalesce(NEW.before::text, ''), coalesce(NEW.after::text, ''),
-    coalesce(NEW.ip, ''), coalesce(NEW.session_id, '')), 'UTF8')), 'hex');
+  NEW.hash := public.audit_event_hash(NEW);
   RETURN NEW;
 END;
 $$;

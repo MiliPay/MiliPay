@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { z } from "https://esm.sh/zod@3.23.8";
+import { recordAudit } from "../_shared/audit.ts";
 import {
   ApiError,
   adminClient,
@@ -169,6 +170,15 @@ serve(handler(async (req) => {
       "CUSTOMER_UPDATE_FAILED",
     );
   }
+
+  await recordAudit(admin, req, caller, {
+    category: "Customers",
+    action: action === "approve" ? "approved customer" : "resent the verified message to",
+    target: fullName,
+    targetId: customer.id,
+    before: action === "approve" ? { status: customer.status } : null,
+    after: action === "approve" ? { status: "active" } : { delivered },
+  });
 
   if (!delivered) {
     console.error(

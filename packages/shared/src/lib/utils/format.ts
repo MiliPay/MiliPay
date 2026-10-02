@@ -80,3 +80,14 @@ export function initials(name: string | null | undefined): string {
     .join("")
     .toUpperCase();
 }
+
+/** "4m ago", "14:20" today, "27 Sep" before. */
+export function whenLabel(iso: string, now = Date.now()): string {
+  const t = Date.parse(iso);
+  if (now - t < 3_600_000) return timeAgo(iso, now);
+  const day = (d: number) => new Intl.DateTimeFormat("en-GB", { dateStyle: "short", timeZone: "Africa/Lagos" }).format(d);
+  if (day(t) === day(now)) {
+    return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Lagos" }).format(t);
+  }
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Lagos" }).format(t);
+}

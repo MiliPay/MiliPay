@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { z } from "https://esm.sh/zod@3.23.8";
+import { recordAudit } from "../_shared/audit.ts";
 import {
   ApiError,
   adminClient,
@@ -77,6 +78,16 @@ serve(handler(async (req) => {
   }
 
   const fullName = `${customer.first_name} ${customer.last_name}`.trim();
+  await recordAudit(admin, req, caller, {
+    category: "Customers",
+    action: "rejected customer",
+    target: fullName,
+    targetId: customerId,
+    reason,
+    before: { status: customer.status },
+    after: { status: "rejected" },
+  });
+
   const dispatch = await dispatchCredential(
     customer.phone,
     rejectionMessage(fullName, reason),

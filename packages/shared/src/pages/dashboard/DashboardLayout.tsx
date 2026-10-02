@@ -1,10 +1,12 @@
 import {
   Activity,
   ArrowLeftRight,
+  Bell,
   Building2,
   LayoutDashboard,
   LifeBuoy,
   MonitorSmartphone,
+  ScrollText,
   Settings,
   Shield,
   Store,
@@ -12,8 +14,8 @@ import {
   UserRoundPlus,
   Users,
 } from "lucide-react";
-import { Link } from "react-router-dom";
-import { AppShell, ThemeToggle, type NavGroup } from "@milipay/shared/components/layout/AppShell";
+import { Link, useNavigate } from "react-router-dom";
+import { AppShell, ThemeToggle, TopBarButton, type NavGroup } from "@milipay/shared/components/layout/AppShell";
 import { GlobalSearch } from "@milipay/shared/components/layout/GlobalSearch";
 import { useAdminNavCounts } from "@milipay/shared/features/navCounts/useNavCounts";
 import { ROUTES } from "@milipay/shared/lib/constants";
@@ -50,6 +52,7 @@ function SystemStatus({ waiting }: { waiting: number | null }) {
 /** The admin console: the shared shell with the admin navigation. */
 export default function DashboardLayout() {
   const counts = useAdminNavCounts();
+  const navigate = useNavigate();
 
   const nav: NavGroup[] = [
     { items: [{ label: "Dashboard", icon: LayoutDashboard, to: ROUTES.dashboard, end: true }] },
@@ -58,6 +61,7 @@ export default function DashboardLayout() {
       items: [
         { label: "Transactions", icon: ArrowLeftRight, to: ROUTES.transactions },
         { label: "Operations", icon: Activity, to: ROUTES.operations, badge: counts.operations, badgeTone: "fail" },
+        { label: "Audit log", icon: ScrollText, to: ROUTES.audit },
       ],
     },
     {
@@ -96,6 +100,12 @@ export default function DashboardLayout() {
           <div className="flex-1" />
           <SystemStatus waiting={counts.operations} />
           <ThemeToggle />
+          <TopBarButton
+            icon={Bell}
+            title={counts.deniedToday ? `Audit log · ${counts.deniedToday} denied today` : "Audit log"}
+            dot={Boolean(counts.deniedToday)}
+            onClick={() => navigate(ROUTES.audit)}
+          />
         </>
       }
     />

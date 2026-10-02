@@ -1,42 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Clock,
-  Fingerprint,
-  RefreshCw,
-  Wallet,
-} from "lucide-react";
-
-import { supabase } from "../../lib/supabase";
-import { formatNaira } from "../../lib/utils/format";
+import { CheckCircle2, CircleDot, Hand, RefreshCw, Smartphone, Tv, Wifi, Zap, type LucideIcon } from "lucide-react";
+import clsx from "clsx";
+import { supabase } from "@milipay/shared/lib/supabase";
+import { Pill } from "@milipay/shared/components/ui/StatusBadge";
+import { LoadingState } from "@milipay/shared/components/ui/LoadingState";
+import { TransactionDrawer } from "@milipay/shared/components/transactions/TransactionDrawer";
+import { SERVICE, providerName } from "@milipay/shared/features/dashboard/view";
+import { presentTransactionStatus } from "@milipay/shared/lib/transactionStatus";
+import { formatNairaWhole, timeAgo } from "@milipay/shared/lib/utils/format";
 
 /**
- * Quick-services operations.
+ * Admin › Operations (design handoff): payments the sweep could not settle
+ * on its own, oldest first, each one resolved in the transaction drawer; and
+ * palm matching health. Built on vtu_operations_snapshot.
  *
- * This page exists because the sweep deliberately refuses to guess. When a
- * purchase cannot be resolved automatically — VTPass keeps saying pending, a
- * refund keeps failing, a webhook disagreed with the price we charged — the money is
- * sitting with us and somebody has to decide. Without somewhere to see that,
- * the queues fill silently and the first anyone hears is a complaint.
- *
- * Palm matching shares the page rather than growing its own, because the
- * question an operator actually asks in the morning is "is anything wrong",
- * not "is anything wrong with subsystem four".
+ * Every queue here is money sitting with us and somebody has to decide.
+ * Without somewhere to see that, the queues fill silently and the first
+ * anyone hears is a complaint.
  */
 
 interface Snapshot {
-  since: string;
   generatedAt: string;
-  window: {
-    total: number;
-    delivered: number;
-    failed: number;
-    refunded: number;
-    inFlight: number;
-    value: number;
-    margin: number;
-  };
   queues: {
     pending: number;
     pendingUnresolvable: number;
@@ -45,20 +29,12 @@ interface Snapshot {
     quarantined: number;
     stuck: number;
   };
-  byService: {
-    service_type: string;
-    provider: string;
-    total: number;
-    delivered: number;
-    failed: number;
-  }[];
   attention: {
     reference: string;
     status: string;
     amount: number;
     service_type: string | null;
     provider: string | null;
-    operator_transaction_id: string | null;
     failure_reason: string | null;
     updated_at: string;
   }[];
@@ -74,347 +50,240 @@ interface Snapshot {
   enrolment: { customers: number; withTemplate: number; simulated: number };
 }
 
-function Tile({
-  label,
-  value,
-  hint,
-  tone = "neutral",
-  icon,
-}: {
-  label: string;
-  value: string | number;
-  hint?: string;
-  tone?: "neutral" | "good" | "warn" | "bad";
-  icon?: React.ReactNode;
-}) {
-  const toneClass =
-    tone === "bad"
-      ? "text-status-fail"
-      : tone === "warn"
-        ? "text-status-warn"
-        : tone === "good"
-          ? "text-status-ok"
-          : "text-ink";
+interface Sweep {
+  lastRunAt: string | null;
+  status: string | null;
+  everyMinutes: number;
+}
+
+const SVC_ICON: Record<string, LucideIcon> = { airtime: Smartphone, data: Wifi, power: Zap, cable: Tv, palm: Hand, other: CircleDot };
+
+/** Why a payment is waiting for a person, in words. */
+export function whyItsHere(status: string, failureReason: string | null): string {
+  switch (status) {
+    case "quarantined":
+      return failureReason ? `Held: ${failureReason}` : "Bank confirmation and charge disagree";
+    case "refund_failed":
+      return failureReason ? `Refund failed: ${failureReason}` : "Refund to the bank failed";
+    case "fulfilment_pending":
+      return "Provider still says pending";
+    case "fulfilling":
+      return "No reply from the provider";
+    case "refund_pending":
+      return "Refund not confirmed by the bank";
+    case "initiated":
+    case "paid":
+      return "Waiting on the bank";
+    default:
+      return failureReason || "Needs a look";
+  }
+}
+
+export function OperationsPage() {
+  const [snap, setSnap] = useState<Snapshot | null>(null);
+  const [sweep, setSweep] = useState<Sweep | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const [s, w] = await Promise.all([
+      supabase.rpc("vtu_operations_snapshot", { p_hours: 24 }),
+      supabase.rpc("admin_sweep_status"),
+    ]);
+    if (s.error) setError(s.error.message);
+    else {
+      setSnap(s.data as Snapshot);
+      setError(null);
+    }
+    if (!w.error) setSweep(w.data as Sweep);
+  }, []);
+
+  useEffect(() => {
+    void load();
+    const t = setInterval(() => void load(), 30_000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  const q = snap?.queues;
+  const queues: { label: string; value: number; hint: string; tone: "warn" | "info" | "fail" }[] = q
+    ? [
+        { label: "Delivery pending", value: q.pending, hint: "Provider unresolved", tone: "warn" },
+        { label: "Stuck over 1 hour", value: q.stuck, hint: "No progress for an hour", tone: "warn" },
+        { label: "Refunds open", value: q.refundsOpen, hint: "Sending to the bank", tone: "info" },
+        { label: "Refunds failed", value: q.refundsFailed, hint: "Manual refund needed", tone: "fail" },
+        { label: "Held for review", value: q.quarantined, hint: "Needs a decision", tone: "fail" },
+      ]
+    : [];
+  const toneText = { warn: "text-warn", info: "text-info", fail: "text-fail" } as const;
+  const toneDot = { warn: "bg-warn", info: "bg-info", fail: "bg-fail" } as const;
+
+  const palm = snap?.palm;
+  const en = snap?.enrolment;
+  const enrolledPct = en && en.customers > 0 ? (en.withTemplate / en.customers) * 100 : 0;
 
   return (
-    <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-5">
-      <div className="flex items-center gap-2 text-ink-muted text-xs uppercase tracking-wider">
-        {icon}
-        {label}
+    <div className="flex max-w-[1480px] animate-fade-in flex-col gap-[18px] p-4 sm:p-7">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-[240px] flex-1">
+          <h1 className="text-2xl font-bold tracking-[-.02em]">Operations</h1>
+          <div className="mt-1 text-muted">Payments the sweep could not settle on its own, and palm matching health.</div>
+        </div>
+        {sweep && (
+          <div
+            className={clsx(
+              "flex items-center gap-2 rounded-[10px] border border-line bg-panel px-3 py-2 text-[13px]",
+              sweep.status && sweep.status !== "succeeded" ? "text-warn" : "text-muted",
+            )}
+          >
+            <RefreshCw size={14} aria-hidden="true" />
+            {sweep.lastRunAt
+              ? `${sweep.status && sweep.status !== "succeeded" ? "Last sweep failed" : "Sweep ran"} ${timeAgo(sweep.lastRunAt)} · runs every ${sweep.everyMinutes} min`
+              : "The sweep hasn't run yet"}
+          </div>
+        )}
       </div>
-      <div className={`mt-2 text-2xl font-semibold ${toneClass}`}>{value}</div>
-      {hint ? <div className="mt-1 text-xs text-ink-muted">{hint}</div> : null}
+
+      {error && <div className="rounded-xl bg-fail-soft p-3.5 text-[13px] text-fail">{error}</div>}
+      {!snap && !error && <LoadingState title="Loading operations" />}
+
+      {snap && (
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+            {queues.map((k) => (
+              <div key={k.label} className="flex flex-col gap-1.5 rounded-2xl border border-line bg-panel px-[18px] py-4 shadow-card">
+                <div className="flex items-center gap-2 text-[13px] text-muted">
+                  <div className={clsx("h-2 w-2 rounded-full", toneDot[k.tone])} />
+                  {k.label}
+                </div>
+                <div className={clsx("text-[26px] font-bold tabular-nums", k.value ? toneText[k.tone] : "text-faint")}>{k.value}</div>
+                <div className="text-xs text-faint">{k.hint}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="overflow-hidden rounded-card border border-line bg-panel shadow-card">
+            <div className="flex items-center px-5 pb-3 pt-4">
+              <h2 className="flex-1 text-[15px] font-bold">Needs a decision</h2>
+              <div className="text-xs text-muted">Oldest first</div>
+            </div>
+            <div className="overflow-x-auto">
+              <div className="min-w-[860px]">
+                <div className="grid grid-cols-[150px_minmax(260px,2.4fr)_110px_150px_90px_96px] gap-3.5 border-y border-line bg-field px-5 py-[9px] text-[11px] font-semibold uppercase tracking-[.06em] text-faint">
+                  <div>Reference</div>
+                  <div>Why it's here</div>
+                  <div className="text-right">Amount</div>
+                  <div>Status</div>
+                  <div className="text-right">Waiting</div>
+                  <div />
+                </div>
+                {snap.attention.length === 0 && (
+                  <div className="p-9 text-center text-muted">
+                    <div className="mb-2 flex justify-center text-brand">
+                      <CheckCircle2 size={28} aria-hidden="true" />
+                    </div>
+                    Nothing waiting. The queue is clear.
+                  </div>
+                )}
+                {snap.attention.map((t) => {
+                  const svc = t.service_type && SERVICE[t.service_type] ? t.service_type : "other";
+                  const s = SERVICE[svc];
+                  const Icon = SVC_ICON[svc] ?? CircleDot;
+                  const st = presentTransactionStatus(t.status);
+                  const waitingMin = (Date.now() - Date.parse(t.updated_at)) / 60000;
+                  return (
+                    <div
+                      key={t.reference}
+                      className="grid h-14 grid-cols-[150px_minmax(260px,2.4fr)_110px_150px_90px_96px] items-center gap-3.5 border-b border-line2 px-5 hover:bg-hover"
+                    >
+                      <div className="truncate font-mono text-[12.5px] font-medium">{t.reference}</div>
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <div className="flex h-7 w-7 flex-none items-center justify-center rounded-lg" style={{ background: s.color + "24", color: s.color }}>
+                          <Icon size={14} aria-hidden="true" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate text-[13px] font-semibold">
+                            {providerName(t.provider)} {svc === "other" ? "" : s.label}
+                          </div>
+                          <div className="truncate text-xs text-muted">{whyItsHere(t.status, t.failure_reason)}</div>
+                        </div>
+                      </div>
+                      <div className="text-right font-semibold tabular-nums">{formatNairaWhole(t.amount)}</div>
+                      <div>
+                        <Pill tone={st.tone}>{st.label}</Pill>
+                      </div>
+                      <div className={clsx("text-right text-[13px]", waitingMin > 60 ? "text-fail" : "text-muted")}>
+                        {timeAgo(t.updated_at).replace(" ago", "")}
+                      </div>
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setOpen(t.reference)}
+                          className="flex h-[30px] items-center rounded-lg bg-brand px-3 text-xs font-bold text-brand-ink"
+                        >
+                          Resolve
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+            <div className="rounded-card border border-line bg-panel px-[18px] py-4 shadow-card">
+              <div className="flex items-center gap-2">
+                <Hand size={16} aria-hidden="true" />
+                <h2 className="text-[15px] font-bold">Palm matching · 24h</h2>
+              </div>
+              <div className="mt-3.5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                {[
+                  { label: "Match attempts", value: palm?.events ?? 0, cls: "text-fg" },
+                  { label: "Matched", value: palm?.matched ?? 0, cls: "text-brand-text" },
+                  { label: "Ambiguous", value: palm?.ambiguous ?? 0, cls: "text-warn" },
+                  { label: "Rejected", value: palm?.rejected ?? 0, cls: "text-fail" },
+                ].map((p) => (
+                  <div key={p.label} className="rounded-xl bg-field p-3">
+                    <div className="text-xs text-muted">{p.label}</div>
+                    <div className={clsx("mt-0.5 text-[19px] font-bold tabular-nums", p.cls)}>{p.value.toLocaleString("en-NG")}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3.5 flex flex-col gap-2 text-[13px] text-muted">
+                <Line label="Average match margin" value={palm?.avgMargin != null ? Number(palm.avgMargin).toFixed(2) : "—"} />
+                <Line
+                  label="Lowest margin"
+                  value={palm?.minMargin != null ? Number(palm.minMargin).toFixed(2) : "—"}
+                  cls={palm?.minMargin != null && palm.minMargin < 0.1 ? "text-warn" : undefined}
+                />
+                <Line label="Gallery size" value={palm?.gallerySize != null ? `${palm.gallerySize.toLocaleString("en-NG")} palms` : "—"} />
+              </div>
+            </div>
+            <div className="rounded-card border border-line bg-panel px-[18px] py-4 shadow-card">
+              <h2 className="text-[15px] font-bold">Enrolment</h2>
+              <div className="mt-3 flex flex-col gap-2.5 text-[13px]">
+                <Line label="Customers" value={(en?.customers ?? 0).toLocaleString("en-NG")} />
+                <Line label="With palm template" value={`${(en?.withTemplate ?? 0).toLocaleString("en-NG")} · ${enrolledPct.toFixed(1)}%`} />
+                <div className="h-1.5 overflow-hidden rounded-[3px] bg-chip">
+                  <div className="h-full bg-brand" style={{ width: `${enrolledPct}%` }} />
+                </div>
+                <Line label="Simulated captures (test)" value={(en?.simulated ?? 0).toLocaleString("en-NG")} cls={en?.simulated ? "text-warn" : undefined} />
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      <TransactionDrawer txKey={open} onClose={() => setOpen(null)} onChanged={() => void load()} />
     </div>
   );
 }
 
-const STATUS_TONE: Record<string, string> = {
-  quarantined: "bg-status-warn/15 text-status-warn",
-  refund_failed: "bg-status-fail/15 text-status-fail",
-  fulfilment_pending: "bg-status-info/15 text-status-info",
-  refund_pending: "bg-signal/15 text-signal",
-  initiated: "bg-white/10 text-ink-muted",
-  paid: "bg-white/10 text-ink-muted",
-  fulfilling: "bg-white/10 text-ink-muted",
-};
-
-export function OperationsPage() {
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [hours, setHours] = useState(24);
-  const [busy, setBusy] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setError(null);
-    const { data, error: rpcError } = await supabase.rpc("vtu_operations_snapshot", {
-      p_hours: hours,
-    });
-    if (rpcError) {
-      setError(rpcError.message);
-    } else {
-      setSnapshot(data as Snapshot);
-    }
-    setLoading(false);
-  }, [hours]);
-
-  useEffect(() => {
-    void load();
-    // Polled rather than subscribed: these are aggregates over the whole
-    // estate, so there is no single row to watch, and a minute of staleness on
-    // a counter is not worth a live query per change.
-    const timer = setInterval(() => void load(), 60_000);
-    return () => clearInterval(timer);
-  }, [load]);
-
-  const resolve = async (reference: string, action: "mark_delivered" | "refund") => {
-    const note = window.prompt(
-      action === "refund"
-        ? `Refund ${reference}. Why? (recorded against your name)`
-        : `Mark ${reference} delivered. What confirms it? (recorded against your name)`,
-    );
-    if (note === null) return;
-
-    setBusy(reference);
-    const { error: rpcError } = await supabase.rpc("admin_resolve_transaction", {
-      p_reference: reference,
-      p_action: action,
-      p_note: note || null,
-    });
-    setBusy(null);
-
-    if (rpcError) {
-      setError(rpcError.message);
-      return;
-    }
-    await load();
-  };
-
-  if (loading) {
-    return <div className="p-8 text-ink-muted">Loading operations…</div>;
-  }
-
-  if (error && !snapshot) {
-    return <div className="p-8 text-status-fail">Could not load operations: {error}</div>;
-  }
-  if (!snapshot) return null;
-
-  const { window: w, queues, palm, enrolment } = snapshot;
-  const successRate = w.total > 0 ? Math.round((w.delivered / w.total) * 100) : null;
-
-  // Everything here means a person has to act. Zero is the only good number.
-  const needsAttention =
-    queues.quarantined + queues.refundsFailed + queues.stuck + queues.pendingUnresolvable;
-
+function Line({ label, value, cls }: { label: string; value: string; cls?: string }) {
   return (
-    <div className="p-8 space-y-8">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-ink">Operations</h1>
-          <p className="text-sm text-ink-muted mt-1">
-            Quick services and biometric matching. Updated{" "}
-            {new Date(snapshot.generatedAt).toLocaleTimeString("en-NG")}.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <select
-            value={hours}
-            onChange={(e) => setHours(Number(e.target.value))}
-            className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-ink"
-          >
-            <option value={1}>Last hour</option>
-            <option value={24}>Last 24 hours</option>
-            <option value={168}>Last 7 days</option>
-            <option value={720}>Last 30 days</option>
-          </select>
-          <button
-            onClick={() => void load()}
-            className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-ink hover:bg-white/10"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      {needsAttention > 0 ? (
-        <div className="rounded-2xl border border-status-warn/30 bg-status-warn/[0.06] p-5 flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-status-warn mt-0.5 shrink-0" />
-          <div>
-            <div className="text-ink font-medium">
-              {needsAttention} transaction{needsAttention === 1 ? "" : "s"} need a decision
-            </div>
-            <div className="text-sm text-ink-muted mt-1">
-              These are the ones the sweep will not resolve on its own. Each one is a
-              customer whose money is with us.
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      <section>
-        <h2 className="text-sm uppercase tracking-wider text-ink-muted mb-3">Volume</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <Tile label="Delivered" value={w.delivered} hint={`of ${w.total} started`} tone="good" icon={<CheckCircle2 className="w-3.5 h-3.5" />} />
-          <Tile
-            label="Success rate"
-            value={successRate === null ? "—" : `${successRate}%`}
-            hint={successRate !== null && successRate < 90 ? "below 90% — check providers" : undefined}
-            tone={successRate !== null && successRate < 90 ? "warn" : "neutral"}
-          />
-          <Tile label="Value delivered" value={formatNaira(w.value)} hint={`margin ${formatNaira(w.margin)}`} />
-          <Tile label="In flight" value={w.inFlight} hint="money taken, not yet delivered" tone={w.inFlight > 0 ? "warn" : "neutral"} icon={<Clock className="w-3.5 h-3.5" />} />
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-sm uppercase tracking-wider text-ink-muted mb-3">Queues</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          <Tile label="Pending" value={queues.pending} hint="awaiting the operator" tone={queues.pending > 0 ? "warn" : "neutral"} />
-          <Tile
-            label="Unresolvable"
-            value={queues.pendingUnresolvable}
-            // Under VTPass every pending transaction CAN be requeried — the
-            // request_id comes from the reference and the transaction's own
-            // timestamp. So this is no longer "requery has nothing to ask";
-            // it is "requery has been asking for half an hour and VTPass
-            // still will not say", which is what actually needs a person.
-            hint="pending > 30 min — requery is stuck"
-            tone={queues.pendingUnresolvable > 0 ? "bad" : "neutral"}
-          />
-          <Tile label="Refunds open" value={queues.refundsOpen} tone={queues.refundsOpen > 0 ? "warn" : "neutral"} />
-          <Tile label="Refunds failed" value={queues.refundsFailed} hint="retries exhausted" tone={queues.refundsFailed > 0 ? "bad" : "neutral"} />
-          <Tile label="Quarantined" value={queues.quarantined} hint="amount disagreed" tone={queues.quarantined > 0 ? "bad" : "neutral"} />
-          <Tile label="Stuck > 1h" value={queues.stuck} tone={queues.stuck > 0 ? "bad" : "neutral"} />
-        </div>
-      </section>
-
-      {snapshot.attention.length > 0 ? (
-        <section>
-          <h2 className="text-sm uppercase tracking-wider text-ink-muted mb-3">
-            Needs a decision
-          </h2>
-          <div className="rounded-2xl border border-white/8 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-white/[0.03] text-ink-muted">
-                <tr>
-                  <th className="text-left font-medium px-4 py-3">Reference</th>
-                  <th className="text-left font-medium px-4 py-3">Status</th>
-                  <th className="text-left font-medium px-4 py-3">Service</th>
-                  <th className="text-right font-medium px-4 py-3">Amount</th>
-                  <th className="text-left font-medium px-4 py-3">Waiting</th>
-                  <th className="text-right font-medium px-4 py-3">Resolve</th>
-                </tr>
-              </thead>
-              <tbody>
-                {snapshot.attention.map((t) => (
-                  <tr key={t.reference} className="border-t border-white/5">
-                    <td className="px-4 py-3 font-mono text-xs text-ink">{t.reference}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-1 rounded-md text-xs ${STATUS_TONE[t.status] ?? "bg-white/10 text-ink-muted"}`}>
-                        {t.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-ink-muted">
-                      {t.service_type ?? "—"} {t.provider ? `· ${t.provider}` : ""}
-                      {/* Shown when present, for looking the purchase up on
-                          the VTPass dashboard. Its ABSENCE is not flagged: a
-                          purchase whose call timed out has none, and requery
-                          resolves it by request_id regardless. */}
-                      {t.operator_transaction_id ? (
-                        <span className="ml-2 font-mono text-xs">VTPass {t.operator_transaction_id}</span>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-right text-ink">{formatNaira(Number(t.amount))}</td>
-                    <td className="px-4 py-3 text-ink-muted text-xs">
-                      {Math.round((Date.now() - new Date(t.updated_at).getTime()) / 60000)} min
-                    </td>
-                    <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <button
-                        disabled={busy === t.reference}
-                        onClick={() => void resolve(t.reference, "refund")}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-ink hover:bg-white/10 disabled:opacity-40"
-                      >
-                        Refund
-                      </button>
-                      <button
-                        disabled={busy === t.reference}
-                        onClick={() => void resolve(t.reference, "mark_delivered")}
-                        className="ml-2 text-xs px-3 py-1.5 rounded-lg bg-status-ok/15 border border-status-ok/25 text-status-ok hover:bg-status-ok/25 disabled:opacity-40"
-                      >
-                        Delivered
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-xs text-ink-muted mt-2">
-            Both actions are recorded against your name in the transaction's history.
-            Check the VTPass dashboard before marking anything delivered.
-          </p>
-        </section>
-      ) : null}
-
-      {snapshot.byService.length > 0 ? (
-        <section>
-          <h2 className="text-sm uppercase tracking-wider text-ink-muted mb-3">By service</h2>
-          <div className="rounded-2xl border border-white/8 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-white/[0.03] text-ink-muted">
-                <tr>
-                  <th className="text-left font-medium px-4 py-3">Service</th>
-                  <th className="text-right font-medium px-4 py-3">Total</th>
-                  <th className="text-right font-medium px-4 py-3">Delivered</th>
-                  <th className="text-right font-medium px-4 py-3">Failed</th>
-                </tr>
-              </thead>
-              <tbody>
-                {snapshot.byService.map((s) => (
-                  <tr key={`${s.service_type}-${s.provider}`} className="border-t border-white/5">
-                    <td className="px-4 py-3 text-ink">
-                      {s.service_type} · {s.provider}
-                    </td>
-                    <td className="px-4 py-3 text-right text-ink-muted">{s.total}</td>
-                    <td className="px-4 py-3 text-right text-status-ok">{s.delivered}</td>
-                    <td className={`px-4 py-3 text-right ${s.failed > 0 ? "text-status-fail" : "text-ink-muted"}`}>
-                      {s.failed}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      ) : null}
-
-      <section>
-        <h2 className="text-sm uppercase tracking-wider text-ink-muted mb-3">
-          Biometric matching
-        </h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <Tile label="Scans" value={palm.events} icon={<Fingerprint className="w-3.5 h-3.5" />} />
-          <Tile label="Matched" value={palm.matched} tone="good" />
-          <Tile
-            label="Ambiguous"
-            value={palm.ambiguous}
-            hint="runner-up too close — declined"
-            tone={palm.ambiguous > 0 ? "warn" : "neutral"}
-          />
-          <Tile
-            label="Smallest margin"
-            value={palm.minMargin === null ? "—" : palm.minMargin.toFixed(3)}
-            // The early warning. As the gallery grows the gap between best and
-            // second-best shrinks; when it nears the configured margin the
-            // gallery has outgrown its threshold, and that shows up here long
-            // before the first customer is charged for a stranger's shopping.
-            hint={
-              palm.minMargin !== null && palm.minMargin < 0.1
-                ? "approaching the ambiguity threshold"
-                : "gap to the runner-up"
-            }
-            tone={palm.minMargin !== null && palm.minMargin < 0.1 ? "bad" : "neutral"}
-          />
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-          <Tile label="Customers" value={enrolment.customers} icon={<Wallet className="w-3.5 h-3.5" />} />
-          <Tile
-            label="With a real template"
-            value={enrolment.withTemplate}
-            hint={`${enrolment.customers - enrolment.withTemplate} cannot pay by palm`}
-            tone={enrolment.withTemplate < enrolment.customers ? "warn" : "good"}
-          />
-          <Tile
-            label="Simulated enrolments"
-            value={enrolment.simulated}
-            hint="no real biometric on file"
-            tone={enrolment.simulated > 0 ? "warn" : "neutral"}
-          />
-        </div>
-      </section>
-
-      {error ? <div className="text-sm text-status-fail">{error}</div> : null}
+    <div className="flex justify-between">
+      <div className="text-muted">{label}</div>
+      <div className={clsx("font-semibold tabular-nums", cls ?? "text-fg")}>{value}</div>
     </div>
   );
 }

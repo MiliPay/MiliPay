@@ -27,4 +27,5 @@ export const ROUTES = {
   support: "/dashboard/support",
   supportDetails: "/dashboard/support/:id",
   operations: "/dashboard/operations",
+  audit: "/dashboard/audit",
 } as const;

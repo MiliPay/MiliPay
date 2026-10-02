@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { z } from "https://esm.sh/zod@3.23.8";
+import { recordAudit } from "../_shared/audit.ts";
 import {
   ApiError,
   adminClient,
@@ -105,6 +106,14 @@ serve(handler(async (req) => {
     console.error("[create-staff] profile insert failed", profileError.message);
     throw new ApiError(profileError.message, 400, "PROFILE_CREATE_FAILED");
   }
+
+  await recordAudit(admin, req, caller, {
+    category: "Staff",
+    action: "invited",
+    target: `${fullName} (${role.replace("_", " ")})`,
+    targetId: created.user.id,
+    after: { role, status: "active" },
+  });
 
   const dispatch = await dispatchCredential(phone, credentialMessage(fullName, tempPassword));
 

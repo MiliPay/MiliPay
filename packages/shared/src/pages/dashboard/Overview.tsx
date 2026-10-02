@@ -50,6 +50,7 @@ import { formatNairaCompact, formatNairaWhole, initials, timeAgo } from "@milipa
 import { presentTransactionStatus } from "@milipay/shared/lib/transactionStatus";
 import { TONE_CLASSES, type Tone } from "@milipay/shared/components/ui/StatusBadge";
 import { LoadingState } from "@milipay/shared/components/ui/LoadingState";
+import { useToast } from "@milipay/shared/components/ui/Toast";
 
 /**
  * Admin › Dashboard (design handoff "Admin Dashboard"): what needs a person
@@ -91,12 +92,12 @@ function PanelLink({ to, children }: { to: string; children: ReactNode }) {
 export default function Overview() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { flash } = useToast();
   const [range, setRange] = useState<DashboardRange>("today");
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const [, setTick] = useState(0);
-  const [toast, setToast] = useState<string | null>(null);
   const seenTop = useRef<string | null>(null);
   const [freshId, setFreshId] = useState<string | null>(null);
 
@@ -137,12 +138,6 @@ export default function Overview() {
     };
   }, [load]);
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 2600);
-    return () => clearTimeout(t);
-  }, [toast]);
-
   const rangeInfo = RANGES.find((r) => r.id === range)!;
 
   const exportReport = () => {
@@ -171,7 +166,7 @@ export default function Overview() {
     a.click();
     URL.revokeObjectURL(url);
     void logAudit({ category: "Transactions", action: "exported dashboard report", target: `${rangeInfo.label} report` }).then((ok) =>
-      setToast(ok ? "Report exported · logged to audit trail" : "Report exported"),
+      flash(ok ? "Report exported · logged to audit trail" : "Report exported"),
     );
   };
 
@@ -242,12 +237,6 @@ export default function Overview() {
         </>
       )}
 
-      {toast && (
-        <div className="fixed bottom-7 left-1/2 z-[90] flex -translate-x-1/2 animate-rise-in items-center gap-2.5 rounded-xl bg-[#0B1A15] px-4 py-3 font-medium text-[#E8FFF6] shadow-[0_12px_30px_rgba(0,0,0,.25)]">
-          <span className="text-[#33E0B5]">✓</span>
-          {toast}
-        </div>
-      )}
     </div>
   );
 }
@@ -591,6 +580,7 @@ function RecentActivity({ data }: { data: DashboardData }) {
     <Panel className="overflow-hidden">
       <div className="flex items-center px-5 pb-3 pt-[18px]">
         <h2 className="flex-1 text-[15px] font-bold">Recent admin activity</h2>
+        <PanelLink to={ROUTES.audit}>Audit log</PanelLink>
       </div>
       {data.recentAudit.length === 0 && (
         <div className="border-t border-line2 px-5 py-6 text-center text-[13px] text-muted">Nothing recorded yet.</div>

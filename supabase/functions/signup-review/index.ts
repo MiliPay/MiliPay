@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { ApiError, adminClient, handler, json, requireCaller, requireStaffRole } from "../_shared/auth.ts";
+import { ApiError, adminClient, handler, json, requireCaller, requireStaffRole, type Caller } from "../_shared/auth.ts";
+import { recordAudit } from "../_shared/audit.ts";
 import { dispatchSms } from "../_shared/notify.ts";
 import { evaluateSmile, reviewSms, reviewSummary, type ReviewDecision } from "../_shared/signup.ts";
 
@@ -57,7 +58,8 @@ async function list(admin: SupabaseClient) {
   return json({ success: true, items });
 }
 
-async function decide(admin: SupabaseClient, staffId: string, body: Record<string, unknown>) {
+async function decide(admin: SupabaseClient, req: Request, caller: Caller, body: Record<string, unknown>) {
+  const staffId = caller.id;
   const decision = body.decision as ReviewDecision;
   if (!["approve", "retry", "reject"].includes(decision)) throw new ApiError("Choose approve, retry or reject.", 400, "BAD_DECISION");
   const id = typeof body.sessionId === "string" ? body.sessionId : "";
@@ -121,6 +123,16 @@ async function decide(admin: SupabaseClient, staffId: string, body: Record<strin
   }
   if (!updated) throw new ApiError("That sign-up has already been dealt with.", 409, "NOT_IN_REVIEW");
 
+  await recordAudit(admin, req, caller, {
+    category: "Sign-ups",
+    action: decision === "approve" ? "approved sign-up" : decision === "retry" ? "gave another selfie try to" : "rejected sign-up",
+    target: (patch.id_full_name as string | undefined) || s.id_full_name || s.phone,
+    targetId: s.id,
+    reason: reason || null,
+    before: { step: "review", reason: s.review_reason },
+    after: { step: patch.step },
+  });
+
   const sms = await dispatchSms(s.phone, reviewSms(decision, reason));
   if (!sms.delivered) console.error("[signup-review] customer not told", sms.attempts);
   return json({ success: true, decision, customerTold: sms.delivered });
@@ -133,6 +145,6 @@ serve(handler(async (req) => {
   await requireStaffRole(admin, caller, ["admin", "super_admin"]);
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   if (body.action === "list") return list(admin);
-  if (body.action === "decide") return decide(admin, caller.id, body);
+  if (body.action === "decide") return decide(admin, req, caller, body);
   throw new ApiError(`Unknown action: ${String(body.action ?? "")}`, 400, "UNKNOWN_ACTION");
 }));

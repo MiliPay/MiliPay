@@ -6,6 +6,7 @@ import { useAuth } from "@milipay/shared/features/auth/AuthContext";
 import { useTheme, type Portal } from "@milipay/shared/lib/theme";
 import { ROUTES } from "@milipay/shared/lib/constants";
 import type { Role } from "@milipay/shared/types";
+import { ToastProvider } from "@milipay/shared/components/ui/Toast";
 
 /**
  * The one app shell for every portal (design handoff, "One shell for every
@@ -214,6 +215,7 @@ export function AppShell({ portal, nav, header, presenceColor, mainScroll = true
   );
 
   return (
+    <ToastProvider>
     <div className="grid h-screen grid-cols-1 overflow-hidden bg-canvas text-[14px] text-fg lg:grid-cols-[248px_minmax(0,1fr)]">
       <div className="hidden min-h-0 lg:block">{sidebar}</div>
 
@@ -285,6 +287,7 @@ export function AppShell({ portal, nav, header, presenceColor, mainScroll = true
         </>
       )}
     </div>
+    </ToastProvider>
   );
 }
 

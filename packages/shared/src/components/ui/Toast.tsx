@@ -1,127 +1,50 @@
-import {
-  createContext,
-  useContext,
-  useCallback,
-  useState,
-  useEffect,
-  useRef,
-  type ReactNode,
-} from "react";
-import { createPortal } from "react-dom";
-import { CheckCircle, AlertCircle, Info } from "lucide-react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 
-/* ─── Types ─────────────────────────────────────────────── */
+/**
+ * The design's toast: one dark pill at the bottom centre for 2.6 seconds,
+ * e.g. "MP-4FZK9X refund started · logged". AppShell provides it.
+ */
 
-type ToastType = "success" | "error" | "info";
-
-interface ToastOptions {
-  type: ToastType;
-  message: string;
-  duration?: number;
+interface ToastValue {
+  flash: (message: string, tone?: "ok" | "fail") => void;
 }
 
-interface ToastEntry extends ToastOptions {
-  id: string;
-}
-
-interface ToastContextValue {
-  toast: (options: ToastOptions) => void;
-}
-
-/* ─── Styling config ────────────────────────────────────── */
-
-const TYPE_CLASSES: Record<ToastType, string> = {
-  success: "bg-status-ok/10 border-status-ok/30 text-status-ok",
-  error: "bg-status-fail/10 border-status-fail/30 text-status-fail",
-  info: "bg-signal/10 border-signal/30 text-signal-bright",
-};
-
-const TYPE_ICON: Record<ToastType, typeof CheckCircle> = {
-  success: CheckCircle,
-  error: AlertCircle,
-  info: Info,
-};
-
-const MAX_VISIBLE = 3;
-const DEFAULT_DURATION = 4000;
-
-/* ─── Context ───────────────────────────────────────────── */
-
-const ToastContext = createContext<ToastContextValue | null>(null);
-
-export function useToast(): ToastContextValue {
-  const ctx = useContext(ToastContext);
-  if (!ctx) {
-    throw new Error("useToast must be used within a <ToastProvider>");
-  }
-  return ctx;
-}
-
-/* ─── Single toast item ─────────────────────────────────── */
-
-function ToastItem({
-  entry,
-  onDismiss,
-}: {
-  entry: ToastEntry;
-  onDismiss: (id: string) => void;
-}) {
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
-  const Icon = TYPE_ICON[entry.type];
-
-  useEffect(() => {
-    timerRef.current = setTimeout(() => {
-      onDismiss(entry.id);
-    }, entry.duration ?? DEFAULT_DURATION);
-
-    return () => clearTimeout(timerRef.current);
-  }, [entry.id, entry.duration, onDismiss]);
-
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className={`
-        rounded-lg border px-4 py-3 flex items-center gap-3 shadow-lg animate-rise-in
-        ${TYPE_CLASSES[entry.type]}
-      `}
-    >
-      <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
-      <p className="text-sm font-body">{entry.message}</p>
-    </div>
-  );
-}
-
-/* ─── Provider ──────────────────────────────────────────── */
-
-let idCounter = 0;
+const ToastContext = createContext<ToastValue | null>(null);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<ToastEntry[]>([]);
+  const [toast, setToast] = useState<{ message: string; tone: "ok" | "fail"; key: number } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout>>();
 
-  const toast = useCallback((options: ToastOptions) => {
-    const id = `toast-${++idCounter}`;
-    setToasts((prev) => [...prev.slice(-(MAX_VISIBLE - 1)), { ...options, id }]);
+  const flash = useCallback((message: string, tone: "ok" | "fail" = "ok") => {
+    clearTimeout(timer.current);
+    setToast({ message, tone, key: Date.now() });
+    timer.current = setTimeout(() => setToast(null), 2600);
   }, []);
 
-  const dismiss = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
+  useEffect(() => () => clearTimeout(timer.current), []);
 
   return (
-    <ToastContext.Provider value={{ toast }}>
+    <ToastContext.Provider value={{ flash }}>
       {children}
-      {createPortal(
+      {toast && (
         <div
-          aria-label="Notifications"
-          className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-auto"
+          key={toast.key}
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none fixed bottom-7 left-1/2 z-[90] flex -translate-x-1/2 animate-rise-in items-center gap-2.5 rounded-xl bg-[#0B1A15] px-4 py-3 font-medium text-[#E8FFF6] shadow-[0_12px_30px_rgba(0,0,0,.25)]"
         >
-          {toasts.map((entry) => (
-            <ToastItem key={entry.id} entry={entry} onDismiss={dismiss} />
-          ))}
-        </div>,
-        document.body
+          <span className={toast.tone === "ok" ? "flex text-[#33E0B5]" : "flex text-[#FF5C5C]"}>
+            {toast.tone === "ok" ? <CheckCircle2 size={17} /> : <AlertCircle size={17} />}
+          </span>
+          {toast.message}
+        </div>
       )}
     </ToastContext.Provider>
   );
+}
+
+/** Outside a provider (a page rendered on its own), toasts are dropped. */
+export function useToast(): ToastValue {
+  return useContext(ToastContext) ?? { flash: () => {} };
 }

@@ -11,6 +11,7 @@ import {
   requireStaffRole,
   type Caller,
 } from "../_shared/auth.ts";
+import { recordAudit } from "../_shared/audit.ts";
 import { enforceTransactionLimits } from "../_shared/limits.ts";
 import { disabledMessage, readFulfilmentEnvironment } from "../_shared/environment.ts";
 import {
@@ -723,6 +724,7 @@ serve(handler(async (req) => {
   if (action === "update_settings") {
     await requireStaffRole(admin, caller, ["admin", "super_admin"]);
     const patch = parse(settingsSchema, body);
+    const before = await loadSettings(admin);
     const { data, error } = await admin
       .from("vtu_settings")
       .upsert({
@@ -738,7 +740,16 @@ serve(handler(async (req) => {
       console.error("[vtu] settings upsert failed", error);
       throw new ApiError("Could not save margin settings", 500, "SETTINGS_WRITE_FAILED");
     }
-    return json({ success: true, settings: await loadSettings(admin), saved: Boolean(data) });
+    const after = await loadSettings(admin);
+    await recordAudit(admin, req, caller, {
+      category: "Settings",
+      action: "updated fees and margins",
+      target: "Pricing",
+      before,
+      after,
+      reason: typeof body.reason === "string" ? body.reason : null,
+    });
+    return json({ success: true, settings: after, saved: Boolean(data) });
   }
 
   // ---- Catalogues -------------------------------------------------------
