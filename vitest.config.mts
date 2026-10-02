@@ -24,6 +24,8 @@ export default defineConfig({
       // whose z.object / enum / regex / safeParse behave the same for the
       // schemas in use.
       { find: /^https:\/\/esm\.sh\/zod@[\d.]+$/, replacement: "zod" },
+      // The portals' shared package, as the apps' Vite configs resolve it.
+      { find: "@milipay/shared", replacement: fileURLToPath(new URL("./packages/shared/src", import.meta.url)) },
     ],
   },
   test: {

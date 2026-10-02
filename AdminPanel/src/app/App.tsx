@@ -31,7 +31,7 @@ import NotFoundPage from "@milipay/shared/pages/not-found/NotFoundPage";
 export default function App() {
   return (
     <ThemeProvider portal="admin">
-    <AuthProvider allowedRoles={["super_admin", "admin"]}>
+    <AuthProvider allowedRoles={["super_admin", "admin"]} staffMfa auditTarget="Admin console">
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route path="/" element={<Navigate to={ROUTES.dashboard} replace />} />

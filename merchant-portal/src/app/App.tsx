@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@milipay/shared/features/auth/AuthContext";
 import { ProtectedRoute } from "@milipay/shared/components/layout/ProtectedRoute";
-import LoginPage from "@milipay/shared/pages/login/LoginPage";
+import LoginPage from "@milipay/shared/pages/login/MerchantLoginPage";
 import { MerchantLayout } from "@/components/MerchantLayout";
 import MerchantDashboardPage from "@/pages/MerchantDashboardPage";
 import MerchantTransactionsPage from "@/pages/MerchantTransactionsPage";

@@ -15,7 +15,7 @@ import SettingsPage from "@milipay/shared/pages/settings/SettingsPage";
 export default function App() {
   return (
     <ThemeProvider portal="support">
-    <AuthProvider allowedRoles={["support", "super_admin"]}>
+    <AuthProvider allowedRoles={["support", "super_admin"]} staffMfa auditTarget="Support portal">
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage portal="support" />} />

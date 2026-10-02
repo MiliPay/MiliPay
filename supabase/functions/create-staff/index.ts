@@ -40,7 +40,7 @@ serve(handler(async (req) => {
   const caller = await requireCaller(req);
   const admin = adminClient();
 
-  const callerRole = await requireStaffRole(admin, caller.id, ["admin", "super_admin"]);
+  const callerRole = await requireStaffRole(admin, caller, ["admin", "super_admin"]);
 
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) {

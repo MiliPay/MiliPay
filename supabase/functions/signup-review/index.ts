@@ -130,7 +130,7 @@ serve(handler(async (req) => {
   if (req.method !== "POST") throw new ApiError("Method not allowed", 405, "METHOD_NOT_ALLOWED");
   const caller = await requireCaller(req);
   const admin = adminClient();
-  await requireStaffRole(admin, caller.id, ["admin", "super_admin"]);
+  await requireStaffRole(admin, caller, ["admin", "super_admin"]);
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   if (body.action === "list") return list(admin);
   if (body.action === "decide") return decide(admin, caller.id, body);

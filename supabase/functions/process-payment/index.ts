@@ -241,6 +241,9 @@ serve(handler(async (req) => {
     account_used: (typeof palmAccountId === "string" ? palmAccountId : null),
     terminal_id: terminal?.terminal_id ?? null,
     amount,
+    // MiliPay's cut, recorded on the row as quick services do, so revenue
+    // can be read without re-deriving it from the merchant's current rate.
+    fee_amount: feeAmount,
     // A merchant palm payment settles synchronously, so it goes straight to
     // the terminal state. 'success' was the old vocabulary; the state machine
     // in 20260922000000 constrains this column now.

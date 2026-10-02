@@ -12,9 +12,40 @@ import {
   UserRoundPlus,
   Users,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { AppShell, ThemeToggle, type NavGroup } from "@milipay/shared/components/layout/AppShell";
+import { GlobalSearch } from "@milipay/shared/components/layout/GlobalSearch";
 import { useAdminNavCounts } from "@milipay/shared/features/navCounts/useNavCounts";
 import { ROUTES } from "@milipay/shared/lib/constants";
+
+/**
+ * The status pill in the top bar. It says "All systems normal" only when no
+ * payment is stuck with a provider or held for review; otherwise it says how
+ * many are, and links to Operations. Hidden while the count is unknown.
+ */
+function SystemStatus({ waiting }: { waiting: number | null }) {
+  if (waiting === null) return null;
+  if (waiting === 0) {
+    return (
+      <div
+        title="No payment is stuck with a provider or held for review"
+        className="hidden items-center gap-2 whitespace-nowrap rounded-full bg-brand-soft px-3 py-1.5 text-xs font-semibold text-brand-text sm:flex"
+      >
+        <span className="h-[7px] w-[7px] animate-pulse-dot rounded-full bg-brand" />
+        All systems normal
+      </div>
+    );
+  }
+  return (
+    <Link
+      to={ROUTES.operations}
+      className="hidden items-center gap-2 whitespace-nowrap rounded-full bg-warn-soft px-3 py-1.5 text-xs font-semibold text-warn sm:flex"
+    >
+      <span className="h-[7px] w-[7px] rounded-full bg-warn" />
+      {waiting === 1 ? "1 payment needs attention" : `${waiting} payments need attention`}
+    </Link>
+  );
+}
 
 /** The admin console: the shared shell with the admin navigation. */
 export default function DashboardLayout() {
@@ -61,7 +92,9 @@ export default function DashboardLayout() {
       nav={nav}
       header={
         <>
+          <GlobalSearch />
           <div className="flex-1" />
+          <SystemStatus waiting={counts.operations} />
           <ThemeToggle />
         </>
       }

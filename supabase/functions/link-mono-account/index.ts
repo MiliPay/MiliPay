@@ -131,12 +131,19 @@ serve(async (req) => {
     // they could log in to. (Agent-enrolled customers are checked in person.)
     const { data: customer } = await adminClient
       .from('customers')
-      .select('first_name, last_name, signup_source')
+      .select('id, first_name, last_name, signup_source')
       .eq('auth_user_id', user.id)
       .maybeSingle();
     if (customer?.signup_source === 'self' &&
         !namesMatch({ firstName: customer.first_name ?? '', lastName: customer.last_name ?? '' }, accountName)) {
-      // Nothing is stored, and Mono is told to forget the link.
+      // The link is not kept, and Mono is told to forget it. The attempt is
+      // recorded for the admin console (Sign-ups › Bank name mismatches).
+      await adminClient.from('bank_name_mismatches').insert({
+        customer_id: customer.id,
+        bank_name: bankName,
+        account_name: accountName,
+        customer_name: [customer.first_name, customer.last_name].filter(Boolean).join(' '),
+      }).then(() => {}, () => {});
       await fetch(`https://api.withmono.com/v2/accounts/${accountId}/unlink`, {
         method: 'POST',
         headers: { 'Accept': 'application/json', 'mono-sec-key': monoSecretKey },

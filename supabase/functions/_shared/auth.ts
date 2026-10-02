@@ -45,6 +45,19 @@ export function adminClient(): SupabaseClient {
 export interface Caller {
   id: string;
   email: string | null;
+  /** Assurance level of this session: "aal2" once a second factor passed. */
+  aal: string | null;
+}
+
+/** The claims of a JWT the auth server has already verified. */
+function jwtClaims(token: string): Record<string, unknown> {
+  try {
+    const part = token.split(".")[1] ?? "";
+    const b64 = part.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(part.length / 4) * 4, "=");
+    return JSON.parse(atob(b64));
+  } catch {
+    return {};
+  }
 }
 
 /**
@@ -76,7 +89,8 @@ export async function requireCaller(req: Request): Promise<Caller> {
     throw new ApiError("Invalid or expired session", 401, "UNAUTHENTICATED");
   }
 
-  return { id: data.user.id, email: data.user.email ?? null };
+  const aal = jwtClaims(token).aal;
+  return { id: data.user.id, email: data.user.email ?? null, aal: typeof aal === "string" ? aal : null };
 }
 
 export type StaffRole = "agent" | "support" | "admin" | "super_admin";
@@ -92,18 +106,31 @@ export async function staffRole(admin: SupabaseClient, userId: string): Promise<
   return (data?.role as StaffRole) ?? null;
 }
 
+/** Whether staff must have passed a second factor (Settings › Security). */
+export async function staffMfaRequired(admin: SupabaseClient): Promise<boolean> {
+  const { data, error } = await admin.from("platform_settings").select("staff_mfa_required").eq("id", 1).maybeSingle();
+  return !error && data?.staff_mfa_required === true;
+}
+
+/**
+ * The caller must be staff with one of these roles and, while two-factor
+ * sign-in is required, a session that has passed it.
+ */
 export async function requireStaffRole(
   admin: SupabaseClient,
-  userId: string,
+  caller: Caller,
   allowed: StaffRole[],
 ): Promise<StaffRole> {
-  const role = await staffRole(admin, userId);
+  const role = await staffRole(admin, caller.id);
   if (!role || !allowed.includes(role)) {
     throw new ApiError(
       `Access denied. This action requires one of: ${allowed.join(", ")}.`,
       403,
       "FORBIDDEN",
     );
+  }
+  if (caller.aal !== "aal2" && (await staffMfaRequired(admin))) {
+    throw new ApiError("Two-factor sign-in is required. Sign in again with your authenticator code.", 403, "MFA_REQUIRED");
   }
   return role;
 }

@@ -721,7 +721,7 @@ serve(handler(async (req) => {
   }
 
   if (action === "update_settings") {
-    await requireStaffRole(admin, caller.id, ["admin", "super_admin"]);
+    await requireStaffRole(admin, caller, ["admin", "super_admin"]);
     const patch = parse(settingsSchema, body);
     const { data, error } = await admin
       .from("vtu_settings")

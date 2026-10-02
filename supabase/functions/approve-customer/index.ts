@@ -51,7 +51,7 @@ serve(handler(async (req) => {
 
   // Checked against staff_profiles, not against a JWT claim the caller could
   // have been issued before a role change.
-  await requireStaffRole(admin, caller.id, ["admin", "super_admin"]);
+  await requireStaffRole(admin, caller, ["admin", "super_admin"]);
 
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) {
