@@ -209,3 +209,51 @@ export function namesMatch(
   if (last.length === 0 || given.length === 0) return false;
   return last.every((t) => account.has(t)) && given.some((t) => account.has(t));
 }
+
+// ─── Review (admin portal) ──────────────────────────────────────────────────
+
+/** What a reviewer sees of one Smile ID result. */
+export interface ReviewSummary {
+  status: string | null;
+  reason: string | null;
+  fullName: string | null;
+  dateOfBirth: string | null;
+  /** The NIMC record is for the NIN the customer typed. */
+  ninMatches: boolean;
+  /** …and its date of birth is the one they chose. */
+  dobMatches: boolean;
+  photoUrl: string | null;
+  selfieUrl: string | null;
+  riskLevel: string | null;
+}
+
+export function reviewSummary(payload: Record<string, any> | null, expected: { nin: string | null; dob: string | null }): ReviewSummary {
+  const f = payload?.id_fields ?? {};
+  const idNumber = String(f.id_number ?? "").replace(/\D/g, "");
+  const dob = typeof f.date_of_birth === "string" ? f.date_of_birth.slice(0, 10) : null;
+  return {
+    status: typeof payload?.status === "string" ? payload.status : null,
+    reason: typeof payload?.reason === "string" ? payload.reason : null,
+    fullName: cleanName(f.full_name) || [cleanName(f.first_name), cleanName(f.other_names), cleanName(f.last_name)].filter(Boolean).join(" ") || null,
+    dateOfBirth: dob,
+    ninMatches: !!idNumber && idNumber === expected.nin,
+    dobMatches: !!dob && dob === expected.dob,
+    photoUrl: typeof f.photo_url === "string" ? f.photo_url : null,
+    selfieUrl: typeof payload?.image_links?.selfie_image === "string" ? payload.image_links.selfie_image : null,
+    riskLevel: typeof payload?.antifraud?.fraud_risk?.risk_level === "string" ? payload.antifraud.fraud_risk.risk_level : null,
+  };
+}
+
+export type ReviewDecision = "approve" | "retry" | "reject";
+
+/** The text the customer gets after a decision. Nothing secret in it. */
+export function reviewSms(decision: ReviewDecision, reason?: string): string {
+  if (decision === "approve") {
+    return "Your MiliPay sign-up has been checked and approved. Open the MiliPay app and tap Continue signing up to finish.";
+  }
+  if (decision === "retry") {
+    return "Your MiliPay sign-up needs a clearer selfie. Open the MiliPay app, tap Continue signing up and take it again in good light.";
+  }
+  const why = reason?.trim() ? ` Reason: ${reason.trim()}.` : "";
+  return `We couldn't verify your identity for a MiliPay account.${why} If you think this is a mistake, contact support@milipay.ng.`;
+}

@@ -12,6 +12,7 @@ export const ROUTES = {
   dashboard: "/dashboard",
   customers: "/dashboard/customers",
   customerDetails: "/dashboard/customers/:id",
+  signupReviews: "/dashboard/customers/signup-reviews",
   transactions: "/dashboard/transactions",
   transactionDetails: "/dashboard/transactions/:id",
   register: "/dashboard/register",

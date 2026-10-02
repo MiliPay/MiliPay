@@ -11,6 +11,7 @@ import RegisterHubPage from "@milipay/shared/pages/register/RegisterHubPage";
 import RegisterCustomerPage from "@milipay/shared/pages/register-customer/RegisterCustomerPage";
 import CustomersPage from "@milipay/shared/pages/customers/CustomersPage";
 import CustomerDetailsPage from "@milipay/shared/pages/customers/CustomerDetailsPage";
+import SignupReviewsPage from "@milipay/shared/pages/customers/SignupReviewsPage";
 import TransactionsPage from "@milipay/shared/pages/transactions/TransactionsPage";
 import TransactionDetailsPage from "@milipay/shared/pages/transactions/TransactionDetailsPage";
 import SettingsPage from "@milipay/shared/pages/settings/SettingsPage";
@@ -45,6 +46,7 @@ export default function App() {
           >
             <Route index element={<Overview />} />
             <Route path="customers" element={<CustomersPage />} />
+            <Route path="customers/signup-reviews" element={<SignupReviewsPage />} />
             <Route path="customers/:id" element={<CustomerDetailsPage />} />
             <Route path="merchants" element={<MerchantsPage />} />
             <Route path="merchants/:id" element={<MerchantDetailsPage />} />

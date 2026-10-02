@@ -126,10 +126,9 @@ export default function SignupScreen({ navigation, route }: any) {
     setAttemptsLeft(v.selfie?.attemptsLeft ?? 3);
     if (v.dateOfBirth) setDob(dobFromIso(v.dateOfBirth));
     if (v.person) setPerson(v.person);
-    if (v.step === 'review') {
-      void saveSignup(null);
-      return go('review');
-    }
+    // In review the phone keeps the sign-up: once an administrator approves
+    // it or allows another try, "Continue signing up" picks it up again.
+    if (v.step === 'review') return go('review');
     if (v.step === 'confirm') return go('confirm');
     if (v.step === 'addr') return go('addr');
     if (v.step === 'selfie') {
@@ -673,12 +672,7 @@ export default function SignupScreen({ navigation, route }: any) {
             </View>
             <Button
               label="OK"
-              onPress={async () => {
-                // The server keeps the session for the reviewers; only the
-                // phone forgets it.
-                await saveSignup(null);
-                navigation.goBack();
-              }}
+              onPress={() => navigation.goBack()}
             />
           </>
         );

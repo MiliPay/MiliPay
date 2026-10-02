@@ -11,6 +11,7 @@ import {
   Store,
   Cpu,
   Activity,
+  ScanFace,
 } from "lucide-react";
 import { Sidebar } from "@milipay/shared/components/layout/Sidebar";
 import { MobileNav } from "@milipay/shared/components/layout/MobileNav";
@@ -27,6 +28,7 @@ export default function DashboardLayout() {
   const navItems: MobileNavItem[] = [
     { name: "Dashboard", path: ROUTES.dashboard, icon: LayoutGrid, end: true },
     { name: "Customers", path: ROUTES.customers, icon: Users },
+    { name: "Sign-up reviews", path: ROUTES.signupReviews, icon: ScanFace },
     { name: "Merchants", path: ROUTES.merchants, icon: Store },
     { name: "POS terminals", path: ROUTES.terminals, icon: Cpu },
     { name: "Transactions", path: ROUTES.transactions, icon: TrendingUp },

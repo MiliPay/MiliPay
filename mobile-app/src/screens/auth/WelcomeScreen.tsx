@@ -39,8 +39,13 @@ export default function WelcomeScreen({ navigation }: any) {
         if (status.ok && ['nin', 'selfie', 'confirm', 'addr'].includes(status.view.step)) {
           setResume({ saved, step: status.view.stepNumber });
         } else {
-          // Finished, in review, expired or gone: nothing to resume.
-          if (!status.ok || ['done', 'review', 'abandoned'].includes(status.ok ? status.view.step : '')) await saveSignup(null);
+          // In review: kept (it comes back once a person decides), but there is
+          // nothing to continue yet. Finished, rejected or gone: forgotten.
+          // A dropped connection is not a reason to forget it.
+          const gone = status.ok
+            ? status.view.step === 'done' || status.view.step === 'abandoned'
+            : ['NOT_FOUND', 'BAD_TOKEN', 'EXPIRED', 'ABANDONED', 'DONE'].includes(status.code ?? '');
+          if (gone) await saveSignup(null);
           setResume(null);
         }
       })();

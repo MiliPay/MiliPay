@@ -22,7 +22,8 @@ import {
   type PaginatedResult 
 } from "@milipay/shared/types";
 import { useAuth } from "@milipay/shared/features/auth/AuthContext";
-import { Trash2, AlertTriangle, CheckCircle, XCircle, Smartphone, ShieldCheck, UserCheck } from "lucide-react";
+import { Trash2, AlertTriangle, CheckCircle, XCircle, Smartphone, ShieldCheck, UserCheck, ScanFace } from "lucide-react";
+import { ROUTES } from "@milipay/shared/lib/constants";
 
 export default function CustomersPage() {
   const [data, setData] = useState<PaginatedResult<Customer> | null>(null);
@@ -253,6 +254,11 @@ export default function CustomersPage() {
             placeholder="Search by name or phone..." 
           />
         </div>
+        {isAdmin ? (
+          <Button variant="secondary" size="sm" onClick={() => navigate(ROUTES.signupReviews)}>
+            <ScanFace className="h-4 w-4" /> Sign-up reviews
+          </Button>
+        ) : null}
         <FilterChips
           options={[
             { label: "All Customers", value: "all" },
@@ -292,7 +298,7 @@ export default function CustomersPage() {
           onClose={() => {
             if (!isApproving) setCustomerToApprove(null);
           }}
-          title="Approve Customer & Dispatch Login SMS"
+          title="Approve Customer & Send Verified Message"
         >
           <div className="space-y-4">
             <div className="flex items-start gap-3 p-4 bg-status-ok/10 border border-status-ok/25 rounded-xl">
@@ -300,7 +306,7 @@ export default function CustomersPage() {
               <div className="text-sm">
                 <p className="font-semibold text-white">Verification Approval</p>
                 <p className="text-xs text-ink-muted mt-1 leading-relaxed">
-                  Approving <strong className="text-white">{customerToApprove.fullName}</strong> ({customerToApprove.phone}) will create their Supabase Auth account and immediately dispatch a temporary password via SMS.
+                  Approving <strong className="text-white">{customerToApprove.fullName}</strong> ({customerToApprove.phone}) will create their sign-in account and tell them by SMS, WhatsApp and email that they are verified. They log in with their phone number and a one-time code; no password is sent.
                 </p>
               </div>
             </div>
