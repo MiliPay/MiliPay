@@ -1,351 +1,169 @@
-import React, { useState } from "react";
-import { Modal } from "@milipay/shared/components/ui/Modal";
-import { Input } from "@milipay/shared/components/ui/Input";
-import { Select } from "@milipay/shared/components/ui/Select";
-import { Button } from "@milipay/shared/components/ui/Button";
+import { useEffect, useState } from "react";
+import { Send } from "lucide-react";
+import clsx from "clsx";
+import { useAuth } from "@milipay/shared/features/auth/AuthContext";
 import { createStaffMember } from "@milipay/shared/features/staff/api";
+import { STAFF_ROLES, assignableRoles } from "@milipay/shared/features/staff/roles";
 import { NIGERIAN_STATES } from "@milipay/shared/lib/constants";
-import type { Role, CreatedStaffResult } from "@milipay/shared/types";
-import { Check, Copy, KeyRound, ExternalLink, ShieldAlert } from "lucide-react";
+import type { Role } from "@milipay/shared/types";
 
-interface CreateStaffModalProps {
+/**
+ * Invite staff (design handoff): name, work email, phone, state, NIN and a
+ * role. create-staff makes the login and sends a one-time password by
+ * WhatsApp or SMS; it never comes back here. An admin can invite agents and
+ * support; only a super admin can invite administrators.
+ */
+
+interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  /** Called with the result line for the toast. */
+  onSuccess: (message?: string) => void;
 }
 
+const EMPTY = { fullName: "", email: "", phone: "", state: "", nin: "", role: "support" as Role };
 
-export function CreateStaffModal({ isOpen, onClose, onSuccess }: CreateStaffModalProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // Retained so copyToClipboard can keep signalling; the password itself is no
-  // longer rendered, so the flag has no reader.
-  const [, setCopiedPassword] = useState(false);
-  const [copiedAll, setCopiedAll] = useState(false);
-  const [createdResult, setCreatedResult] = useState<CreatedStaffResult | null>(null);
+export function CreateStaffModal({ isOpen, onClose, onSuccess }: Props) {
+  const { user } = useAuth();
+  const [f, setF] = useState(EMPTY);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const allowed = assignableRoles(user?.role);
 
-  const [formData, setFormData] = useState({
-    fullName: "",
-    email: "",
-    phone: "",
-    nin: "",
-    role: "agent" as Role,
-    state: "",
-  });
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-  };
-
-  const handleReset = () => {
-    setFormData({
-      fullName: "",
-      email: "",
-      phone: "",
-      nin: "",
-      role: "agent",
-      state: "",
-    });
-    setCreatedResult(null);
-    setError(null);
-    setCopiedPassword(false);
-    setCopiedAll(false);
-  };
-
-  const handleModalClose = () => {
-    if (createdResult) {
-      onSuccess();
+  useEffect(() => {
+    if (isOpen) {
+      setF(EMPTY);
+      setErr("");
+      setBusy(false);
     }
-    handleReset();
-    onClose();
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !busy && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isOpen, busy, onClose]);
+
+  if (!isOpen) return null;
+
+  const set = (patch: Partial<typeof EMPTY>) => {
+    setF((p) => ({ ...p, ...patch }));
+    setErr("");
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setError(null);
-
-    // Validate NIN
-    const cleanNin = formData.nin.replace(/\D/g, "");
-    if (cleanNin.length !== 11) {
-      setError("National Identification Number (NIN) must be exactly 11 digits.");
-      setIsSubmitting(false);
-      return;
-    }
-
+  const send = async () => {
+    if (!f.fullName.trim() || !/^\S+@\S+\.\S+$/.test(f.email.trim())) return setErr("Enter a name and a valid work email.");
+    if (!/^0[789][01]\d{8}$/.test(f.phone)) return setErr("Enter an 11-digit Nigerian phone number. The one-time password goes there.");
+    if (!/^\d{11}$/.test(f.nin)) return setErr("NIN must be 11 digits.");
+    if (!allowed.includes(f.role)) return setErr("Only a super admin can invite administrators.");
+    setBusy(true);
     try {
-      const result = await createStaffMember({
-        fullName: formData.fullName.trim(),
-        email: formData.email.trim().toLowerCase(),
-        phone: formData.phone.trim(),
-        nin: cleanNin,
-        role: formData.role,
-        state: formData.role === "agent" ? formData.state : undefined,
-      });
-
-      setCreatedResult(result);
-      onSuccess();
-    } catch (err: any) {
-      setError(err.message || "Failed to create staff member");
-    } finally {
-      setIsSubmitting(false);
+      const r = await createStaffMember({ fullName: f.fullName, email: f.email, phone: f.phone, nin: f.nin, role: f.role, state: f.state || undefined });
+      onSuccess(
+        r.delivered
+          ? `Invite sent to ${f.fullName.trim()} · logged`
+          : `${f.fullName.trim()} was added, but the password couldn't be sent · logged`,
+      );
+      onClose();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not send the invite.");
+      setBusy(false);
     }
   };
 
-  const copyToClipboard = async (text: string, isFullMemo = false) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      if (isFullMemo) {
-        setCopiedAll(true);
-        setTimeout(() => setCopiedAll(false), 2500);
-      } else {
-        setCopiedPassword(true);
-        setTimeout(() => setCopiedPassword(false), 2500);
-      }
-    } catch (err) {
-      console.error("Clipboard copy failed", err);
-    }
-  };
-
-  const getFullOnboardingMemo = () => {
-    if (!createdResult) return "";
-    return `MiliPay Staff Onboarding Credentials
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Name: ${createdResult.profile.fullName}
-Role: ${createdResult.profile.role.toUpperCase()} ${createdResult.profile.state ? `(${createdResult.profile.state} State)` : ""}
-Email: ${createdResult.profile.email}
-Phone: ${createdResult.profile.phone}
-NIN: •••••••${createdResult.profile.ninLast4}
-
-Portal Access:
-${createdResult.portalUrl
-  ? `URL: ${createdResult.portalUrl} (${createdResult.portalName})`
-  : `Portal: ${createdResult.portalName} — ask your administrator for the address`}
-
-IMPORTANT:
-A one-time password has been sent to your phone. Log in to your portal with your
-email address and that password. You will be asked to change it immediately.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
-  };
-
+  const input = "h-10 w-full rounded-[10px] border border-line bg-field px-3 outline-none focus:border-brand";
   return (
-    <Modal 
-      isOpen={isOpen} 
-      onClose={handleModalClose} 
-      title={createdResult ? "Staff Credentials Handover" : "Register New Staff Member"}
-    >
-      {createdResult ? (
-        // ── Credential Handover View ──────────────────────────────
-        <div className="space-y-6 animate-rise-in">
-          <div className="flex items-center gap-3 p-4 bg-status-ok/10 border border-status-ok/30 rounded-xl">
-            <div className="w-10 h-10 rounded-full bg-status-ok/20 flex items-center justify-center text-status-ok shrink-0">
-              <Check className="w-5 h-5 stroke-[3]" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-white">Staff Member Successfully Enrolled</p>
-              <p className="text-xs text-ink-muted">
-                Account created with <span className="font-semibold text-signal-bright capitalize">{createdResult.profile.role}</span> permissions.
-              </p>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-white/[0.08] bg-ledger-line/50 p-4 space-y-3">
-            <div className="flex justify-between items-center py-1.5 border-b border-white/[0.05]">
-              <span className="text-xs text-ink-muted uppercase font-semibold">Staff Name</span>
-              <span className="text-sm font-medium text-white">{createdResult.profile.fullName}</span>
-            </div>
-            <div className="flex justify-between items-center py-1.5 border-b border-white/[0.05]">
-              <span className="text-xs text-ink-muted uppercase font-semibold">Email (Login ID)</span>
-              <span className="text-sm font-data text-signal-bright">{createdResult.profile.email}</span>
-            </div>
-            <div className="flex justify-between items-center py-1.5 border-b border-white/[0.05]">
-              <span className="text-xs text-ink-muted uppercase font-semibold">Phone</span>
-              <span className="text-sm font-data text-white">{createdResult.profile.phone}</span>
-            </div>
-            <div className="flex justify-between items-center py-1.5 border-b border-white/[0.05]">
-              <span className="text-xs text-ink-muted uppercase font-semibold">NIN (Verified)</span>
-              <span className="text-sm font-data text-white">••••••••{createdResult.profile.ninLast4}</span>
-            </div>
-            {createdResult.profile.state && (
-              <div className="flex justify-between items-center py-1.5 border-b border-white/[0.05]">
-                <span className="text-xs text-ink-muted uppercase font-semibold">Assigned State</span>
-                <span className="text-sm font-medium text-white">{createdResult.profile.state}</span>
-              </div>
-            )}
-            <div className="flex justify-between items-center py-1.5 border-b border-white/[0.05]">
-              <span className="text-xs text-ink-muted uppercase font-semibold">Designated Portal</span>
-              {createdResult.portalUrl ? (
-                <a
-                  href={createdResult.portalUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs font-semibold text-signal-bright hover:underline flex items-center gap-1"
-                >
-                  {createdResult.portalName} ({createdResult.portalUrl})
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              ) : (
-                <span className="text-xs font-semibold text-ink-muted">
-                  {createdResult.portalName}
-                </span>
-              )}
-            </div>
-
-            {/* Credential delivery */}
-            <div className="pt-2">
-              <span className="block text-xs text-ink-muted uppercase font-semibold mb-1.5">
-                One-time password
-              </span>
-              <div className={`p-3 rounded-lg border text-xs ${
-                createdResult.delivered
-                  ? "bg-status-ok/10 border-status-ok/25 text-status-ok"
-                  : "bg-status-fail/10 border-status-fail/25 text-status-fail"
-              }`}>
-                {createdResult.message}
-              </div>
-            </div>
-          </div>
-
-          <div className="p-3.5 bg-status-info/10 border border-status-info/25 rounded-lg flex items-start gap-2.5 text-xs text-ink-muted">
-            <KeyRound className="w-4 h-4 text-status-info shrink-0 mt-0.5" />
-            <p>
-              The password is never shown here — it goes to the staff member&apos;s phone
-              and nowhere else. They will be asked to change it on first login to the{" "}
-              {createdResult.portalName}.
-            </p>
-          </div>
-
-          <div className="pt-2 flex flex-col sm:flex-row gap-3">
-            <Button
-              type="button"
-              variant="secondary"
-              className="flex-1"
-              onClick={() => copyToClipboard(getFullOnboardingMemo(), true)}
-            >
-              {copiedAll ? <Check className="w-4 h-4 mr-2 text-status-ok" /> : <Copy className="w-4 h-4 mr-2" />}
-              {copiedAll ? "Onboarding Memo Copied!" : "Copy Full Credentials"}
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              className="flex-1"
-              onClick={handleModalClose}
-            >
-              Done &amp; Close
-            </Button>
-          </div>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="invite-title">
+      <div className="absolute inset-0 animate-fade-in bg-scrim" onClick={() => !busy && onClose()} />
+      <div className="relative flex max-h-[calc(100vh-32px)] w-[560px] max-w-full animate-rise-in flex-col gap-3.5 overflow-y-auto rounded-[20px] border border-line bg-panel p-6 shadow-pop">
+        <div>
+          <h2 id="invite-title" className="text-lg font-bold">
+            Invite staff
+          </h2>
+          <div className="mt-1 text-muted">They get a one-time password by WhatsApp or SMS, and set up two-factor on first sign-in when it's required.</div>
         </div>
-      ) : (
-        // ── Registration Form View ────────────────────────────────
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <div className="p-3 bg-status-fail/10 border border-status-fail/30 rounded-lg text-sm text-status-fail flex items-start gap-2">
-              <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <div className="space-y-4">
-            <Input 
-              label="Full Legal Name" 
-              name="fullName"
-              placeholder="e.g. Adewale Okafor"
-              value={formData.fullName}
-              onChange={handleChange}
-              required 
+        <div className="grid gap-2.5 sm:grid-cols-2">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold text-muted">Full name</span>
+            <input className={input} placeholder="e.g. Amina Yusuf" value={f.fullName} onChange={(e) => set({ fullName: e.target.value })} />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold text-muted">Work email</span>
+            <input className={input} type="email" placeholder="name@milipay.ng" value={f.email} onChange={(e) => set({ email: e.target.value })} />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold text-muted">Phone</span>
+            <input
+              className={clsx(input, "font-mono")}
+              inputMode="tel"
+              placeholder="0803 000 0000"
+              value={f.phone}
+              onChange={(e) => set({ phone: e.target.value.replace(/\D/g, "").slice(0, 11) })}
             />
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input 
-                label="Email Address" 
-                name="email"
-                type="email"
-                placeholder="name@milipay.ng"
-                value={formData.email}
-                onChange={handleChange}
-                required 
-              />
-              <Input 
-                label="Phone Number" 
-                name="phone"
-                placeholder="08012345678"
-                mono
-                value={formData.phone}
-                onChange={handleChange}
-                required 
-              />
-            </div>
-
-            {/* NIN Input Field */}
-            <div>
-              <Input 
-                label="National Identification Number (NIN)" 
-                name="nin"
-                mono
-                maxLength={11}
-                placeholder="12345678901"
-                value={formData.nin}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, "");
-                  setFormData(prev => ({ ...prev, nin: val }));
-                }}
-                required 
-                hint="11 digits required for identity and security vetting"
-              />
-            </div>
-
-            {/* Role Selection */}
-            <div className="space-y-1">
-              <label className="block text-xs font-semibold text-ink-muted uppercase tracking-wide">
-                Staff Role <span className="text-status-warn">*</span>
-              </label>
-              <select
-                name="role"
-                value={formData.role}
-                onChange={handleChange}
-                className="w-full bg-ledger-line border border-white/[0.08] rounded px-4 py-3 text-ink focus:outline-none focus:border-signal/50 focus:ring-1 focus:ring-signal/50 transition-colors appearance-none"
-                required
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold text-muted">State</span>
+            <select className={input} value={f.state} onChange={(e) => set({ state: e.target.value })}>
+              <option value="">Select a state</option>
+              {NIGERIAN_STATES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1.5 sm:col-span-2">
+            <span className="text-xs font-semibold text-muted">NIN</span>
+            <input
+              className={clsx(input, "font-mono")}
+              inputMode="numeric"
+              placeholder="11 digits"
+              value={f.nin}
+              onChange={(e) => set({ nin: e.target.value.replace(/\D/g, "").slice(0, 11) })}
+            />
+          </label>
+        </div>
+        <div className="text-xs font-semibold text-muted">Role</div>
+        <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Role">
+          {(Object.keys(STAFF_ROLES) as Role[]).map((r) => {
+            const on = f.role === r;
+            const ok = allowed.includes(r);
+            return (
+              <button
+                key={r}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                disabled={!ok}
+                onClick={() => set({ role: r })}
+                className={clsx(
+                  "rounded-xl border-[1.5px] p-3 text-left disabled:cursor-not-allowed disabled:opacity-45",
+                  on ? "border-brand bg-brand-soft" : "border-line",
+                )}
               >
-                <option value="agent">Field Agent (Biometric Enrollment)</option>
-                <option value="support">Service &amp; Support Staff (Disputes &amp; Help Desk)</option>
-                <option value="admin">Administrator (Console Access)</option>
-              </select>
-            </div>
-
-            {/* Assigned State (for Agents) */}
-            {formData.role === "agent" && (
-              <Select
-                label="Assigned State"
-                name="state"
-                placeholder="Select assigned territory"
-                options={NIGERIAN_STATES}
-                value={formData.state}
-                onChange={handleChange}
-                required
-              />
-            )}
-
-            {/* Credential notice */}
-            <div className="p-3.5 bg-signal/5 border border-signal/20 rounded-xl flex items-start gap-2.5">
-              <KeyRound className="w-4 h-4 text-signal-bright shrink-0 mt-0.5" />
-              <div className="text-xs leading-relaxed text-ink-muted">
-                A one-time password is generated on the server and sent to the phone
-                number above on WhatsApp, falling back to SMS. It is not shown to you,
-                and the staff member must change it on first login.
-              </div>
-            </div>
-          </div>
-
-          <div className="pt-4 flex justify-end gap-3 border-t border-white/[0.05]">
-            <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" isLoading={isSubmitting}>
-              Enroll Staff Member
-            </Button>
-          </div>
-        </form>
-      )}
-    </Modal>
+                <div className="font-semibold">{STAFF_ROLES[r as keyof typeof STAFF_ROLES].label}</div>
+                <div className="mt-0.5 text-xs leading-[1.4] text-muted">{ok ? STAFF_ROLES[r as keyof typeof STAFF_ROLES].desc : "Only a super admin can invite this role."}</div>
+              </button>
+            );
+          })}
+        </div>
+        {err && <div className="rounded-[10px] bg-fail-soft px-3 py-2.5 text-[13px] text-fail">{err}</div>}
+        <div className="mt-1 flex justify-end gap-2.5">
+          <button type="button" onClick={onClose} disabled={busy} className="h-10 rounded-[10px] border border-line px-4 font-semibold">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void send()}
+            disabled={busy}
+            className="flex h-10 items-center gap-2 rounded-[10px] bg-brand px-4 font-bold text-brand-ink disabled:opacity-60"
+          >
+            <Send size={15} aria-hidden="true" />
+            {busy ? "Sending…" : "Send invite"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

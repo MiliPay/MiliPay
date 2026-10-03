@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ChevronsUpDown, LogOut, Menu, Moon, Sun, User, X, type LucideIcon } from "lucide-react";
 import clsx from "clsx";
@@ -7,6 +7,7 @@ import { useTheme, type Portal } from "@milipay/shared/lib/theme";
 import { ROUTES } from "@milipay/shared/lib/constants";
 import type { Role } from "@milipay/shared/types";
 import { ToastProvider } from "@milipay/shared/components/ui/Toast";
+import { useIdleSignOut } from "@milipay/shared/lib/useIdleSignOut";
 
 /**
  * The one app shell for every portal (design handoff, "One shell for every
@@ -129,6 +130,13 @@ export function AppShell({ portal, nav, header, presenceColor, mainScroll = true
     await logout();
     navigate(ROUTES.login, { replace: true });
   };
+
+  // Settings › Security: the admin and support portals sign out when idle.
+  const signOutIdle = useCallback(async () => {
+    await logout();
+    navigate(`${ROUTES.login}?idle=1`, { replace: true });
+  }, [logout, navigate]);
+  useIdleSignOut(Boolean(user) && (portal === "admin" || portal === "support"), signOutIdle);
 
   const sidebar = (
     <aside className={clsx("flex h-full flex-col border-r border-line min-h-0", p.sideClass)}>

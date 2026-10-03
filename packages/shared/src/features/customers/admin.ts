@@ -139,6 +139,22 @@ export async function customerAction(customerId: string, action: CustomerAction,
   return { customerTold: Boolean(data.customerTold) };
 }
 
+/**
+ * Edit a customer's details (customer-admin edit_details): a reason is
+ * required, a new phone or email changes their sign-in too and signs them
+ * out, and the change goes on the audit log from the server.
+ */
+export async function editCustomerDetails(
+  customerId: string,
+  details: { firstName: string; lastName: string; phone: string; email: string; address: string; state: string },
+  reason: string,
+): Promise<string[]> {
+  const { data, error } = await supabase.functions.invoke("customer-admin", { body: { customerId, action: "edit_details", reason, details } });
+  if (error) throw new Error(await functionError(error, "That didn't work. Try again."));
+  if (!data?.success) throw new Error(data?.error || "That didn't work. Try again.");
+  return (data.changed as string[]) ?? [];
+}
+
 // ── What the profile shows ────────────────────────────────────────────────
 
 export interface KycRow {

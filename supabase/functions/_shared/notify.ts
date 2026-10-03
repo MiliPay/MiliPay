@@ -190,6 +190,15 @@ export function credentialMessage(fullName: string, tempPassword: string): strin
   );
 }
 
+/** A new staff member's first sign-in. They sign in with their email, not a phone number. */
+export function staffCredentialMessage(fullName: string, email: string, portalName: string, tempPassword: string): string {
+  return (
+    `Hello ${fullName}, you've been added to MiliPay's ${portalName}. ` +
+    `Sign in with ${email} and this one-time password: ${tempPassword}. ` +
+    `You'll set your own password when you first sign in. MiliPay will never ask you for this password.`
+  );
+}
+
 export function rejectionMessage(fullName: string, reason: string): string {
   return (
     `Hello ${fullName}, your MiliPay registration was not approved. ` +

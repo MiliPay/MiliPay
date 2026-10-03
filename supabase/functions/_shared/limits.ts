@@ -32,8 +32,18 @@ export async function enforceTransactionLimits(
   },
 ): Promise<void> {
   const { authUserId, customerId, amount, kycTier, pinThreshold, pin } = opts;
-  const tier = tierFor(kycTier);
-  const limits = effectiveLimits(kycTier, opts.singleLimit, opts.dailyLimit);
+  // The ceilings are edited in Settings › Tier limits (public.tier_limits).
+  // If they can't be read the payment stops: guessing could mean allowing
+  // more than an administrator has just set.
+  const { data: capRows, error: capError } = await admin.rpc("tier_caps", { p_tier: kycTier });
+  const cap = Array.isArray(capRows) ? capRows[0] : capRows;
+  if (capError || !cap || !(Number(cap.max_single) > 0) || !(Number(cap.max_daily) > 0)) {
+    console.error("[limits] tier_caps failed", capError);
+    throw new ApiError("Could not check your limits. Please try again.", 503, "LIMIT_CHECK_UNAVAILABLE");
+  }
+  const caps = { maxSingle: Number(cap.max_single), maxDaily: Number(cap.max_daily) };
+  const tier = { ...tierFor(kycTier), ...caps };
+  const limits = effectiveLimits(kycTier, opts.singleLimit, opts.dailyLimit, caps);
 
   if (amount > limits.maxSingle) {
     const isCustomerSet = limits.singleIsCustomerSet;

@@ -11,6 +11,7 @@ import {
   type MerchantForm,
 } from "@milipay/shared/features/merchants/register";
 import { categoryStyle } from "@milipay/shared/features/merchants/admin";
+import { fetchDefaultMerchantFee } from "@milipay/shared/features/settings/api";
 import { NIGERIAN_STATES } from "@milipay/shared/lib/constants";
 import { ChoiceChips, DoneCard, Field, FormError, InfoBox, ReviewRows, SelectField, StepNav } from "../register/formParts";
 
@@ -56,6 +57,20 @@ export default function RegisterMerchantPage() {
   };
   const bankCode = NIGERIAN_SETTLEMENT_BANKS.find((b) => b.name === f.bank)?.code ?? "";
 
+  // Start the fee at Settings › Fees "Palm payments (default)".
+  const [defaultFee, setDefaultFee] = useState(EMPTY_MERCHANT_FORM.fee);
+  useEffect(() => {
+    let live = true;
+    fetchDefaultMerchantFee().then((fee) => {
+      if (!live || !fee) return;
+      setDefaultFee(String(fee));
+      setF((p) => (p.fee === EMPTY_MERCHANT_FORM.fee ? { ...p, fee: String(fee) } : p));
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
   // Ask the bank whose account it is once there's a bank and ten digits.
   useEffect(() => {
     if (!bankCode || !/^\d{10}$/.test(f.acct)) {
@@ -93,7 +108,7 @@ export default function RegisterMerchantPage() {
   };
 
   const again = () => {
-    setF(EMPTY_MERCHANT_FORM);
+    setF({ ...EMPTY_MERCHANT_FORM, fee: defaultFee });
     setStep(0);
     setErr("");
     setDone(null);

@@ -1,708 +1,561 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "@milipay/shared/features/auth/AuthContext";
-import { supabase } from "@milipay/shared/lib/supabase";
-import { Card } from "@milipay/shared/components/ui/Card";
-import { Input } from "@milipay/shared/components/ui/Input";
-import { Button } from "@milipay/shared/components/ui/Button";
-import { formatNaira, formatDate } from "@milipay/shared/lib/utils/format";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
+  Banknote,
   Check,
+  Gauge,
+  Hand,
+  Contact,
+  Info,
+  Landmark,
+  Lock,
+  MessageSquare,
+  Percent,
+  Plug,
+  ScanFace,
   ShieldCheck,
-  AlertCircle,
-  KeyRound,
-  LogOut,
-  Sliders,
-  TrendingUp,
-  Sparkles,
-  Zap,
+  Signal,
+  Smartphone,
   Tv,
+  UserRoundPlus,
   Wifi,
-  RotateCcw,
-  Save,
-  CheckCircle2,
+  Zap,
+  type LucideIcon,
 } from "lucide-react";
-import { LogoutModal } from "@milipay/shared/components/layout/LogoutModal";
+import clsx from "clsx";
+import { LoadingState } from "@milipay/shared/components/ui/LoadingState";
+import { ReasonDialog, type ReasonDialogProps } from "@milipay/shared/components/ui/ReasonDialog";
+import { Pill } from "@milipay/shared/components/ui/StatusBadge";
+import { Switch } from "@milipay/shared/components/ui/Switch";
+import { useToast } from "@milipay/shared/components/ui/Toast";
+import {
+  feeError,
+  fetchIntegrations,
+  fetchSettings,
+  fetchVtuFees,
+  savePlatformSettings,
+  saveTierLimits,
+  saveVtuFees,
+  signupError,
+  tierError,
+  type FeeDraft,
+  type Integration,
+  type PlatformSettings,
+  type TierRow,
+  type VtuFees,
+} from "@milipay/shared/features/settings/api";
 
-interface VtuMarginSettings {
-  data_surcharge_ngn: number;
-  cable_surcharge_ngn: number;
-  power_convenience_fee_ngn: number;
-  airtime_surcharge_percent: number;
-  updated_at?: string;
-  updated_by?: string;
-}
+/**
+ * Settings (design handoff, admin "Settings"). Platform rules; every change
+ * needs a reason and is kept in the audit log.
+ *
+ * Only switches that change something are here. The design's Alerts tab,
+ * the face-match thresholds, the NIN lockout, the second approver, the
+ * office-IP rule and per-tier "Available" have nothing behind them yet, and
+ * "Require a reason" and "Block bank accounts in another name" are always on.
+ */
 
-const DEFAULT_VTU_SETTINGS: VtuMarginSettings = {
-  data_surcharge_ngn: 25.00,
-  cable_surcharge_ngn: 30.00,
-  power_convenience_fee_ngn: 0.00,
-  airtime_surcharge_percent: 0.00,
+type Tab = "limits" | "signup" | "fees" | "security" | "integrations";
+type DialogConfig = Omit<ReasonDialogProps, "open" | "onClose">;
+
+const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
+  { id: "limits", label: "Tier limits", icon: Gauge },
+  { id: "signup", label: "Self sign-up", icon: UserRoundPlus },
+  { id: "fees", label: "Fees and margins", icon: Percent },
+  { id: "security", label: "Security", icon: ShieldCheck },
+  { id: "integrations", label: "Integrations", icon: Plug },
+];
+
+const TIER_NAME: Record<number, [string, string]> = {
+  1: ["Tier 1 · Basic", "Phone, NIN and selfie (self sign-up)"],
+  2: ["Tier 2 · Enrolled", "NIN and palm scan confirmed"],
+  3: ["Tier 3 · Enterprise", "BVN and verified address"],
 };
 
+const naira = (n: number) => (Number.isFinite(n) ? n.toLocaleString("en-NG") : "");
+const digitsOnly = (v: string) => Number(v.replace(/[^0-9]/g, "")) || 0;
+
 export default function SettingsPage() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const tab = (TABS.some((t) => t.id === params.get("tab")) ? params.get("tab") : "limits") as Tab;
+  const { flash } = useToast();
+  const [s, setS] = useState<PlatformSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<DialogConfig | null>(null);
 
-  const isAdmin = user?.role === "admin" || user?.role === "super_admin";
+  const load = useCallback(async () => {
+    try {
+      setS(await fetchSettings());
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load settings.");
+    }
+  }, []);
 
-  // VTU Margin Settings State
-  const [vtuSettings, setVtuSettings] = useState<VtuMarginSettings>(DEFAULT_VTU_SETTINGS);
-  const [isLoadingVtuSettings, setIsLoadingVtuSettings] = useState(false);
-  const [isSavingVtuSettings, setIsSavingVtuSettings] = useState(false);
-  const [vtuSuccessMsg, setVtuSuccessMsg] = useState<string | null>(null);
-  const [vtuErrorMsg, setVtuErrorMsg] = useState<string | null>(null);
-
-  // Load VTU margin settings on mount if admin
   useEffect(() => {
-    if (!isAdmin) return;
+    void load();
+  }, [load]);
 
-    const loadSettings = async () => {
-      setIsLoadingVtuSettings(true);
-      try {
-        // 1. Try local storage first for instant render
-        const cached = localStorage.getItem("milipay_vtu_settings");
-        if (cached) {
-          try {
-            setVtuSettings(JSON.parse(cached));
-          } catch (_) {}
-        }
-
-        // 2. Try Supabase table query
-        const { data: dbData, error: dbErr } = await supabase
-          .from("vtu_settings")
-          .select("*")
-          .eq("id", "default")
-          .maybeSingle();
-
-        if (!dbErr && dbData) {
-          const loaded: VtuMarginSettings = {
-            data_surcharge_ngn: Number(dbData.data_surcharge_ngn) ?? 25,
-            cable_surcharge_ngn: Number(dbData.cable_surcharge_ngn) ?? 30,
-            power_convenience_fee_ngn: Number(dbData.power_convenience_fee_ngn) ?? 0,
-            airtime_surcharge_percent: Number(dbData.airtime_surcharge_percent) ?? 0,
-            updated_at: dbData.updated_at,
-            updated_by: dbData.updated_by,
-          };
-          setVtuSettings(loaded);
-          localStorage.setItem("milipay_vtu_settings", JSON.stringify(loaded));
-          return;
-        }
-
-        // 3. Try edge function get_settings if DB table query had an issue
-        const { data: edgeData } = await supabase.functions.invoke("vtu-service", {
-          body: { action: "get_settings" },
-        });
-        if (edgeData?.success && edgeData?.settings) {
-          setVtuSettings((prev) => ({
-            ...prev,
-            ...edgeData.settings,
-          }));
-          localStorage.setItem("milipay_vtu_settings", JSON.stringify(edgeData.settings));
-        }
-      } catch (err: any) {
-        console.warn("Could not fetch remote VTU settings:", err);
-      } finally {
-        setIsLoadingVtuSettings(false);
-      }
-    };
-
-    loadSettings();
-  }, [isAdmin]);
-
-  const handleSaveVtuSettings = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setIsSavingVtuSettings(true);
-    setVtuSuccessMsg(null);
-    setVtuErrorMsg(null);
-
-    const payload = {
-      data_surcharge_ngn: Math.max(0, Number(vtuSettings.data_surcharge_ngn) || 0),
-      cable_surcharge_ngn: Math.max(0, Number(vtuSettings.cable_surcharge_ngn) || 0),
-      power_convenience_fee_ngn: Math.max(0, Number(vtuSettings.power_convenience_fee_ngn) || 0),
-      airtime_surcharge_percent: Math.max(0, Number(vtuSettings.airtime_surcharge_percent) || 0),
-    };
-
-    try {
-      // Single authoritative path. Writing the table directly from the browser
-      // no longer works (and should not): the Edge Function verifies the caller
-      // is an administrator before touching retail pricing.
-      const { data, error } = await supabase.functions.invoke("vtu-service", {
-        body: { action: "update_settings", ...payload },
-      });
-
-      if (error) throw error;
-      if (!data?.success) {
-        throw new Error(data?.error || "Margin settings were not saved.");
-      }
-
-      const saved = { ...payload, ...data.settings };
-      setVtuSettings(saved);
-      localStorage.setItem("milipay_vtu_settings", JSON.stringify(saved));
-
-      setVtuSuccessMsg("VTU profit margins updated. Customer apps will pick up the new pricing within 10 minutes.");
-      setTimeout(() => setVtuSuccessMsg(null), 6000);
-    } catch (err: any) {
-      console.error("Failed to update VTU settings:", err);
-      setVtuErrorMsg(err?.message || "Could not save margin settings. Your changes were not applied.");
-    } finally {
-      setIsSavingVtuSettings(false);
-    }
-  };
-
-  const applyPreset = (preset: {
-    data: number;
-    cable: number;
-    power: number;
-    airtime: number;
-  }) => {
-    setVtuSettings((prev) => ({
-      ...prev,
-      data_surcharge_ngn: preset.data,
-      cable_surcharge_ngn: preset.cable,
-      power_convenience_fee_ngn: preset.power,
-      airtime_surcharge_percent: preset.airtime,
-    }));
-  };
-
-  const handlePasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-
-    if (newPassword.length < 8) {
-      setError("New password must be at least 8 characters long.");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setError("New passwords do not match.");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
-
-      if (updateError) {
-        throw updateError;
-      }
-
-      setSuccess("Your password has been updated successfully.");
-      setNewPassword("");
-      setConfirmPassword("");
-    } catch (err: any) {
-      setError(err.message || "Failed to update password. Please try again.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleConfirmLogout = async () => {
-    await logout();
-    navigate("/login", { replace: true });
+  const confirm = (config: DialogConfig) => setDialog(config);
+  const saved = async (message: string) => {
+    setDialog(null);
+    flash(message);
+    await load();
   };
 
   return (
-    <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-6 sm:space-y-8 animate-rise-in">
-      <div className="mb-6 sm:mb-8">
-        <h1 className="text-xl sm:text-2xl font-display font-bold text-ink">Account &amp; Security Settings</h1>
-        <p className="text-ink-muted text-xs sm:text-sm mt-1">Manage your staff profile, credentials, security preferences, and ecosystem margin parameters.</p>
+    <div className="flex max-w-[1280px] animate-fade-in flex-col gap-[18px] p-4 sm:p-7">
+      <div>
+        <h1 className="text-2xl font-bold tracking-[-.02em]">Settings</h1>
+        <div className="mt-1 text-muted">Platform rules. Every change needs a reason and is kept in the audit log.</div>
       </div>
-
-      <div className="space-y-6">
-        <Card raised className="p-4 sm:p-6">
-          <h2 className="text-lg font-display font-semibold text-ink mb-4 flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-signal-bright" />
-            Profile Information
-          </h2>
-          <div className="space-y-4">
-            <Input 
-              label="Full Name" 
-              value={user?.fullName || ""} 
-              readOnly 
-              disabled 
-            />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input 
-                label="Email (Login ID)" 
-                value={user?.email || ""} 
-                readOnly 
-                disabled 
-                mono 
-              />
-              <Input 
-                label="Phone Number" 
-                value={user?.phone || ""} 
-                readOnly 
-                disabled 
-                mono 
-              />
-            </div>
-            <div>
-              <span className="block text-xs font-semibold text-ink-muted uppercase tracking-wide mb-1.5">
-                Assigned Role
-              </span>
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-signal/15 text-signal-bright border border-signal/30 px-3 py-1 rounded-full uppercase tracking-wider">
-                {user?.role?.replace("_", " ")}
-              </span>
-            </div>
-          </div>
-        </Card>
-
-        {/* VTU & Telecom Surcharge Profit Margin Engine (Admin & Super Admin Exclusive) */}
-        {isAdmin && (
-          <Card raised className="p-4 sm:p-6 border border-signal/20 bg-ledger-raised/70 relative overflow-hidden">
-            <div className="absolute -top-24 -right-24 w-48 h-48 bg-signal/5 rounded-full blur-3xl pointer-events-none" />
-
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-              <div>
-                <h2 className="text-lg font-display font-semibold text-ink flex items-center gap-2">
-                  <Sliders className="w-5 h-5 text-signal-bright" />
-                  VTU &amp; Telecom Margin Engine
-                </h2>
-                <p className="text-xs text-ink-muted mt-1">
-                  Adjust active retail profit margins, markup surcharges, and convenience fees applied across customer mobile app recharges in real-time.
-                </p>
-              </div>
-              <span className="inline-flex items-center gap-1.5 text-xs font-mono text-signal-bright bg-signal/15 px-3 py-1 rounded-full border border-signal/30 self-start sm:self-auto shrink-0">
-                <Sparkles className="w-3.5 h-3.5" />
-                Live Dynamic Markup
-              </span>
-            </div>
-
-            {/* Quick Margin Presets */}
-            <div className="mb-6 p-3 bg-ledger rounded-xl border border-white/[0.04]">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-medium text-ink-muted flex items-center gap-1.5">
-                  <RotateCcw className="w-3.5 h-3.5 text-signal-bright" />
-                  Quick Margin Presets:
-                </span>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => applyPreset({ data: 25, cable: 30, power: 0, airtime: 0 })}
-                    className="text-[11px] font-mono font-medium px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-ink border border-white/[0.06] transition-colors"
-                  >
-                    Recommended Conservative (₦25 / ₦30 / ₦0)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyPreset({ data: 35, cable: 50, power: 50, airtime: 1 })}
-                    className="text-[11px] font-mono font-medium px-2.5 py-1 rounded-lg bg-signal/10 hover:bg-signal/20 text-signal-bright border border-signal/25 transition-colors"
-                  >
-                    Growth Retail (₦35 / ₦50 / ₦50 / 1%)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyPreset({ data: 0, cable: 0, power: 0, airtime: 0 })}
-                    className="text-[11px] font-mono font-medium px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-ink-muted border border-white/[0.06] transition-colors"
-                  >
-                    Zero Markup (Cashback Only)
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {vtuSuccessMsg && (
-              <div className="mb-4 p-3.5 bg-status-ok/10 border border-status-ok/30 rounded-xl text-xs sm:text-sm text-status-ok flex items-start gap-2.5 animate-rise-in">
-                <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{vtuSuccessMsg}</span>
-              </div>
-            )}
-
-            {vtuErrorMsg && (
-              <div className="mb-4 p-3.5 bg-status-fail/10 border border-status-fail/30 rounded-xl text-xs sm:text-sm text-status-fail flex items-start gap-2.5 animate-rise-in">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{vtuErrorMsg}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSaveVtuSettings} className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Data Surcharge */}
-                <div className="space-y-1.5 p-3.5 bg-ledger/80 rounded-xl border border-white/[0.05]">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-ink flex items-center gap-1.5">
-                      <Wifi className="w-3.5 h-3.5 text-signal-bright" />
-                      Data Bundle Markup (₦)
-                    </label>
-                    <span className="text-[10px] font-mono text-ink-faint uppercase">Per Bundle Vend</span>
-                  </div>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted font-mono text-sm">₦</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="500"
-                      step="1"
-                      value={vtuSettings.data_surcharge_ngn}
-                      onChange={(e) =>
-                        setVtuSettings((prev) => ({
-                          ...prev,
-                          data_surcharge_ngn: Math.max(0, parseFloat(e.target.value) || 0),
-                        }))
-                      }
-                      className="w-full pl-8 pr-3 py-2 bg-ledger-raised border border-white/[0.08] focus:border-signal/50 focus:ring-1 focus:ring-signal/30 rounded-lg text-ink font-mono text-sm transition-all"
-                      required
-                    />
-                  </div>
-                  <p className="text-[11px] text-ink-muted leading-tight">
-                    Flat fee added to wholesale API pricing across MTN, Airtel, Glo &amp; 9mobile data.
-                  </p>
-                </div>
-
-                {/* Cable TV Surcharge */}
-                <div className="space-y-1.5 p-3.5 bg-ledger/80 rounded-xl border border-white/[0.05]">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-ink flex items-center gap-1.5">
-                      <Tv className="w-3.5 h-3.5 text-signal-bright" />
-                      Cable TV Surcharge (₦)
-                    </label>
-                    <span className="text-[10px] font-mono text-ink-faint uppercase">Per Bouquet</span>
-                  </div>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted font-mono text-sm">₦</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="1000"
-                      step="1"
-                      value={vtuSettings.cable_surcharge_ngn}
-                      onChange={(e) =>
-                        setVtuSettings((prev) => ({
-                          ...prev,
-                          cable_surcharge_ngn: Math.max(0, parseFloat(e.target.value) || 0),
-                        }))
-                      }
-                      className="w-full pl-8 pr-3 py-2 bg-ledger-raised border border-white/[0.08] focus:border-signal/50 focus:ring-1 focus:ring-signal/30 rounded-lg text-ink font-mono text-sm transition-all"
-                      required
-                    />
-                  </div>
-                  <p className="text-[11px] text-ink-muted leading-tight">
-                    Platform fee on DStv, GOtv, and StarTimes bouquet activations &amp; renewals.
-                  </p>
-                </div>
-
-                {/* Electricity Convenience Fee */}
-                <div className="space-y-1.5 p-3.5 bg-ledger/80 rounded-xl border border-white/[0.05]">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-ink flex items-center gap-1.5">
-                      <Zap className="w-3.5 h-3.5 text-signal-bright" />
-                      Electricity Convenience Fee (₦)
-                    </label>
-                    <span className="text-[10px] font-mono text-ink-faint uppercase">Per Meter Vend</span>
-                  </div>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted font-mono text-sm">₦</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="500"
-                      step="1"
-                      value={vtuSettings.power_convenience_fee_ngn}
-                      onChange={(e) =>
-                        setVtuSettings((prev) => ({
-                          ...prev,
-                          power_convenience_fee_ngn: Math.max(0, parseFloat(e.target.value) || 0),
-                        }))
-                      }
-                      className="w-full pl-8 pr-3 py-2 bg-ledger-raised border border-white/[0.08] focus:border-signal/50 focus:ring-1 focus:ring-signal/30 rounded-lg text-ink font-mono text-sm transition-all"
-                      required
-                    />
-                  </div>
-                  <p className="text-[11px] text-ink-muted leading-tight">
-                    Convenience fee for generating 20-digit STS Disco tokens (prepaid &amp; postpaid).
-                  </p>
-                </div>
-
-                {/* Airtime Surcharge % */}
-                <div className="space-y-1.5 p-3.5 bg-ledger/80 rounded-xl border border-white/[0.05]">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-ink flex items-center gap-1.5">
-                      <TrendingUp className="w-3.5 h-3.5 text-signal-bright" />
-                      Airtime Surcharge (%)
-                    </label>
-                    <span className="text-[10px] font-mono text-ink-faint uppercase">Top-up Markup</span>
-                  </div>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      min="0"
-                      max="10"
-                      step="0.1"
-                      value={vtuSettings.airtime_surcharge_percent}
-                      onChange={(e) =>
-                        setVtuSettings((prev) => ({
-                          ...prev,
-                          airtime_surcharge_percent: Math.max(0, parseFloat(e.target.value) || 0),
-                        }))
-                      }
-                      className="w-full px-3 py-2 bg-ledger-raised border border-white/[0.08] focus:border-signal/50 focus:ring-1 focus:ring-signal/30 rounded-lg text-ink font-mono text-sm transition-all"
-                      required
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted font-mono text-sm">%</span>
-                  </div>
-                  <p className="text-[11px] text-ink-muted leading-tight">
-                    Optional percentage markup on airtime. MiliPay also retains 3% to 4% telecom wallet cashback.
-                  </p>
-                </div>
-              </div>
-
-              {/* Live Retail Impact Simulator */}
-              <div className="p-4 bg-ledger rounded-xl border border-white/[0.06] space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-ink flex items-center gap-1.5">
-                    <TrendingUp className="w-4 h-4 text-signal-bright" />
-                    Live Margin Impact Simulator (Customer Preview)
-                  </span>
-                  <span className="text-[10px] font-mono text-status-ok bg-status-ok/10 px-2 py-0.5 rounded border border-status-ok/20">
-                    Calculated in Real-Time
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {/* Simulation 1: MTN Data */}
-                  <div className="p-3 bg-ledger-raised/60 rounded-lg border border-white/[0.04] space-y-1.5 text-xs">
-                    <div className="font-semibold text-ink flex items-center justify-between">
-                      <span>MTN 1.5GB Data (30d)</span>
-                      <span className="text-[10px] text-ink-muted">30 Days</span>
-                    </div>
-                    <div className="space-y-1 text-ink-muted text-[11px] font-mono pt-1">
-                      <div className="flex justify-between">
-                        <span>Wholesale Cost:</span>
-                        <span>₦1,000.00</span>
-                      </div>
-                      <div className="flex justify-between text-signal-bright">
-                        <span>Configured Markup:</span>
-                        <span>+{formatNaira(vtuSettings.data_surcharge_ngn)}</span>
-                      </div>
-                      <div className="flex justify-between text-ink font-bold pt-1 border-t border-white/[0.06]">
-                        <span>Customer Debited:</span>
-                        <span>{formatNaira(1000 + Number(vtuSettings.data_surcharge_ngn))}</span>
-                      </div>
-                      <div className="flex justify-between text-status-ok text-[10px]">
-                        <span>Est. Net Revenue:</span>
-                        <span>{formatNaira(Number(vtuSettings.data_surcharge_ngn) + 30.00)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Simulation 2: Cable TV */}
-                  <div className="p-3 bg-ledger-raised/60 rounded-lg border border-white/[0.04] space-y-1.5 text-xs">
-                    <div className="font-semibold text-ink flex items-center justify-between">
-                      <span>DStv Padi Bouquet</span>
-                      <span className="text-[10px] text-ink-muted">1 Month</span>
-                    </div>
-                    <div className="space-y-1 text-ink-muted text-[11px] font-mono pt-1">
-                      <div className="flex justify-between">
-                        <span>Wholesale Cost:</span>
-                        <span>₦3,300.00</span>
-                      </div>
-                      <div className="flex justify-between text-signal-bright">
-                        <span>Configured Markup:</span>
-                        <span>+{formatNaira(vtuSettings.cable_surcharge_ngn)}</span>
-                      </div>
-                      <div className="flex justify-between text-ink font-bold pt-1 border-t border-white/[0.06]">
-                        <span>Customer Debited:</span>
-                        <span>{formatNaira(3300 + Number(vtuSettings.cable_surcharge_ngn))}</span>
-                      </div>
-                      <div className="flex justify-between text-status-ok text-[10px]">
-                        <span>Est. Net Revenue:</span>
-                        <span>{formatNaira(Number(vtuSettings.cable_surcharge_ngn) + 49.50)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Simulation 3: Electricity */}
-                  <div className="p-3 bg-ledger-raised/60 rounded-lg border border-white/[0.04] space-y-1.5 text-xs">
-                    <div className="font-semibold text-ink flex items-center justify-between">
-                      <span>Ikeja Electric (Prepaid)</span>
-                      <span className="text-[10px] text-ink-muted">20-digit STS</span>
-                    </div>
-                    <div className="space-y-1 text-ink-muted text-[11px] font-mono pt-1">
-                      <div className="flex justify-between">
-                        <span>Base Token Vend:</span>
-                        <span>₦5,000.00</span>
-                      </div>
-                      <div className="flex justify-between text-signal-bright">
-                        <span>Convenience Fee:</span>
-                        <span>+{formatNaira(vtuSettings.power_convenience_fee_ngn)}</span>
-                      </div>
-                      <div className="flex justify-between text-ink font-bold pt-1 border-t border-white/[0.06]">
-                        <span>Customer Debited:</span>
-                        <span>{formatNaira(5000 + Number(vtuSettings.power_convenience_fee_ngn))}</span>
-                      </div>
-                      <div className="flex justify-between text-status-ok text-[10px]">
-                        <span>Est. Net Revenue:</span>
-                        <span>{formatNaira(Number(vtuSettings.power_convenience_fee_ngn) + 60.00)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons & Audit Info */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-1">
-                <div className="text-xs text-ink-faint text-center sm:text-left">
-                  {vtuSettings.updated_at && (
-                    <span>
-                      Last synchronized: {formatDate(vtuSettings.updated_at)} • Logged by{" "}
-                      <strong className="text-ink-muted">{vtuSettings.updated_by || "Admin"}</strong>
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-3 w-full sm:w-auto">
-                  <Button
-                    type="submit"
-                    isLoading={isSavingVtuSettings}
-                    disabled={isSavingVtuSettings || isLoadingVtuSettings}
-                    className="w-full sm:w-auto px-6 py-2.5 rounded-xl gap-2 font-medium"
-                  >
-                    <Save className="w-4 h-4" />
-                    Save Margin Configuration
-                  </Button>
-                </div>
-              </div>
-            </form>
-          </Card>
-        )}
-
-        <Card raised className="p-6">
-          <h2 className="text-lg font-display font-semibold text-ink mb-2 flex items-center gap-2">
-            <KeyRound className="w-5 h-5 text-signal-bright" />
-            Change Password
-          </h2>
-          <p className="text-xs text-ink-muted mb-4">
-            Update your temporary password to a permanent, secure password for your account.
-          </p>
-
-          {error && (
-            <div className="mb-4 p-3 bg-status-fail/10 border border-status-fail/30 rounded-lg text-sm text-status-fail flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {success && (
-            <div className="mb-4 p-3 bg-status-ok/10 border border-status-ok/30 rounded-lg text-sm text-status-ok flex items-start gap-2">
-              <Check className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{success}</span>
-            </div>
-          )}
-
-          <form onSubmit={handlePasswordSubmit} className="space-y-4">
-            <Input 
-              label="New Password" 
-              type="password" 
-              placeholder="Minimum 8 characters" 
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              required 
-            />
-            <Input 
-              label="Confirm New Password" 
-              type="password" 
-              placeholder="Re-enter new password" 
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required 
-            />
-            <Button type="submit" isLoading={isSubmitting} disabled={isSubmitting}>
-              Update Password
-            </Button>
-          </form>
-        </Card>
-
-        <Card raised className="p-4 sm:p-6">
-          <h2 className="text-lg font-display font-semibold text-ink mb-4">Portal &amp; System Information</h2>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between py-2 border-b border-ledger-line">
-              <span className="text-ink-muted">Active Portal</span>
-              <span className="text-ink font-medium">
-                {user?.role === "agent" 
-                  ? "Field Agent Portal" 
-                  : user?.role === "support" 
-                  ? "Support Service Portal" 
-                  : "Central Admin Panel"}
-              </span>
-            </div>
-            <div className="flex justify-between py-2 border-b border-ledger-line">
-              <span className="text-ink-muted">Role Clearance</span>
-              <span className="font-mono text-signal-bright font-medium capitalize">
-                {user?.role === "agent" 
-                  ? "Biometric Enrollment & Walk-ins" 
-                  : user?.role === "support" 
-                  ? "Digital Live Support Desk" 
-                  : "Executive Administrator"}
-              </span>
-            </div>
-            <div className="flex justify-between py-2 border-b border-ledger-line">
-              <span className="text-ink-muted">Version</span>
-              <span className="font-data text-ink">v1.0.0</span>
-            </div>
-            <div className="flex justify-between py-2">
-              <span className="text-ink-muted">Environment</span>
-              <span className="font-data text-status-ok flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-status-ok animate-pulse" />
-                Live Production
-              </span>
-            </div>
-          </div>
-          <p className="text-xs text-ink-faint mt-6 text-center">MiliPay Ecosystem • Secured for 100M+ biometric payment transactions.</p>
-        </Card>
-
-        {/* Active Terminal Session & Sign Out Card */}
-        <Card raised className="p-4 sm:p-6 border border-status-fail/20 bg-ledger-raised/50">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-            <h2 className="text-lg font-display font-semibold text-ink flex items-center gap-2">
-              <LogOut className="w-5 h-5 text-status-fail" />
-              Active Terminal Session
-            </h2>
-            <span className="inline-flex items-center gap-1.5 text-xs font-mono text-status-ok bg-status-ok/10 px-2.5 py-1 rounded-full border border-status-ok/20 self-start sm:self-auto">
-              <span className="w-1.5 h-1.5 rounded-full bg-status-ok animate-pulse" />
-              Encrypted TLS Session
-            </span>
-          </div>
-          <p className="text-xs text-ink-muted mb-4 leading-relaxed">
-            You are actively logged into this device as <strong className="text-ink">{user?.fullName || "Staff Member"}</strong> ({user?.email}).
-            Terminating your session revokes local cryptographic tokens and purges cached biometric credentials from this terminal.
-          </p>
-          <div className="pt-1">
-            <Button
-              type="button"
-              variant="danger"
-              onClick={() => setIsLogoutModalOpen(true)}
-              className="w-full sm:w-auto py-2.5 px-5 text-xs sm:text-sm rounded-xl gap-2 font-medium"
-            >
-              <LogOut className="w-4 h-4" />
-              Sign Out of Terminal
-            </Button>
-          </div>
-        </Card>
+      <div className="grid items-start gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <nav className="flex gap-0.5 overflow-x-auto lg:sticky lg:top-0 lg:flex-col" aria-label="Settings sections">
+          {TABS.map((t) => {
+            const on = t.id === tab;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                aria-current={on ? "page" : undefined}
+                onClick={() => setParams(t.id === "limits" ? {} : { tab: t.id }, { replace: true })}
+                className={clsx(
+                  "flex h-[38px] flex-none items-center gap-2.5 whitespace-nowrap rounded-[10px] px-3",
+                  on ? "bg-brand-soft font-semibold text-brand-text" : "font-medium text-muted hover:bg-hover",
+                )}
+              >
+                <t.icon size={16} aria-hidden="true" />
+                {t.label}
+              </button>
+            );
+          })}
+        </nav>
+        <div className="flex min-w-0 flex-col gap-3.5">
+          {error && <div className="rounded-xl bg-fail-soft p-3.5 text-[13px] text-fail">{error}</div>}
+          {!s && !error && <LoadingState title="Loading settings" />}
+          {s && tab === "limits" && <TierLimits s={s} confirm={confirm} saved={saved} />}
+          {s && tab === "signup" && <SignupRules s={s} confirm={confirm} saved={saved} goLimits={() => setParams({}, { replace: true })} />}
+          {s && tab === "fees" && <Fees s={s} confirm={confirm} saved={saved} />}
+          {s && tab === "security" && <Security s={s} confirm={confirm} saved={saved} />}
+          {tab === "integrations" && <Integrations />}
+        </div>
       </div>
-
-      <LogoutModal
-        isOpen={isLogoutModalOpen}
-        onClose={() => setIsLogoutModalOpen(false)}
-        onConfirm={handleConfirmLogout}
-        portalName={
-          user?.role === "agent"
-            ? "Field Agent Portal"
-            : user?.role === "support"
-            ? "Support Service Portal"
-            : "Central Admin Panel"
-        }
-        user={user}
-      />
+      {dialog && <ReasonDialog open onClose={() => setDialog(null)} {...dialog} />}
     </div>
+  );
+}
+
+interface SectionProps {
+  s: PlatformSettings;
+  confirm: (c: DialogConfig) => void;
+  saved: (message: string) => Promise<void>;
+}
+
+function Panel({ title, sub, children }: { title: string; sub: string; children: ReactNode }) {
+  return (
+    <div className="overflow-hidden rounded-card border border-line bg-panel shadow-card">
+      <div className="px-5 pb-3 pt-[18px]">
+        <h2 className="text-base font-bold">{title}</h2>
+        <div className="mt-[3px] text-[13px] text-muted">{sub}</div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function SaveBar({ changed, error, onDiscard, onSave, label }: { changed: boolean; error: string; onDiscard: () => void; onSave: () => void; label: string }) {
+  const ready = changed && !error;
+  return (
+    <>
+      {changed && error && <div className="mx-5 mb-1 rounded-[10px] bg-fail-soft px-3 py-2.5 text-[13px] text-fail">{error}</div>}
+      <div className="flex flex-wrap items-center gap-2.5 border-t border-line px-5 py-3.5">
+        <div className="flex-1 text-[13px] text-muted">{changed ? "Unsaved changes. You will be asked for a reason." : "No changes."}</div>
+        <button
+          type="button"
+          onClick={onDiscard}
+          disabled={!changed}
+          className="flex h-[38px] items-center rounded-[10px] border border-line px-3.5 font-semibold disabled:opacity-40"
+        >
+          Discard
+        </button>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={!ready}
+          className="flex h-[38px] items-center gap-2 rounded-[10px] bg-brand px-4 font-bold text-brand-ink disabled:opacity-40"
+        >
+          <Check size={16} strokeWidth={2.5} aria-hidden="true" />
+          {label}
+        </button>
+      </div>
+    </>
+  );
+}
+
+function MoneyInput({ value, onChange, changed, label, prefix = "₦", suffix }: { value: string; onChange: (v: string) => void; changed: boolean; label: string; prefix?: string; suffix?: string }) {
+  return (
+    <span className={clsx("flex h-[38px] items-center gap-1 rounded-[9px] border bg-field px-2.5", changed ? "border-warn" : "border-line")}>
+      {prefix && <span className="font-semibold text-muted">{prefix}</span>}
+      <input
+        aria-label={label}
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-full min-w-0 flex-1 bg-transparent text-right font-semibold tabular-nums outline-none"
+      />
+      {suffix && <span className="whitespace-nowrap text-[13px] text-muted">{suffix}</span>}
+    </span>
+  );
+}
+
+// ── Tier limits ──────────────────────────────────────────────────────────
+function TierLimits({ s, confirm, saved }: SectionProps) {
+  const [draft, setDraft] = useState<TierRow[]>(s.tiers);
+  useEffect(() => setDraft(s.tiers), [s.tiers]);
+  const changedRows = draft.filter((d) => {
+    const o = s.tiers.find((t) => t.tier === d.tier)!;
+    return o.maxSingle !== d.maxSingle || o.maxDaily !== d.maxDaily || o.pinOver !== d.pinOver;
+  });
+  const err = tierError(draft);
+  const set = (tier: number, k: "maxSingle" | "maxDaily" | "pinOver", v: string) =>
+    setDraft((p) => p.map((t) => (t.tier === tier ? { ...t, [k]: digitsOnly(v) } : t)));
+
+  return (
+    <Panel title="Tier limits" sub="Customers can set their own limits below these ceilings in the app. The PIN amount is where a new customer in that tier starts.">
+      <div className="overflow-x-auto">
+        <div className="min-w-[640px]">
+          <div className="grid grid-cols-[minmax(0,1.4fr)_150px_150px_150px] gap-3.5 border-y border-line bg-field px-5 py-[9px] text-[11px] font-semibold uppercase tracking-[.06em] text-faint">
+            <div>Tier</div>
+            <div>Per payment</div>
+            <div>Daily</div>
+            <div>PIN required over</div>
+          </div>
+          {draft.map((t) => {
+            const o = s.tiers.find((x) => x.tier === t.tier)!;
+            return (
+              <div key={t.tier} className="grid grid-cols-[minmax(0,1.4fr)_150px_150px_150px] items-center gap-3.5 border-b border-line2 px-5 py-3">
+                <div>
+                  <div className="font-semibold">{TIER_NAME[t.tier][0]}</div>
+                  <div className="mt-0.5 text-xs text-muted">{TIER_NAME[t.tier][1]}</div>
+                </div>
+                <MoneyInput label={`Tier ${t.tier} per payment`} value={naira(t.maxSingle)} changed={t.maxSingle !== o.maxSingle} onChange={(v) => set(t.tier, "maxSingle", v)} />
+                <MoneyInput label={`Tier ${t.tier} daily`} value={naira(t.maxDaily)} changed={t.maxDaily !== o.maxDaily} onChange={(v) => set(t.tier, "maxDaily", v)} />
+                <MoneyInput label={`Tier ${t.tier} PIN required over`} value={naira(t.pinOver)} changed={t.pinOver !== o.pinOver} onChange={(v) => set(t.tier, "pinOver", v)} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <SaveBar
+        changed={changedRows.length > 0}
+        error={err}
+        label="Save changes"
+        onDiscard={() => setDraft(s.tiers)}
+        onSave={() =>
+          confirm({
+            title: "Save tier limits?",
+            body: "New limits apply to every customer in that tier on their next payment.",
+            icon: Gauge,
+            tone: "ok",
+            confirmLabel: "Save limits",
+            noteRequired: true,
+            notePlaceholder: "Why are the limits changing?",
+            onConfirm: async (note) => {
+              await saveTierLimits(changedRows, note);
+              await saved("Tier limits saved · logged");
+            },
+          })
+        }
+      />
+    </Panel>
+  );
+}
+
+// ── Self sign-up ─────────────────────────────────────────────────────────
+function SignupRules({ s, confirm, saved, goLimits }: SectionProps & { goLimits: () => void }) {
+  const [d, setD] = useState(s.signup);
+  useEffect(() => setD(s.signup), [s.signup]);
+  const changed = JSON.stringify(d) !== JSON.stringify(s.signup);
+  const nums: { k: "selfieAttempts" | "abandonHours"; label: string; sub: string; unit: string }[] = [
+    { k: "selfieAttempts", label: "Selfie attempts allowed", sub: "After the last failed attempt the sign-up goes to Sign-ups for review.", unit: "tries" },
+    { k: "abandonHours", label: "Mark as abandoned after", sub: "No finished sign-up after this long moves it to Abandoned. A reminder SMS gives it another week.", unit: "hours" },
+  ];
+  return (
+    <>
+      <Panel
+        title="Self sign-up"
+        sub="Rules for people opening a Tier 1 account in the app. Smile ID checks the NIN and selfie; anything it flags goes to Sign-ups for review."
+      >
+        {nums.map((n) => (
+          <div key={n.k} className="grid grid-cols-[minmax(0,1fr)_160px] items-center gap-4 border-t border-line2 px-5 py-3.5">
+            <div>
+              <div className="font-semibold">{n.label}</div>
+              <div className="mt-0.5 text-xs leading-[1.45] text-muted">{n.sub}</div>
+            </div>
+            <MoneyInput label={n.label} prefix="" suffix={n.unit} value={String(d[n.k])} changed={d[n.k] !== s.signup[n.k]} onChange={(v) => setD({ ...d, [n.k]: digitsOnly(v) })} />
+          </div>
+        ))}
+        <div className="grid grid-cols-[minmax(0,1fr)_160px] items-center gap-4 border-t border-line2 px-5 py-3.5">
+          <div>
+            <div className="font-semibold">Allow self sign-up in the app</div>
+            <div className="mt-0.5 text-xs leading-[1.45] text-muted">When off, the app tells people to visit an agent instead of creating an account.</div>
+          </div>
+          <div className="flex justify-end">
+            <Switch label="Allow self sign-up in the app" on={d.enabled} onChange={(enabled) => setD({ ...d, enabled })} />
+          </div>
+        </div>
+        <SaveBar
+          changed={changed}
+          error={signupError(d)}
+          label="Save rules"
+          onDiscard={() => setD(s.signup)}
+          onSave={() =>
+            confirm({
+              title: "Save sign-up rules?",
+              body: "New rules apply to the next sign-up attempt.",
+              icon: UserRoundPlus,
+              tone: "ok",
+              confirmLabel: "Save rules",
+              noteRequired: true,
+              notePlaceholder: "Why are the rules changing?",
+              onConfirm: async (note) => {
+                await savePlatformSettings("signup", d, note);
+                await saved("Sign-up rules saved · logged");
+              },
+            })
+          }
+        />
+      </Panel>
+      <div className="flex gap-2.5 rounded-[14px] bg-info-soft px-4 py-3 text-[13px] leading-[1.45] text-info">
+        <Info size={16} className="mt-px flex-none" aria-hidden="true" />
+        <div>
+          Tier 1 limits for self sign-ups are set in{" "}
+          <button type="button" onClick={goLimits} className="font-bold underline">
+            Tier limits
+          </button>
+          . Bank accounts in someone else's name are always refused for self sign-ups.
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Fees and margins ─────────────────────────────────────────────────────
+const FEE_ROWS: { k: keyof FeeDraft; label: string; sub: string; icon: LucideIcon; color: string; unit: "%" | "₦" }[] = [
+  { k: "palm", label: "Palm payments (default)", sub: "Charged to the merchant per payment. New merchants start here; existing ones keep their own rate.", icon: Hand, color: "#00C896", unit: "%" },
+  { k: "airtime", label: "Airtime", sub: "Added to the airtime price, per purchase", icon: Smartphone, color: "#10B981", unit: "%" },
+  { k: "data", label: "Data", sub: "Added to the plan price, per purchase", icon: Wifi, color: "#3B82F6", unit: "₦" },
+  { k: "electricity", label: "Electricity", sub: "Convenience fee added to the token amount", icon: Zap, color: "#F97316", unit: "₦" },
+  { k: "cable", label: "Cable TV", sub: "Added to the package price, per purchase", icon: Tv, color: "#A855F7", unit: "₦" },
+];
+
+function Fees({ s, confirm, saved }: SectionProps) {
+  const [vtu, setVtu] = useState<VtuFees | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const base = (v: VtuFees): FeeDraft => ({
+    palm: String(s.defaultMerchantFee),
+    airtime: String(v.airtime_surcharge_percent),
+    data: String(v.data_surcharge_ngn),
+    electricity: String(v.power_convenience_fee_ngn),
+    cable: String(v.cable_surcharge_ngn),
+  });
+  const [d, setD] = useState<FeeDraft | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const v = await fetchVtuFees();
+      setVtu(v);
+      setD(base(v));
+      setErr(null);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not load the fees.");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.defaultMerchantFee]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (err) return <div className="rounded-xl bg-fail-soft p-3.5 text-[13px] text-fail">{err}</div>;
+  if (!vtu || !d) return <LoadingState title="Loading fees" />;
+  const orig = base(vtu);
+  const changed = (Object.keys(d) as (keyof FeeDraft)[]).filter((k) => Number(d[k]) !== Number(orig[k]));
+
+  return (
+    <Panel title="Fees and margins" sub="What MiliPay earns on each payment. Prices shown to customers include these.">
+      {FEE_ROWS.map((r) => (
+        <div key={r.k} className="flex items-center gap-3.5 border-t border-line2 px-5 py-3">
+          <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px]" style={{ background: `${r.color}24`, color: r.color }}>
+            <r.icon size={16} aria-hidden="true" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold">{r.label}</div>
+            <div className="text-xs text-muted">{r.sub}</div>
+          </div>
+          <div className="w-[120px]">
+            <MoneyInput
+              label={r.label}
+              prefix={r.unit === "₦" ? "₦" : ""}
+              suffix={r.unit === "%" ? "%" : undefined}
+              value={d[r.k]}
+              changed={changed.includes(r.k)}
+              onChange={(v) => setD({ ...d, [r.k]: v.replace(/[^0-9.]/g, "").slice(0, r.unit === "%" ? 5 : 6) })}
+            />
+          </div>
+        </div>
+      ))}
+      <SaveBar
+        changed={changed.length > 0}
+        error={feeError(d)}
+        label="Save fees"
+        onDiscard={() => setD(orig)}
+        onSave={() =>
+          confirm({
+            title: "Save fees?",
+            body: "New rates apply from the next transaction.",
+            icon: Percent,
+            tone: "ok",
+            confirmLabel: "Save fees",
+            noteRequired: true,
+            notePlaceholder: "Why are the fees changing?",
+            onConfirm: async (note) => {
+              const vtuChanged = changed.some((k) => k !== "palm");
+              if (vtuChanged) {
+                await saveVtuFees(
+                  {
+                    airtime_surcharge_percent: Number(d.airtime),
+                    data_surcharge_ngn: Number(d.data),
+                    power_convenience_fee_ngn: Number(d.electricity),
+                    cable_surcharge_ngn: Number(d.cable),
+                  },
+                  note,
+                );
+              }
+              if (changed.includes("palm")) await savePlatformSettings("merchant_fee", { defaultMerchantFee: Number(d.palm) }, note);
+              await saved("Fees saved · logged");
+              await load();
+            },
+          })
+        }
+      />
+    </Panel>
+  );
+}
+
+// ── Security ─────────────────────────────────────────────────────────────
+function Security({ s, confirm, saved }: SectionProps) {
+  const rows: { k: "mfaRequired" | "idleSignOut"; label: string; sub: string }[] = [
+    {
+      k: "mfaRequired",
+      label: "Require two-factor sign-in",
+      sub: "All staff must use an authenticator app. Anyone who hasn't set one up is asked to on their next sign-in.",
+    },
+    { k: "idleSignOut", label: "Sign out after 15 minutes idle", sub: "Applies to the admin and support portals." },
+  ];
+  const cantTurnOnMfa = !s.security.mfaRequired && s.sessionAal !== "aal2";
+  return (
+    <Panel title="Security" sub="Rules for everyone who signs in to the MiliPay portals.">
+      {rows.map((r) => {
+        const on = s.security[r.k];
+        const blocked = r.k === "mfaRequired" && cantTurnOnMfa;
+        return (
+          <div key={r.k} className="flex items-center gap-3.5 border-t border-line2 px-5 py-3.5">
+            <div className="flex-1">
+              <div className="font-semibold">{r.label}</div>
+              <div className="mt-0.5 text-xs leading-[1.4] text-muted">
+                {r.sub}
+                {blocked && (
+                  <span className="mt-1 block font-semibold text-warn">
+                    Sign in with your own authenticator first, so turning this on can't lock you out.
+                  </span>
+                )}
+              </div>
+            </div>
+            <Switch
+              label={r.label}
+              on={on}
+              disabled={blocked}
+              onChange={(next) =>
+                confirm({
+                  title: `${next ? "Turn on" : "Turn off"} "${r.label}"?`,
+                  body:
+                    r.k === "mfaRequired"
+                      ? next
+                        ? "Everyone must pass an authenticator code from their next request. Staff without one are asked to set it up."
+                        : "Staff can sign in with only a password again."
+                      : next
+                        ? "Anyone idle for 15 minutes in the admin or support portal is signed out."
+                        : "Idle sessions stay signed in.",
+                  icon: ShieldCheck,
+                  tone: next ? "ok" : "fail",
+                  confirmLabel: next ? "Turn on" : "Turn off",
+                  noteRequired: true,
+                  onConfirm: async (note) => {
+                    await savePlatformSettings("security", { [r.k]: next }, note);
+                    await saved("Setting saved · logged");
+                  },
+                })
+              }
+            />
+          </div>
+        );
+      })}
+    </Panel>
+  );
+}
+
+// ── Integrations ─────────────────────────────────────────────────────────
+const INTEGRATION_ICON: Record<string, LucideIcon> = {
+  landmark: Landmark,
+  zap: Zap,
+  signal: Signal,
+  "message-square": MessageSquare,
+  "scan-face": ScanFace,
+  "id-card": Contact,
+  hand: Hand,
+  banknote: Banknote,
+};
+
+function Integrations() {
+  const [list, setList] = useState<Integration[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    fetchIntegrations()
+      .then(setList)
+      .catch((e) => setErr(e instanceof Error ? e.message : "Could not check the integrations."));
+  }, []);
+  if (err) return <div className="rounded-xl bg-fail-soft p-3.5 text-[13px] text-fail">{err}</div>;
+  if (!list) return <LoadingState title="Checking integrations" />;
+  return (
+    <>
+      <div className="grid gap-3.5 md:grid-cols-2">
+        {list.map((g) => {
+          const Icon = INTEGRATION_ICON[g.icon] ?? Plug;
+          return (
+            <div key={g.name} className="flex flex-col gap-2.5 rounded-2xl border border-line bg-panel px-[18px] py-4 shadow-card">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-chip text-muted">
+                  <Icon size={18} aria-hidden="true" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-bold">{g.name}</div>
+                  <div className="text-xs text-muted">{g.use}</div>
+                </div>
+                <Pill tone={g.tone}>{g.status}</Pill>
+              </div>
+              <div className="flex justify-between gap-3 text-xs text-muted">
+                <div>{g.metric}</div>
+                <div className="font-mono">{g.mode}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex gap-2 text-xs text-faint">
+        <Lock size={13} aria-hidden="true" />
+        Secret keys live only in server config and are never shown here.
+      </div>
+    </>
   );
 }

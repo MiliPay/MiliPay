@@ -6,7 +6,8 @@ import { TIER_LIMITS } from "../supabase/functions/_shared/tier-math";
  * The tier table exists in four places and none of them can import the others:
  *
  *   1. supabase/functions/_shared/tier-math.ts  — Deno, enforces payments
- *   2. public.tier_caps()                        — SQL, clamps limit writes
+ *   2. public.tier_limits (seed)                 — SQL; tier_caps() reads it, and
+ *                                                 Settings › Tier limits edits it
  *   3. packages/shared/src/types/index.ts        — Vite, the web portals
  *   4. mobile-app/src/lib/limitsView.ts         — Expo, a separate package
  *
@@ -24,25 +25,20 @@ const read = (p: string) => fs.readFileSync(p, "utf8");
 const num = (raw: string) => Number(raw.replace(/_/g, ""));
 
 describe("tier limits agree across every copy", () => {
-  it("SQL tier_caps matches tier-math", () => {
-    // The authoritative copy of the function is the most recent migration that
-    // defines it.
-    const sql = read("supabase/migrations/20260921010000_close_open_policies_and_anon_rpcs.sql");
-
-    const body = sql.slice(sql.indexOf("FUNCTION public.tier_caps"));
-    const singleLine = body.match(/CASE p_tier WHEN 1 THEN (\d+)::NUMERIC\s+WHEN 3 THEN (\d+)::NUMERIC\s+ELSE (\d+)::NUMERIC END/);
-    const dailyLine = body.match(/CASE p_tier WHEN 1 THEN (\d+)::NUMERIC\s+WHEN 3 THEN (\d+)::NUMERIC\s+ELSE (\d+)::NUMERIC END;/);
-
-    expect(singleLine, "could not find the single-limit CASE in tier_caps").not.toBeNull();
-    expect(dailyLine, "could not find the daily-limit CASE in tier_caps").not.toBeNull();
-
-    expect(num(singleLine![1])).toBe(TIER_LIMITS[1].maxSingle);
-    expect(num(singleLine![2])).toBe(TIER_LIMITS[3].maxSingle);
-    expect(num(singleLine![3])).toBe(TIER_LIMITS[2].maxSingle);
-
-    expect(num(dailyLine![1])).toBe(TIER_LIMITS[1].maxDaily);
-    expect(num(dailyLine![2])).toBe(TIER_LIMITS[3].maxDaily);
-    expect(num(dailyLine![3])).toBe(TIER_LIMITS[2].maxDaily);
+  it("the tier_limits table starts from tier-math's numbers", () => {
+    // Since 20261003130000 the ceilings live in public.tier_limits, edited in
+    // Settings › Tier limits, and tier_caps() reads them. The other copies
+    // are the defaults it was seeded with (and the app's display until it
+    // reads the table), so the seed must match them.
+    const sql = read("supabase/migrations/20261003130000_staff_and_settings.sql");
+    const seed = sql.slice(sql.indexOf("INSERT INTO public.tier_limits"));
+    for (const tier of [1, 2, 3] as const) {
+      const row = seed.match(new RegExp(`\\(${tier}, (\\d+), (\\d+), (\\d+)\\)`));
+      expect(row, `no seed row for tier ${tier}`).not.toBeNull();
+      expect(num(row![1]), `tier ${tier} single limit`).toBe(TIER_LIMITS[tier].maxSingle);
+      expect(num(row![2]), `tier ${tier} daily limit`).toBe(TIER_LIMITS[tier].maxDaily);
+    }
+    expect(sql).toMatch(/FUNCTION public\.tier_caps\(p_tier INT\)[\s\S]*?FROM public\.tier_limits t/);
   });
 
   it("the web portals' TIER_LIMITS matches tier-math", () => {

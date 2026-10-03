@@ -53,8 +53,10 @@ export function effectiveLimits(
   kycTier: number,
   singleLimit?: number | null,
   dailyLimit?: number | null,
+  /** The tier's ceilings as Settings has them (public.tier_limits); the built-in table otherwise. */
+  caps?: { maxSingle: number; maxDaily: number } | null,
 ): EffectiveLimits {
-  const tier = tierFor(kycTier);
+  const tier = caps ? { ...tierFor(kycTier), ...caps } : tierFor(kycTier);
 
   // A non-finite or non-positive value is not a tightening, it is nonsense;
   // ignore it and use the tier.

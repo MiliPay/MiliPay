@@ -132,6 +132,34 @@ async function sendCode(phone: string, code: string): Promise<boolean> {
 
 const NOT_SENT = "We couldn't send a code to that number right now. Please try again shortly.";
 
+/**
+ * The rules Settings › Self sign-up controls (platform_settings). Read once
+ * per request; when the row can't be read, the built-in defaults apply.
+ */
+interface SignupRules {
+  enabled: boolean;
+  selfieAttempts: number;
+  abandonHours: number;
+}
+const DEFAULT_RULES: SignupRules = { enabled: true, selfieAttempts: MAX_SELFIE_ATTEMPTS, abandonHours: 168 };
+let rules: SignupRules = DEFAULT_RULES;
+
+async function loadRules(admin: SupabaseClient): Promise<SignupRules> {
+  const { data, error } = await admin
+    .from("platform_settings")
+    .select("self_signup_enabled, selfie_attempts, signup_abandon_hours")
+    .eq("id", 1)
+    .maybeSingle();
+  if (error || !data) return DEFAULT_RULES;
+  const attempts = Number(data.selfie_attempts);
+  const hours = Number(data.signup_abandon_hours);
+  return {
+    enabled: data.self_signup_enabled !== false,
+    selfieAttempts: attempts >= 1 && attempts <= 5 ? attempts : MAX_SELFIE_ATTEMPTS,
+    abandonHours: hours >= 24 && hours <= 720 ? hours : 168,
+  };
+}
+
 async function loadSession(admin: SupabaseClient, id: unknown): Promise<Session> {
   if (typeof id !== "string" || id.length === 0 || id.length > 64) throw new ApiError(START_AGAIN, 400, "BAD_REQUEST");
   const { data } = await admin.from(TABLE).select("*").eq("id", id).maybeSingle();
@@ -176,7 +204,7 @@ function view(s: Session) {
     nin: s.nin ? { masked: maskNin(s.nin) } : null,
     dateOfBirth: s.date_of_birth,
     selfie: {
-      attemptsLeft: Math.max(0, MAX_SELFIE_ATTEMPTS - (Number(s.selfie_attempts) || 0)),
+      attemptsLeft: Math.max(0, rules.selfieAttempts - (Number(s.selfie_attempts) || 0)),
       failure: s.selfie_failure,
       failureText: s.selfie_failure ? FAIL_REASONS[s.selfie_failure as keyof typeof FAIL_REASONS] ?? null : null,
     },
@@ -202,6 +230,9 @@ async function start(admin: SupabaseClient, address: string, body: Record<string
   await rateLimit(admin, `signup:address:${address}`, 20, 60 * 60);
   await rateLimit(admin, `signup:phone:${phone}`, 5, 60 * 60);
   if (await phoneTaken(admin, phone)) throw new ApiError(PHONE_TAKEN, 409, "PHONE_TAKEN");
+  if (!rules.enabled) {
+    throw new ApiError("Signing up in the app is paused right now. Visit any MiliPay agent with your NIN to open an account.", 503, "SIGNUP_PAUSED");
+  }
 
   // One sign-up per number at a time: starting again replaces the last.
   await admin
@@ -210,7 +241,7 @@ async function start(admin: SupabaseClient, address: string, body: Record<string
     .eq("phone", phone)
     .in("step", ["phone", "nin", "selfie", "confirm", "addr"]);
 
-  const { data: created, error } = await admin.from(TABLE).insert({ phone, step: "phone", expires_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString() }).select("id").single();
+  const { data: created, error } = await admin.from(TABLE).insert({ phone, step: "phone", expires_at: new Date(Date.now() + rules.abandonHours * 3600 * 1000).toISOString() }).select("id").single();
   if (error || !created) {
     console.error("[signup] session not created", error);
     throw new ApiError("Could not start sign-up. Please try again.", 503, "UNAVAILABLE");
@@ -396,7 +427,7 @@ async function selfieStatus(admin: SupabaseClient, body: Record<string, unknown>
     return json({ ...view({ ...s, step: "review" }) });
   }
   const attempts = (Number(s.selfie_attempts) || 0) + (outcome.counts ? 1 : 0);
-  if (attempts >= MAX_SELFIE_ATTEMPTS) {
+  if (attempts >= rules.selfieAttempts) {
     await update(admin, s.id, { evaluated_job_id: s.smile_job_id, selfie_attempts: attempts, step: "review", review_reason: "three_failed_selfies" });
     return json({ ...view({ ...s, step: "review", selfie_attempts: attempts }) });
   }
@@ -513,6 +544,7 @@ serve(handler(async (req) => {
   const address_ = callerAddress(req);
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const action = typeof body?.action === "string" ? body.action : "";
+  rules = await loadRules(admin);
 
   switch (action) {
     case "start":

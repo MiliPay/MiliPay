@@ -211,6 +211,8 @@ export class FakeSupabase {
   readonly deletedUsers: string[] = [];
   /** auth.admin.createUser calls, in order. */
   readonly createdUsers: { id: string; attributes: Record<string, unknown> }[] = [];
+  /** Authenticator factors per user, for auth.admin.mfa. */
+  readonly factors = new Map<string, { id: string; factor_type: string; status: string }[]>();
 
   readonly auth = {
     getUser: async (token: string) => {
@@ -250,6 +252,13 @@ export class FakeSupabase {
       signOut: async (jwt: string, scope?: string) => {
         this.signOuts.push({ jwt, scope: scope ?? "global" });
         return { data: null, error: null };
+      },
+      mfa: {
+        listFactors: async ({ userId }: { userId: string }) => ({ data: { factors: [...(this.factors.get(userId) ?? [])] }, error: null }),
+        deleteFactor: async ({ userId, id }: { userId: string; id: string }) => {
+          this.factors.set(userId, (this.factors.get(userId) ?? []).filter((f) => f.id !== id));
+          return { data: { id }, error: null };
+        },
       },
       deleteUser: async (id: string) => {
         this.deletedUsers.push(id);

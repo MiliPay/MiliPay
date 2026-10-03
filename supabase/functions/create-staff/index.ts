@@ -10,9 +10,9 @@ import {
   requireStaffRole,
 } from "../_shared/auth.ts";
 import {
-  credentialMessage,
   dispatchCredential,
   generateTempPassword,
+  staffCredentialMessage,
 } from "../_shared/notify.ts";
 
 /**
@@ -115,7 +115,8 @@ serve(handler(async (req) => {
     after: { role, status: "active" },
   });
 
-  const dispatch = await dispatchCredential(phone, credentialMessage(fullName, tempPassword));
+  const portalName = role === "agent" ? "agent portal" : role === "support" ? "support portal" : "admin console";
+  const dispatch = await dispatchCredential(phone, staffCredentialMessage(fullName, email, portalName, tempPassword));
 
   if (!dispatch.delivered) {
     console.error(`[create-staff] credential dispatch failed for ${created.user.id}`, dispatch.attempts);

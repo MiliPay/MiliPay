@@ -42,6 +42,7 @@ import { useAuth } from "@milipay/shared/features/auth/AuthContext";
 import {
   connectedRecords,
   customerAction,
+  editCustomerDetails,
   fetchCustomerDetail,
   kycRows,
   limitRows,
@@ -50,8 +51,7 @@ import {
   type CustomerDetail,
   type SecurityEvent,
 } from "@milipay/shared/features/customers/admin";
-import { approveCustomer, rejectCustomer, resendCustomerCredentials, updateCustomerProfile } from "@milipay/shared/features/customers/api";
-import { logAudit } from "@milipay/shared/features/audit/api";
+import { approveCustomer, rejectCustomer, resendCustomerCredentials } from "@milipay/shared/features/customers/api";
 import { SERVICE, providerName } from "@milipay/shared/features/dashboard/view";
 import { Pill, StatusBadge, TONE_CLASSES } from "@milipay/shared/components/ui/StatusBadge";
 import { ReasonDialog, type ReasonDialogProps } from "@milipay/shared/components/ui/ReasonDialog";
@@ -637,28 +637,26 @@ function EditDetails({ c, onClose, onSaved }: { c: CustomerDetail; onClose: () =
     address: c.address ?? "",
     state: c.state ?? "",
   });
+  const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
+  const contactChanged = f.phone.replace(/\s/g, "") !== (c.phone ?? "") || f.email.trim().toLowerCase() !== (c.email ?? "").toLowerCase();
 
   const save = async () => {
     if (!f.firstName.trim() || !f.lastName.trim() || !/^0[789][01]\d{8}$/.test(f.phone.replace(/\s/g, ""))) {
       setErr("Enter a first and last name and an 11-digit Nigerian phone number.");
       return;
     }
+    if (reason.trim().length < 3) {
+      setErr("Give a reason. It goes on the audit log.");
+      return;
+    }
     setBusy(true);
     try {
-      await updateCustomerProfile({ id: c.id, ...f, phone: f.phone.replace(/\s/g, "") });
-      const before = { firstName: c.firstName, lastName: c.lastName, phone: c.phone, email: c.email, address: c.address, state: c.state };
-      const changed = Object.fromEntries(Object.entries(f).filter(([k, v]) => (before as Record<string, unknown>)[k] !== v));
-      await logAudit({
-        category: "Customers",
-        action: "edited details of",
-        target: c.name,
-        targetId: c.id,
-        before: Object.fromEntries(Object.keys(changed).map((k) => [k, (before as Record<string, unknown>)[k]])),
-        after: changed,
-      });
+      // customer-admin saves it, keeps the sign-in identity in step, and
+      // writes the audit entry; nothing here touches the table directly.
+      await editCustomerDetails(c.id, { ...f, phone: f.phone.replace(/\s/g, "") }, reason.trim());
       await onSaved();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not save.");
@@ -677,7 +675,14 @@ function EditDetails({ c, onClose, onSaved }: { c: CustomerDetail; onClose: () =
         </div>
         <Input label="Address" value={f.address} onChange={set("address")} />
         <Select label="State" options={NIGERIAN_STATES} value={f.state} onChange={set("state")} placeholder="Select a state" />
-        {err && <div className="rounded-[10px] bg-fail-soft px-3 py-2.5 text-[13px] text-fail">{err}</div>}
+        {contactChanged && (
+          <div className="rounded-[10px] bg-warn-soft px-3 py-2.5 text-[13px] text-warn">
+            A new phone number or email becomes what they sign in with. They're signed out everywhere, and the old number is told.
+          </div>
+        )}
+        <Input label="Reason (required)" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why are the details changing?" />
+        <div className="text-[13px] text-muted">This action is recorded in the audit log with your name.</div>
+        {err &&<div className="rounded-[10px] bg-fail-soft px-3 py-2.5 text-[13px] text-fail">{err}</div>}
         <div className="flex justify-end gap-2.5">
           <Button variant="secondary" onClick={onClose} disabled={busy}>
             Cancel

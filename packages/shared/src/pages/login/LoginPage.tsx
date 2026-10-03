@@ -46,7 +46,10 @@ export default function LoginPage({ portal }: { portal: Portal }) {
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  // Signed out by Settings › Security "Sign out after 15 minutes idle".
+  const [notice, setNotice] = useState<string | null>(() =>
+    new URLSearchParams(location.search).get("idle") ? "You were signed out after 15 minutes without activity." : null,
+  );
   const [busy, setBusy] = useState(false);
   const [failures, setFailures] = useState(0);
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);

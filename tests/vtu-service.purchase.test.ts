@@ -75,6 +75,8 @@ beforeEach(() => {
   db.users.set("tok-1", { id: "user-1", email: "samuel@example.com" });
   db.rpcAnswers.set("consume_rate_limit", () => true);
   db.rpcAnswers.set("get_customer_daily_spend", () => 0);
+  // Settings › Tier limits, as the database has them.
+  db.rpcAnswers.set("tier_caps", (args: any) => [{ max_single: ({ 1: 50000, 3: 250000 } as Record<number, number>)[args.p_tier] ?? 150000, max_daily: ({ 1: 200000, 3: 1000000 } as Record<number, number>)[args.p_tier] ?? 500000 }]);
   (globalThis as any).__fakeSupabase = db;
 
   monoCalls = [];

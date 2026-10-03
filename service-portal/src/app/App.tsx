@@ -10,7 +10,7 @@ import CustomerDetailsPage from "@milipay/shared/pages/customers/CustomerDetails
 import { ComplaintsDesk } from "@milipay/shared/pages/complaints/ComplaintsDesk";
 import { MyCasesPage } from "@milipay/shared/pages/complaints/MyCasesPage";
 import { TicketDetailsPage } from "@milipay/shared/pages/complaints/TicketDetailsPage";
-import SettingsPage from "@milipay/shared/pages/settings/SettingsPage";
+import SettingsPage from "@milipay/shared/pages/settings/AccountSettingsPage";
 
 export default function App() {
   return (

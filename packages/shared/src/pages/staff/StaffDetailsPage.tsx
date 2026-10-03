@@ -1,501 +1,322 @@
-import { useState, useEffect } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
-import { 
-  ArrowLeft, 
-  Shield, 
-  Users, 
-  Headset, 
-  Mail, 
-  Phone, 
-  MapPin, 
-  Fingerprint, 
-  Calendar, 
-  ExternalLink, 
-  Copy, 
-  Check, 
-  Ban, 
-  CheckCircle, 
-  Trash2, 
-  Clock, 
-  CheckCircle2, 
-  XCircle,
-  TrendingUp,
-  AlertTriangle,
-  Key,
-  Laptop
-} from "lucide-react";
-import { Card } from "@milipay/shared/components/ui/Card";
-import { StatusBadge } from "@milipay/shared/components/ui/StatusBadge";
-import { DataTable, type Column } from "@milipay/shared/components/ui/DataTable";
-import { Button } from "@milipay/shared/components/ui/Button";
-import { Modal } from "@milipay/shared/components/ui/Modal";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { Link, useParams } from "react-router-dom";
+import { ArrowLeft, Ban, Check, KeyRound, Laptop, LogOut, Mail, MapPin, Minus, Phone, RotateCcw, Smartphone, UserCog, type LucideIcon } from "lucide-react";
+import clsx from "clsx";
 import { LoadingState } from "@milipay/shared/components/ui/LoadingState";
-import { 
-  fetchStaffDetails, 
-  getPortalDetails, 
-  toggleStaffStatus, 
-  deleteStaffMember 
-} from "@milipay/shared/features/staff/api";
-import { formatDate } from "@milipay/shared/lib/utils/format";
-import type { StaffProfile, Role } from "@milipay/shared/types";
+import { ReasonDialog, type ReasonDialogProps } from "@milipay/shared/components/ui/ReasonDialog";
+import { Pill, TONE_CLASSES } from "@milipay/shared/components/ui/StatusBadge";
+import { useToast } from "@milipay/shared/components/ui/Toast";
+import { useAuth } from "@milipay/shared/features/auth/AuthContext";
+import { fetchStaffDetail, signOutOtherSessions, staffAction, type StaffDetail } from "@milipay/shared/features/staff/api";
+import { PERMISSIONS, STAFF_ROLES, assignableRoles, canManage, deviceLabel, isPhoneUa, roleMeta } from "@milipay/shared/features/staff/roles";
+import { ROUTES } from "@milipay/shared/lib/constants";
+import { initials, timeAgo } from "@milipay/shared/lib/utils/format";
+import type { Role } from "@milipay/shared/types";
+import { staffStatus } from "./StaffPage";
 
-function RoleBadge({ role }: { role: Role }) {
-  const styles = {
-    agent: "bg-signal/10 text-signal-bright border-signal/20",
-    support: "bg-status-info/10 text-status-info border-status-info/20",
-    admin: "bg-status-warn/10 text-status-warn border-status-warn/20",
-    super_admin: "bg-status-fail/10 text-status-fail border-status-fail/20",
+/**
+ * A member of staff (design handoff, admin "staffOne"), and "My profile":
+ * who they are, what their role allows, where they're signed in, and what
+ * they've done. Change role, Reset 2FA, Reset password and Suspend go through
+ * staff-admin with a reason; on your own profile you can sign out your other
+ * sessions.
+ */
+
+type DialogConfig = Omit<ReasonDialogProps, "open" | "onClose">;
+
+const stamp = (iso: string) =>
+  new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Lagos" })
+    .format(new Date(iso))
+    .replace(",", "");
+
+export default function StaffDetailsPage() {
+  const { id = "" } = useParams();
+  const { user } = useAuth();
+  const { flash } = useToast();
+  const [p, setP] = useState<StaffDetail | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<DialogConfig | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const d = await fetchStaffDetail(id);
+      setP(d);
+      setError(d ? null : "That staff member wasn't found.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load this profile.");
+    }
+  }, [id]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (error && !p) {
+    return (
+      <div className="p-4 sm:p-7">
+        <BackLink />
+        <div className="mt-4 rounded-xl bg-fail-soft p-3.5 text-[13px] text-fail">{error}</div>
+      </div>
+    );
+  }
+  if (!p) return <LoadingState title="Loading the profile" />;
+
+  const role = roleMeta(p.role);
+  const [st, stTone] = staffStatus(p);
+  const manage = canManage(user?.role, p.role, p.self);
+  const done = async (message: string) => {
+    setDialog(null);
+    flash(message);
+    await load();
+  };
+  const run = (action: Parameters<typeof staffAction>[1], message: (delivered: boolean | null) => string, roleTo?: Role) => async (note: string) => {
+    const r = await staffAction(p.id, action, note, roleTo);
+    await done(message(r.delivered));
   };
 
-  const icons = {
-    agent: <Users className="w-3.5 h-3.5 mr-1.5" />,
-    support: <Headset className="w-3.5 h-3.5 mr-1.5" />,
-    admin: <Shield className="w-3.5 h-3.5 mr-1.5" />,
-    super_admin: <Shield className="w-3.5 h-3.5 mr-1.5" />,
-  };
-
-  const labels = {
-    agent: "Field Agent",
-    support: "Service / Support",
-    admin: "Administrator",
-    super_admin: "Super Admin",
-  };
+  const actions: { label: string; icon: LucideIcon; tone?: "fail" | "ok"; open: () => void }[] = [];
+  if (p.self) {
+    actions.push({
+      label: "Sign out other sessions",
+      icon: LogOut,
+      open: async () => {
+        try {
+          const n = await signOutOtherSessions();
+          flash(n ? `${n} other session${n === 1 ? "" : "s"} signed out · logged` : "No other sessions · logged");
+          await load();
+        } catch (e) {
+          flash(e instanceof Error ? e.message : "Could not sign out other sessions.", "fail");
+        }
+      },
+    });
+  } else if (manage) {
+    const roles = assignableRoles(user?.role).filter((r) => r !== p.role);
+    actions.push({
+      label: "Change role",
+      icon: UserCog,
+      open: () =>
+        setDialog({
+          title: `Change ${p.name}'s role`,
+          body: "They're signed out and get the new role's portal and permissions when they sign in again.",
+          icon: UserCog,
+          tone: "ok",
+          confirmLabel: "Save role",
+          reasons: roles.map((r) => `${STAFF_ROLES[r as keyof typeof STAFF_ROLES].label}: ${STAFF_ROLES[r as keyof typeof STAFF_ROLES].desc}`),
+          noteRequired: true,
+          notePlaceholder: "Why is the role changing?",
+          onConfirm: async (note, picked) => {
+            const to = roles.find((r) => picked?.startsWith(STAFF_ROLES[r as keyof typeof STAFF_ROLES].label + ":"));
+            if (!to) throw new Error("Choose the new role.");
+            await run("change_role", () => `${p.name} is now ${STAFF_ROLES[to as keyof typeof STAFF_ROLES].label} · logged`, to)(note);
+          },
+        }),
+    });
+    if (p.twoFactor) {
+      actions.push({
+        label: "Reset 2FA",
+        icon: KeyRound,
+        open: () =>
+          setDialog({
+            title: "Reset two-factor sign-in?",
+            body: `${p.name}'s authenticator is removed and they're signed out. They set one up again on next sign-in.`,
+            icon: KeyRound,
+            tone: "fail",
+            confirmLabel: "Reset 2FA",
+            noteRequired: true,
+            onConfirm: run("reset_2fa", () => `2FA reset for ${p.name} · logged`),
+          }),
+      });
+    }
+    if (p.status === "active") {
+      actions.push({
+        label: "Reset password",
+        icon: KeyRound,
+        open: () =>
+          setDialog({
+            title: `Reset ${p.name}'s password?`,
+            body: "Their password stops working and they're signed out. A one-time password goes to their phone by WhatsApp or SMS.",
+            icon: KeyRound,
+            tone: "fail",
+            confirmLabel: "Reset password",
+            noteRequired: true,
+            onConfirm: run("reset_password", (sent) => (sent ? `New password sent to ${p.name} · logged` : `Password reset, but it couldn't be sent · logged`)),
+          }),
+      });
+      actions.push({
+        label: "Suspend",
+        icon: Ban,
+        tone: "fail",
+        open: () =>
+          setDialog({
+            title: `Suspend ${p.name}?`,
+            body: "All their sessions end now and they cannot sign in.",
+            icon: Ban,
+            tone: "fail",
+            confirmLabel: "Suspend",
+            noteRequired: true,
+            notePlaceholder: "Reason (required)",
+            onConfirm: run("suspend", () => `${p.name} suspended · logged`),
+          }),
+      });
+    } else {
+      actions.push({
+        label: "Reactivate",
+        icon: RotateCcw,
+        tone: "ok",
+        open: () =>
+          setDialog({
+            title: `Reactivate ${p.name}?`,
+            body: "They can sign in again.",
+            icon: RotateCcw,
+            tone: "ok",
+            confirmLabel: "Reactivate",
+            noteRequired: true,
+            onConfirm: run("reactivate", () => `${p.name} reactivated · logged`),
+          }),
+      });
+    }
+  }
 
   return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${styles[role]}`}>
-      {icons[role]}
-      {labels[role]}
-    </span>
+    <div className="flex max-w-[1480px] animate-fade-in flex-col gap-[18px] p-4 sm:p-7">
+      <BackLink />
+
+      <div className="flex flex-wrap items-center gap-[18px] rounded-card border border-line bg-panel p-[22px] shadow-card">
+        <div className="flex h-[60px] w-[60px] flex-none items-center justify-center rounded-full bg-chip text-xl font-bold text-muted">{initials(p.name)}</div>
+        <div className="min-w-[240px] flex-1">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-[22px] font-bold tracking-[-.02em]">{p.name}</h1>
+            <span className={clsx("inline-flex rounded-md px-[9px] py-[3px] text-xs font-semibold", TONE_CLASSES[role.tone])}>{role.label}</span>
+            <Pill tone={stTone}>{st}</Pill>
+          </div>
+          <div className="mt-1.5 flex flex-wrap gap-x-[18px] gap-y-1 text-[13px] text-muted">
+            <div className="flex items-center gap-1.5">
+              <Mail size={14} aria-hidden="true" />
+              {p.email}
+            </div>
+            {p.phone && (
+              <div className="flex items-center gap-1.5">
+                <Phone size={14} aria-hidden="true" />
+                <span className="font-mono">{p.phone}</span>
+              </div>
+            )}
+            {p.state && (
+              <div className="flex items-center gap-1.5">
+                <MapPin size={14} aria-hidden="true" />
+                {p.state}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2.5">
+          {actions.map((a) => (
+            <button
+              key={a.label}
+              type="button"
+              onClick={a.open}
+              className={clsx(
+                "flex h-[38px] items-center gap-2 rounded-[10px] border border-line px-3.5 font-semibold",
+                a.tone === "fail" ? "text-fail" : a.tone === "ok" ? "text-brand-text" : "text-fg",
+              )}
+            >
+              <a.icon size={16} aria-hidden="true" />
+              {a.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid items-start gap-3.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+        <div className="flex flex-col gap-3.5">
+          <Card title="Permissions">
+            {PERMISSIONS.map(([label, roles]) => {
+              const ok = roles.includes(p.role);
+              return (
+                <div key={label} className="flex items-center gap-2.5 border-t border-line2 px-[18px] py-[9px] text-[13px]">
+                  <div className={clsx("flex-1", ok ? "text-fg" : "text-faint")}>{label}</div>
+                  {ok ? (
+                    <Check size={15} strokeWidth={2.5} className="text-brand-text" aria-label="Allowed" />
+                  ) : (
+                    <Minus size={15} strokeWidth={2.5} className="text-faint" aria-label="Not allowed" />
+                  )}
+                </div>
+              );
+            })}
+            <div className="flex items-center gap-2.5 border-t border-line2 px-[18px] py-[9px] text-[13px]">
+              <div className="flex-1 text-muted">Two-factor sign-in</div>
+              <div className={p.twoFactor ? "font-semibold text-brand-text" : "font-semibold text-warn"}>{p.twoFactor ? "Set up" : "Not set up"}</div>
+            </div>
+          </Card>
+          <Card title="Active sessions">
+            {p.sessions.length === 0 && (
+              <div className="flex items-center gap-2.5 border-t border-line2 px-[18px] py-2.5 text-[13px] text-muted">
+                <Laptop size={16} aria-hidden="true" />
+                No active sessions
+              </div>
+            )}
+            {p.sessions.map((x) => {
+              const Icon = isPhoneUa(x.userAgent) ? Smartphone : Laptop;
+              return (
+                <div key={x.id} className="flex items-center gap-2.5 border-t border-line2 px-[18px] py-2.5 text-[13px]">
+                  <Icon size={16} className="text-muted" aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold">{deviceLabel(x.userAgent)}</div>
+                    <div className="text-xs text-muted">
+                      <span className="font-mono">{x.ip ?? "—"}</span>
+                      {x.aal === "aal2" ? " · 2FA passed" : ""}
+                    </div>
+                  </div>
+                  <div className={clsx("text-xs", x.current ? "text-brand-text" : "text-muted")}>{x.current ? "This session" : timeAgo(x.lastActive)}</div>
+                </div>
+              );
+            })}
+          </Card>
+        </div>
+        <Card
+          title="Activity"
+          right={
+            <Link to={ROUTES.audit} className="text-[13px] font-semibold text-brand-text">
+              Full audit log
+            </Link>
+          }
+        >
+          {p.activity.length === 0 && <div className="border-t border-line2 p-6 text-center text-muted">No recorded actions yet.</div>}
+          {p.activity.map((e) => (
+            <div key={e.id} className="grid grid-cols-[110px_minmax(0,1fr)_100px] items-center gap-3 border-t border-line2 px-[18px] py-2.5 text-[13px]">
+              <div className="font-mono text-xs text-muted">{stamp(e.at)}</div>
+              <div className="min-w-0">
+                <span className={e.result === "denied" ? "text-fail" : "text-muted"}>{e.action}</span> <span className="font-semibold">{e.target}</span>
+              </div>
+              <div>
+                <span className="inline-flex rounded-md bg-chip px-[7px] py-0.5 text-[11px] font-semibold text-muted">{e.category}</span>
+              </div>
+            </div>
+          ))}
+        </Card>
+      </div>
+
+      {dialog && <ReasonDialog open onClose={() => setDialog(null)} {...dialog} />}
+    </div>
   );
 }
 
-export default function StaffDetailsPage() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const [details, setDetails] = useState<{
-    profile: StaffProfile;
-    stats?: {
-      totalEnrolled: number;
-      pendingKYC: number;
-      approvedKYC: number;
-      rejectedKYC: number;
-      recentCustomers: Array<{ id: string; fullName: string; phone: string; status: string; createdAt: string }>;
-    };
-  } | null>(null);
-
-  const [isLoading, setIsLoading] = useState(true);
-  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [hasCopiedPortal, setHasCopiedPortal] = useState(false);
-
-  useEffect(() => {
-    if (!id) return;
-    let cancelled = false;
-
-    const loadStaff = async () => {
-      setIsLoading(true);
-      try {
-        const data = await fetchStaffDetails(id);
-        if (!cancelled) setDetails(data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    };
-    loadStaff();
-
-    return () => { cancelled = true; };
-  }, [id]);
-
-  const handleToggleStatus = async () => {
-    if (!details?.profile.id) return;
-    setIsUpdatingStatus(true);
-    try {
-      const ok = await toggleStaffStatus(details.profile.id);
-      if (ok) {
-        setDetails((prev) => prev ? {
-          ...prev,
-          profile: {
-            ...prev.profile,
-            status: prev.profile.status === "active" ? "suspended" : "active"
-          }
-        } : null);
-      }
-    } catch (err) {
-      console.error("Failed to toggle status", err);
-    } finally {
-      setIsUpdatingStatus(false);
-    }
-  };
-
-  const handleDeleteStaff = async () => {
-    if (!details?.profile.id) return;
-    setIsDeleting(true);
-    setDeleteError(null);
-    try {
-      await deleteStaffMember(details.profile.id);
-      setShowDeleteModal(false);
-      navigate("/dashboard/staff", { replace: true });
-    } catch (err: any) {
-      setDeleteError(err.message || "Failed to delete staff member");
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleCopyPortal = (url: string) => {
-    navigator.clipboard.writeText(url);
-    setHasCopiedPortal(true);
-    setTimeout(() => setHasCopiedPortal(false), 2000);
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex-1 overflow-auto bg-ledger min-h-screen flex items-center justify-center p-6">
-        <LoadingState
-          minHeight="min-h-[50vh]"
-          title="Loading Staff Profile..."
-          description="Retrieving security credentials, portal permissions, and performance records."
-        />
-      </div>
-    );
-  }
-
-  if (!details?.profile) {
-    return (
-      <div className="p-6 md:p-10 max-w-5xl mx-auto text-center space-y-4">
-        <h1 className="text-2xl font-display font-bold text-ink">Staff Member Not Found</h1>
-        <Button variant="secondary" onClick={() => navigate("/dashboard/staff")}>
-          Back to Staff &amp; Team
-        </Button>
-      </div>
-    );
-  }
-
-  const staff = details.profile;
-  const portal = getPortalDetails(staff.role);
-  const agentStats = details.stats;
-  const totalEvaluated = agentStats ? agentStats.approvedKYC + agentStats.rejectedKYC : 0;
-  const successRate =
-    totalEvaluated > 0
-      ? Math.round((agentStats!.approvedKYC / totalEvaluated) * 100)
-      : null;
-
-  const customerColumns: Column<any>[] = [
-    {
-      key: "name",
-      header: "Customer",
-      render: (row) => (
-        <div>
-          <span className="text-sm font-medium text-white block">{row.fullName}</span>
-          <span className="text-xs text-ink-muted font-data">{row.phone}</span>
-        </div>
-      ),
-    },
-    {
-      key: "status",
-      header: "KYC Status",
-      render: (row) => <StatusBadge status={row.status as any} />,
-    },
-    {
-      key: "date",
-      header: "Enrolled Date",
-      render: (row) => <span className="text-xs text-ink-muted">{formatDate(row.createdAt)}</span>,
-    },
-  ];
-
+function Card({ title, right, children }: { title: string; right?: ReactNode; children: ReactNode }) {
   return (
-    <div className="p-6 md:p-10 max-w-5xl mx-auto space-y-8 animate-rise-in pb-32">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <Link 
-            to="/dashboard/staff" 
-            className="inline-flex items-center gap-2 text-sm text-ink-muted hover:text-signal-bright transition-colors mb-4"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back to Staff &amp; Team
-          </Link>
-          <div className="flex items-center gap-4">
-            <h1 className="text-2xl md:text-3xl font-display font-bold text-ink">{staff.fullName}</h1>
-            <RoleBadge role={staff.role} />
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-              staff.status === 'active' 
-                ? 'bg-status-ok/15 text-status-ok border border-status-ok/30' 
-                : 'bg-status-fail/15 text-status-fail border border-status-fail/30'
-            }`}>
-              {staff.status === 'active' ? 'Active' : 'Suspended'}
-            </span>
-          </div>
-          <p className="text-ink-muted mt-1 font-data text-sm">Staff ID: {staff.id}</p>
-        </div>
-        
-        {/* Action Buttons */}
-        <div className="flex flex-wrap gap-3">
-          <Button 
-            variant={staff.status === "suspended" ? "primary" : "secondary"} 
-            onClick={handleToggleStatus}
-            disabled={isUpdatingStatus || isDeleting}
-          >
-            {staff.status === "suspended" ? (
-              <><CheckCircle className="w-4 h-4 mr-2" /> Activate Staff Member</>
-            ) : (
-              <><Ban className="w-4 h-4 mr-2" /> Suspend Staff Member</>
-            )}
-          </Button>
-
-          <Button 
-            variant="danger"
-            onClick={() => {
-              setDeleteError(null);
-              setShowDeleteModal(true);
-            }}
-            disabled={isUpdatingStatus || isDeleting}
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Delete Staff
-          </Button>
-        </div>
+    <div className="overflow-hidden rounded-card border border-line bg-panel shadow-card">
+      <div className="flex items-center px-[18px] pb-2.5 pt-4">
+        <h2 className="flex-1 text-[15px] font-bold">{title}</h2>
+        {right}
       </div>
-
-      {/* Top Row: Info Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Contact Info Card */}
-        <Card raised className="p-6 space-y-4 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-            <Mail className="w-24 h-24" />
-          </div>
-          <h2 className="text-sm font-semibold text-ink-muted uppercase tracking-wide flex items-center gap-2 relative z-10">
-            <Mail className="w-4 h-4 text-signal" /> Contact Details
-          </h2>
-          <div className="space-y-4 relative z-10">
-            <div>
-              <p className="text-xs text-ink-faint">Email Address (Login ID)</p>
-              <p className="text-ink font-medium text-sm break-all mt-0.5">{staff.email}</p>
-            </div>
-            <div>
-              <p className="text-xs text-ink-faint">Phone Number</p>
-              <p className="font-data text-ink flex items-center gap-2 mt-0.5">
-                <Phone className="w-3.5 h-3.5 text-ink-muted" /> {staff.phone}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-ink-faint">Territory / Operating State</p>
-              <p className="text-ink flex items-center gap-2 mt-0.5">
-                <MapPin className="w-3.5 h-3.5 text-signal-bright" /> {staff.state || "National / Central"}
-              </p>
-            </div>
-          </div>
-        </Card>
-
-        {/* Identity & Records Card */}
-        <Card raised className="p-6 space-y-4 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-            <Fingerprint className="w-24 h-24" />
-          </div>
-          <h2 className="text-sm font-semibold text-ink-muted uppercase tracking-wide flex items-center gap-2 relative z-10">
-            <Fingerprint className="w-4 h-4 text-signal" /> Identity &amp; Records
-          </h2>
-          <div className="space-y-4 relative z-10">
-            <div>
-              <p className="text-xs text-ink-faint">National Identification Number (NIN)</p>
-              <p className="font-data text-ink flex items-center gap-2 mt-0.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-status-ok" />
-                •••• •••• {staff.ninLast4 || staff.nin?.slice(-4) || "—"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-ink-faint">Identity Status</p>
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-status-ok/10 text-status-ok border border-status-ok/20 mt-1">
-                Verified Identity
-              </span>
-            </div>
-            <div>
-              <p className="text-xs text-ink-faint">Date Registered / Joined</p>
-              <p className="text-xs text-ink-muted mt-0.5 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-ink-muted" /> {formatDate(staff.createdAt)}
-              </p>
-            </div>
-          </div>
-        </Card>
-
-        {/* Workspace & Portal Access */}
-        <Card raised className="p-6 space-y-4 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-            <Laptop className="w-24 h-24" />
-          </div>
-          <h2 className="text-sm font-semibold text-ink-muted uppercase tracking-wide flex items-center gap-2 relative z-10">
-            <Laptop className="w-4 h-4 text-signal" /> Portal Workspace Access
-          </h2>
-          <div className="space-y-3.5 relative z-10 text-xs">
-            <div>
-              <span className="text-ink-faint block">Assigned Web App</span>
-              <span className="text-sm font-bold text-white mt-0.5 block">{portal.portalName}</span>
-              {portal.portalUrl ? (
-                <span className="text-signal-bright font-data block text-xs mt-0.5">{portal.portalUrl}</span>
-              ) : (
-                <span className="text-ink-faint block text-xs mt-0.5">
-                  Address not configured for this environment
-                </span>
-              )}
-            </div>
-
-            {portal.portalUrl && (
-              <div className="flex items-center gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => handleCopyPortal(portal.portalUrl)}
-                  className="px-3 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/10 text-white transition-colors border border-white/10 flex items-center gap-1.5"
-                >
-                  {hasCopiedPortal ? <Check className="w-3.5 h-3.5 text-status-ok" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{hasCopiedPortal ? "Copied" : "Copy Link"}</span>
-                </button>
-                <a
-                  href={portal.portalUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-1.5 rounded-lg bg-signal/15 hover:bg-signal/25 text-signal-bright transition-colors border border-signal/30 flex items-center gap-1.5"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Launch</span>
-                </a>
-              </div>
-            )}
-
-            <div className="p-2.5 rounded-lg bg-ledger-line border border-white/[0.06] text-[11px] text-ink-muted flex items-start gap-2">
-              <Key className="w-3.5 h-3.5 text-signal-bright shrink-0 mt-0.5" />
-              <span>
-                A one-time password was sent to this staff member&apos;s phone at
-                creation. It is never displayed here.
-              </span>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Field Agent Performance & Enrolled Customers (If Agent) */}
-      {staff.role === "agent" && agentStats && (
-        <div className="space-y-6">
-          {/* 5-Metric Breakdown */}
-          <div>
-            <h2 className="text-xl font-display font-semibold text-ink mb-4 flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-signal" /> Field Enrollment Performance
-            </h2>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-              <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-5 backdrop-blur-xl">
-                <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider block">Total Enrolled</span>
-                <span className="text-3xl font-display text-white font-bold mt-2 block">{agentStats.totalEnrolled}</span>
-                <p className="text-[11px] text-ink-faint mt-1">Total registrations</p>
-              </div>
-
-              <div className="bg-status-warn/[0.03] border border-status-warn/20 rounded-2xl p-5 backdrop-blur-xl">
-                <span className="text-xs font-semibold text-status-warn uppercase tracking-wider block flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" /> Pending
-                </span>
-                <span className="text-3xl font-display text-status-warn font-bold mt-2 block">{agentStats.pendingKYC}</span>
-                <p className="text-[11px] text-ink-faint mt-1">Awaiting admin review</p>
-              </div>
-
-              <div className="bg-status-ok/[0.03] border border-status-ok/20 rounded-2xl p-5 backdrop-blur-xl">
-                <span className="text-xs font-semibold text-status-ok uppercase tracking-wider block flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Approved
-                </span>
-                <span className="text-3xl font-display text-status-ok font-bold mt-2 block">{agentStats.approvedKYC}</span>
-                <p className="text-[11px] text-ink-faint mt-1">Active &amp; verified</p>
-              </div>
-
-              <div className="bg-status-fail/[0.03] border border-status-fail/20 rounded-2xl p-5 backdrop-blur-xl">
-                <span className="text-xs font-semibold text-status-fail uppercase tracking-wider block flex items-center gap-1">
-                  <XCircle className="w-3.5 h-3.5" /> Declined
-                </span>
-                <span className="text-3xl font-display text-status-fail font-bold mt-2 block">{agentStats.rejectedKYC}</span>
-                <p className="text-[11px] text-ink-faint mt-1">Action required</p>
-              </div>
-
-              <div className="col-span-2 sm:col-span-1 bg-signal/[0.04] border border-signal/25 rounded-2xl p-5 backdrop-blur-xl">
-                <span className="text-xs font-semibold text-signal-bright uppercase tracking-wider block flex items-center gap-1">
-                  <TrendingUp className="w-3.5 h-3.5" /> Success Rate
-                </span>
-                <span className="text-3xl font-display text-white font-bold mt-2 block">
-                  {successRate === null ? "—" : `${successRate}%`}
-                </span>
-                <p className="text-[11px] text-ink-faint mt-1">
-                  {successRate === null ? "Nothing evaluated yet" : "Approval accuracy"}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Enrolled Customers Table */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-ink">Customers Enrolled by {staff.fullName}</h3>
-              <span className="text-xs text-ink-muted">{agentStats.recentCustomers.length} registered customers</span>
-            </div>
-
-            <DataTable
-              columns={customerColumns}
-              data={agentStats.recentCustomers}
-              isLoading={false}
-              onRowClick={(row) => navigate(`/dashboard/customers/${row.id}`)}
-              rowKey={(row) => row.id}
-              emptyMessage="No customer registrations recorded for this agent terminal yet."
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Delete Staff Confirmation Modal */}
-      {showDeleteModal && (
-        <Modal
-          isOpen={showDeleteModal}
-          onClose={() => {
-            if (!isDeleting) setShowDeleteModal(false);
-          }}
-          title="Delete Staff Member"
-        >
-          <div className="space-y-4">
-            <div className="flex items-start gap-3 p-4 bg-status-fail/10 border border-status-fail/25 rounded-xl">
-              <AlertTriangle className="w-5 h-5 text-status-fail shrink-0 mt-0.5" />
-              <div className="text-sm">
-                <p className="font-semibold text-white">Permanently Revoke Staff Access</p>
-                <p className="text-xs text-ink-muted mt-1 leading-relaxed">
-                  Are you sure you want to delete <strong className="text-white">{staff.fullName}</strong> ({staff.email})? 
-                  This will permanently delete their staff profile and revoke portal access immediately.
-                </p>
-              </div>
-            </div>
-
-            {deleteError && (
-              <div className="p-3 bg-status-fail/10 border border-status-fail/30 rounded-lg text-xs text-status-fail">
-                {deleteError}
-              </div>
-            )}
-
-            <div className="flex justify-end gap-3 pt-3 border-t border-white/[0.05]">
-              <Button
-                variant="secondary"
-                onClick={() => setShowDeleteModal(false)}
-                disabled={isDeleting}
-              >
-                Cancel
-              </Button>
-              <button
-                type="button"
-                onClick={handleDeleteStaff}
-                disabled={isDeleting}
-                className="px-4 py-2 bg-status-fail hover:bg-status-fail/90 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
-              >
-                <Trash2 className="w-4 h-4" />
-                {isDeleting ? "Deleting..." : "Confirm Delete"}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      {children}
     </div>
+  );
+}
+
+function BackLink() {
+  return (
+    <Link to={ROUTES.staff} className="flex w-max items-center gap-1.5 font-medium text-muted">
+      <ArrowLeft size={15} aria-hidden="true" />
+      Staff
+    </Link>
   );
 }

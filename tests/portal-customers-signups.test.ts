@@ -228,6 +228,27 @@ describe("customer-admin", () => {
     expect(sms[0]).toMatch(/Forgot password/);
   });
 
+  it("editing details needs a reason, moves the sign-in number with the record, and tells the old number", async () => {
+    const id = "11111111-2222-4333-8444-555555555555";
+    const details = { firstName: "Adaeze", lastName: "Okafor", phone: "08099990000", email: "", address: "4 Admiralty Way", state: "Lagos" };
+    expect((await call({ customerId: id, action: "edit_details", reason: "", details })).status).toBe(400);
+    const res = await call({ customerId: id, action: "edit_details", reason: "Lost her SIM, confirmed in person", details });
+    expect(res.status).toBe(200);
+    expect(db.table("customers")[0].phone).toBe("08099990000");
+    expect(db.authUpdates[0]).toMatchObject({ id: "auth-c1", attributes: { phone: "+2348099990000", phone_confirm: true } });
+    expect(db.rpcCalls).toContainEqual({ name: "revoke_auth_sessions", args: { p_user: "auth-c1" } });
+    expect(sms[0]).toMatch(/phone number on your MiliPay account was changed/);
+    expect(db.table("audit_events")[0]).toMatchObject({ action: "edited details of", before: { phone: "08031234567" }, after: { phone: "08099990000" } });
+  });
+
+  it("editing refuses a number another customer already has", async () => {
+    db.table("customers").push({ id: "other", phone: "08099990000", status: "active" });
+    const details = { firstName: "Adaeze", lastName: "Okafor", phone: "08099990000", email: "", address: "", state: "Lagos" };
+    const res = await call({ customerId: "11111111-2222-4333-8444-555555555555", action: "edit_details", reason: "Typo fix", details });
+    expect(res.body.code).toBe("CONTACT_TAKEN");
+    expect(db.authUpdates).toEqual([]);
+  });
+
   it("reactivation is only from suspended, never a way round a rejection", async () => {
     db.table("customers")[0].status = "rejected";
     expect((await call({ customerId: "11111111-2222-4333-8444-555555555555", action: "reactivate", reason: "Looks fine now" })).body.code).toBe("NOT_SUSPENDED");

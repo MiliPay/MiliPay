@@ -723,6 +723,9 @@ serve(handler(async (req) => {
 
   if (action === "update_settings") {
     await requireStaffRole(admin, caller, ["admin", "super_admin"]);
+    // A price change is a sensitive action: it needs a reason for the audit log.
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    if (reason.length < 3) throw new ApiError("Give a reason. It goes on the audit log.", 400, "REASON_REQUIRED");
     const patch = parse(settingsSchema, body);
     const before = await loadSettings(admin);
     const { data, error } = await admin
@@ -747,7 +750,7 @@ serve(handler(async (req) => {
       target: "Pricing",
       before,
       after,
-      reason: typeof body.reason === "string" ? body.reason : null,
+      reason,
     });
     return json({ success: true, settings: after, saved: Boolean(data) });
   }

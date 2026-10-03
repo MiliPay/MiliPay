@@ -13,7 +13,7 @@ import CustomersPage from "@milipay/shared/pages/customers/CustomersPage";
 import CustomerDetailsPage from "@milipay/shared/pages/customers/CustomerDetailsPage";
 import { AgentSupportPage } from "@milipay/shared/pages/dashboard/AgentSupportPage";
 import { AgentTicketDetailsPage } from "@milipay/shared/pages/dashboard/AgentTicketDetailsPage";
-import SettingsPage from "@milipay/shared/pages/settings/SettingsPage";
+import SettingsPage from "@milipay/shared/pages/settings/AccountSettingsPage";
 
 export default function App() {
   return (

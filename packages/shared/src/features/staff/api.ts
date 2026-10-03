@@ -1,19 +1,6 @@
 import { supabase } from "@milipay/shared/lib/supabase";
-import type { 
-  CreatedStaffResult, 
-  PaginatedResult, 
-  Role, 
-  StaffProfile 
-} from "@milipay/shared/types";
+import type { CreatedStaffResult, Role } from "@milipay/shared/types";
 
-export { fetchStaffMembers as fetchStaffList };
-
-interface FetchStaffOptions {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-  role?: Role | "";
-}
 
 /**
  * Where a member of staff signs in.
@@ -38,153 +25,6 @@ export function getPortalDetails(role: Role): { portalName: string; portalUrl: s
     default:
       return { portalName: "Portal", portalUrl: "" };
   }
-}
-
-export async function fetchStaffMembers(
-  options: FetchStaffOptions = {}
-): Promise<PaginatedResult<StaffProfile>> {
-  const { page = 1, pageSize = 10, search = "", role = "" } = options;
-
-  let query = supabase.from('staff_profiles').select('*', { count: 'exact' });
-
-  if (role) {
-    query = query.eq('role', role);
-  }
-
-  if (search) {
-    query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
-  }
-
-  const start = (page - 1) * pageSize;
-  const { data, error, count } = await query
-    .range(start, start + pageSize - 1)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error("Error fetching staff profiles:", error);
-    return {
-      items: [],
-      page,
-      pageSize,
-      totalCount: 0
-    };
-  }
-
-  // Batch calculate real-time customer registration counts for agents
-  const agentIds = (data || []).filter((r: any) => r.role === 'agent').map((r: any) => r.id);
-  const regCountMap: Record<string, number> = {};
-
-  if (agentIds.length > 0) {
-    try {
-      const { data: customerCounts } = await supabase
-        .from('customers')
-        .select('registered_by');
-
-      (customerCounts || []).forEach((c: any) => {
-        if (c.registered_by) {
-          regCountMap[c.registered_by] = (regCountMap[c.registered_by] || 0) + 1;
-        }
-      });
-    } catch (countErr) {
-      console.warn("Could not fetch agent registration counts:", countErr);
-    }
-  }
-
-  const mappedItems: StaffProfile[] = (data || []).map((row: any) => ({
-    id: row.id,
-    fullName: row.full_name,
-    email: row.email,
-    phone: row.phone,
-    nin: row.nin,
-    ninLast4: row.nin_last_4,
-    role: row.role as Role,
-    status: row.status,
-    state: row.state,
-    registrationsCount: row.role === 'agent' ? (regCountMap[row.id] || 0) : undefined,
-    createdAt: row.created_at,
-  }));
-
-  return {
-    items: mappedItems,
-    page,
-    pageSize,
-    totalCount: count || 0
-  };
-}
-
-export async function fetchStaffDetails(id: string): Promise<{
-  profile: StaffProfile;
-  stats?: {
-    totalEnrolled: number;
-    pendingKYC: number;
-    approvedKYC: number;
-    rejectedKYC: number;
-    recentCustomers: Array<{ id: string; fullName: string; phone: string; status: string; createdAt: string }>;
-  };
-} | null> {
-  const { data: profileRow, error } = await supabase
-    .from('staff_profiles')
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  if (error || !profileRow) {
-    console.error("Error fetching staff profile details:", error);
-    return null;
-  }
-
-  const profile: StaffProfile = {
-    id: profileRow.id,
-    fullName: profileRow.full_name,
-    email: profileRow.email,
-    phone: profileRow.phone,
-    nin: profileRow.nin,
-    ninLast4: profileRow.nin_last_4,
-    role: profileRow.role as Role,
-    status: profileRow.status,
-    state: profileRow.state,
-    createdAt: profileRow.created_at,
-  };
-
-  if (profile.role === 'agent') {
-    try {
-      const { data: customers } = await supabase
-        .from('customers')
-        .select('id, first_name, last_name, phone, status, created_at')
-        .eq('registered_by', id)
-        .order('created_at', { ascending: false });
-
-      const customerList = customers || [];
-      const totalEnrolled = customerList.length;
-      const pendingKYC = customerList.filter((c: any) => c.status === 'pending').length;
-      const approvedKYC = customerList.filter((c: any) => c.status === 'active').length;
-      const rejectedKYC = customerList.filter((c: any) => c.status === 'rejected').length;
-
-      return {
-        profile: {
-          ...profile,
-          registrationsCount: totalEnrolled,
-        },
-        stats: {
-          totalEnrolled,
-          pendingKYC,
-          approvedKYC,
-          rejectedKYC,
-          recentCustomers: customerList.slice(0, 5).map((c: any) => ({
-            id: c.id,
-            fullName: `${c.first_name} ${c.last_name}`.trim(),
-            phone: c.phone,
-            status: c.status,
-            createdAt: c.created_at,
-          })),
-        },
-      };
-    } catch (err) {
-      console.warn("Could not load agent stats:", err);
-    }
-  }
-
-  return { profile };
 }
 
 /**
@@ -273,85 +113,66 @@ export async function createStaffMember(data: {
 }
 
 
-export async function toggleStaffStatus(id: string): Promise<boolean> {
-  const { data, error: fetchError } = await supabase
-    .from('staff_profiles')
-    .select('status')
-    .eq('id', id)
-    .single();
 
-  if (fetchError || !data) {
-    console.error("Error fetching staff status:", fetchError);
-    return false;
-  }
+// ── Staff pages (design handoff, admin "Staff") ──────────────────────────
 
-  const newStatus = data.status === 'active' ? 'suspended' : 'active';
-
-  const { error: updateError } = await supabase
-    .from('staff_profiles')
-    .update({ status: newStatus })
-    .eq('id', id);
-
-  if (updateError) {
-    console.error("Error updating staff status:", updateError);
-    return false;
-  }
-
-  return true;
+export interface StaffRow {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  state: string | null;
+  status: "active" | "suspended";
+  createdAt: string;
+  lastSignIn: string | null;
+  twoFactor: boolean;
+  lastAction: string | null;
+  registrations: number | null;
 }
 
-export async function deleteStaffMember(id: string): Promise<boolean> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Unauthorized: You must be authenticated to perform this operation.");
+export interface StaffDetail {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  role: Role;
+  state: string | null;
+  status: "active" | "suspended";
+  ninLast4: string | null;
+  createdAt: string;
+  self: boolean;
+  lastSignIn: string | null;
+  twoFactor: boolean;
+  registrations: number | null;
+  sessions: { id: string; userAgent: string | null; ip: string | null; aal: string | null; lastActive: string; current: boolean }[];
+  activity: { id: number; at: string; action: string; target: string | null; category: string; result: string }[];
+}
 
-  const { data: currentStaff } = await supabase
-    .from("staff_profiles")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
+export async function fetchStaff(): Promise<StaffRow[]> {
+  const { data, error } = await supabase.rpc("admin_staff");
+  if (error) throw new Error(error.message);
+  return (data as StaffRow[]) ?? [];
+}
 
-  if (!currentStaff || (currentStaff.role !== "admin" && currentStaff.role !== "super_admin")) {
-    throw new Error("Forbidden: Only administrators have permission to delete staff profiles.");
-  }
+export async function fetchStaffDetail(id: string): Promise<StaffDetail | null> {
+  const { data, error } = await supabase.rpc("admin_staff_detail", { p_id: id });
+  if (error) throw new Error(error.message);
+  return (data as StaffDetail | null) ?? null;
+}
 
-  const { data: session } = await supabase.auth.getSession();
-  const accessToken = session.session?.access_token;
+export type StaffAction = "change_role" | "suspend" | "reactivate" | "reset_2fa" | "reset_password";
 
-  // Attempt 1: Call database RPC function delete_staff_user
-  const { data: rpcData, error: rpcError } = await supabase.rpc('delete_staff_user', {
-    target_user_id: id,
-  });
+/** staff-admin: every action needs a reason and goes on the audit log. */
+export async function staffAction(staffId: string, action: StaffAction, reason: string, role?: Role): Promise<{ delivered: boolean | null }> {
+  const { data, error } = await supabase.functions.invoke("staff-admin", { body: { staffId, action, reason, role } });
+  if (error) throw new Error(await readStaffFunctionError(error, "That didn't go through."));
+  if (!data?.success) throw new Error(data?.error || "That didn't go through.");
+  return { delivered: data.delivered ?? null };
+}
 
-  if (!rpcError && rpcData) {
-    return true;
-  }
-
-  // Attempt 2: Call Edge function delete-staff
-  if (accessToken) {
-    try {
-      const { data: edgeData, error: edgeError } = await supabase.functions.invoke('delete-staff', {
-        body: { staffId: id },
-        headers: {
-          Authorization: `Bearer ${accessToken}`
-        }
-      });
-
-      if (!edgeError && edgeData?.success) {
-        return true;
-      }
-    } catch (_) { /* ignore */ }
-  }
-
-  // Attempt 3: Direct delete on public.staff_profiles
-  const { error } = await supabase
-    .from('staff_profiles')
-    .delete()
-    .eq('id', id);
-
-  if (error) {
-    console.error("Error deleting staff profile:", error);
-    throw new Error(error.message || "Failed to delete staff member");
-  }
-
-  return true;
+/** "Sign out other sessions" on your own profile. */
+export async function signOutOtherSessions(): Promise<number> {
+  const { data, error } = await supabase.rpc("revoke_other_sessions");
+  if (error) throw new Error(error.message);
+  return Number(data) || 0;
 }
