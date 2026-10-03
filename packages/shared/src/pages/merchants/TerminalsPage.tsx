@@ -1,272 +1,151 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Hand, Power, RotateCcw, Wifi, WifiOff } from "lucide-react";
+import clsx from "clsx";
+import { ReasonDialog, type ReasonDialogProps } from "@milipay/shared/components/ui/ReasonDialog";
+import { StatCard } from "@milipay/shared/components/ui/StatCard";
+import { Pill } from "@milipay/shared/components/ui/StatusBadge";
+import { Tabs } from "@milipay/shared/components/ui/Tabs";
+import { useToast } from "@milipay/shared/components/ui/Toast";
 import {
-  Cpu,
-  RefreshCw,
-  Search,
-  ShieldCheck,
-  ShieldAlert,
-  Building2,
-  ExternalLink,
-  UserCheck,
-} from "lucide-react";
+  TERMINAL_STATUS,
+  fetchTerminalList,
+  heartbeatLabel,
+  merchantPath,
+  setTerminalActive,
+  type TerminalList,
+  type TerminalRow,
+  type TerminalTab,
+} from "@milipay/shared/features/merchants/admin";
+import { formatNairaWhole } from "@milipay/shared/lib/utils/format";
 
-import { Button } from "@milipay/shared/components/ui/Button";
-import { LoadingState } from "@milipay/shared/components/ui/LoadingState";
-import { useAuth } from "@milipay/shared/features/auth/AuthContext";
-import {
-  fetchAllTerminals,
-  toggleTerminalActive,
-} from "@milipay/shared/features/merchants/merchantService";
-import type { POSTerminal } from "@milipay/shared/types";
-import { TerminalDetailsModal } from "./TerminalDetailsModal";
+/**
+ * POS terminals (design handoff, admin "Terminals"): online, offline and
+ * deactivated, with a reasoned, audited switch on each. A terminal is
+ * offline after 15 minutes without a heartbeat.
+ */
+
+const TABS: { id: TerminalTab; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "online", label: "Online" },
+  { id: "offline", label: "Offline" },
+  { id: "inactive", label: "Deactivated" },
+];
+const COLS = "grid grid-cols-[110px_minmax(0,1.3fr)_minmax(0,1.2fr)_130px_120px_80px_120px_110px] gap-3.5";
 
 export default function TerminalsPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const isAgent = user?.role === "agent";
+  const { flash } = useToast();
+  const [tab, setTab] = useState<TerminalTab>("all");
+  const [data, setData] = useState<TerminalList | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<Omit<ReasonDialogProps, "open" | "onClose"> | null>(null);
 
-  const [terminals, setTerminals] = useState<POSTerminal[]>([]);
-  const [selectedTerminal, setSelectedTerminal] = useState<POSTerminal | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-
-  const loadTerminals = async () => {
+  const load = useCallback(async () => {
     try {
-      setLoading(true);
-      const data = await fetchAllTerminals();
-      setTerminals(data);
-    } catch (err) {
-      console.error("Failed to load POS terminals:", err);
-    } finally {
-      setLoading(false);
+      setData(await fetchTerminalList(tab));
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load terminals.");
     }
-  };
+  }, [tab]);
 
   useEffect(() => {
-    loadTerminals();
-  }, []);
+    void load();
+  }, [load]);
 
-  const handleToggleActive = async (term: POSTerminal) => {
-    try {
-      const nextActive = !term.isActive;
-      await toggleTerminalActive(term.id, nextActive);
-      setTerminals((prev) =>
-        prev.map((t) => (t.id === term.id ? { ...t, isActive: nextActive } : t))
-      );
-      if (selectedTerminal && selectedTerminal.id === term.id) {
-        setSelectedTerminal((prev) => (prev ? { ...prev, isActive: nextActive } : null));
-      }
-    } catch (err) {
-      console.error("Failed to update terminal:", err);
-    }
-  };
+  const toggle = (t: TerminalRow) =>
+    setDialog({
+      title: `${t.active ? "Deactivate" : "Reactivate"} ${t.tid}?`,
+      body: t.active
+        ? `The terminal at ${t.merchant ?? "this merchant"} stops accepting palm payments right away.`
+        : "The terminal can accept payments again once it sends a heartbeat.",
+      icon: t.active ? Power : RotateCcw,
+      tone: t.active ? "fail" : "ok",
+      confirmLabel: t.active ? "Deactivate terminal" : "Reactivate",
+      noteRequired: true,
+      notePlaceholder: "Reason (required)",
+      onConfirm: async (note) => {
+        await setTerminalActive(t.id, !t.active, note);
+        setDialog(null);
+        flash(`${t.tid} ${t.active ? "deactivated" : "reactivated"} · logged`);
+        await load();
+      },
+    });
 
-  const filtered = terminals.filter((t) => {
-    if (!search.trim()) return true;
-    const s = search.toLowerCase();
-    return (
-      t.terminalId.toLowerCase().includes(s) ||
-      t.deviceSerialNumber.toLowerCase().includes(s) ||
-      (t.merchantName && t.merchantName.toLowerCase().includes(s)) ||
-      t.deviceModel.toLowerCase().includes(s)
-    );
-  });
-
-  const totalUnits = terminals.length;
-  const activeUnits = terminals.filter((t) => t.isActive).length;
-  const blacklistedUnits = terminals.filter((t) => !t.isActive).length;
-
+  const c = data?.counts;
   return (
-    <div className="p-6 md:p-10 max-w-7xl mx-auto animate-rise-in space-y-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Cpu className="w-5 h-5 text-signal-bright" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-signal-bright">
-              Biometric Hardware Fleet
-            </span>
-          </div>
-          <h1 className="font-display text-3xl font-bold text-ink">POS Terminals Management</h1>
-          <p className="text-sm text-ink-muted mt-1">
-            Track deployed HFSecurity HP605PV and VP930Pro palm vein scanners across all retail stores.
-          </p>
-        </div>
-
-        <Button variant="secondary" onClick={loadTerminals}>
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Refresh Fleet
-        </Button>
+    <div className="flex max-w-[1480px] animate-fade-in flex-col gap-[18px] p-4 sm:p-7">
+      <div>
+        <h1 className="text-2xl font-bold tracking-[-.02em]">Terminals</h1>
+        <div className="mt-1 text-muted">Palm terminals in the field. A terminal is offline after 15 minutes without a heartbeat.</div>
       </div>
 
-      {/* KPI Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-ledger-raised border border-white/[0.06] rounded-xl p-5">
-          <div className="flex items-center justify-between text-ink-muted mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Total Hardware Deployed</span>
-            <Cpu className="w-4 h-4 text-signal-bright" />
-          </div>
-          <div className="text-2xl font-bold font-data text-white">{totalUnits}</div>
-          <p className="text-xs text-ink-muted mt-1 font-mono">Provisioned devices in circulation</p>
-        </div>
+      <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+        <StatCard label="Online" value={c?.online ?? "—"} icon={<Wifi size={18} />} tone="ok" />
+        <StatCard label="Offline" value={c?.offline ?? "—"} icon={<WifiOff size={18} />} tone="fail" />
+        <StatCard label="Deactivated" value={c?.inactive ?? "—"} icon={<Power size={18} />} tone="muted" />
+        <StatCard label="Payments today" value={data ? data.paymentsToday.toLocaleString("en-NG") : "—"} icon={<Hand size={18} />} tone="info" />
+      </div>
 
-        <div className="bg-ledger-raised border border-white/[0.06] rounded-xl p-5">
-          <div className="flex items-center justify-between text-ink-muted mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Authorized & Online</span>
-            <ShieldCheck className="w-4 h-4 text-status-ok" />
+      <div className="overflow-hidden rounded-card border border-line bg-panel shadow-card">
+        <Tabs<TerminalTab> tabs={TABS.map((t) => ({ ...t, count: c?.[t.id] ?? null }))} value={tab} onChange={setTab} />
+        <div className="overflow-x-auto">
+          <div className="min-w-[1080px]">
+            <div className={clsx(COLS, "border-b border-line bg-field px-5 py-2.5 text-[11px] font-semibold uppercase tracking-[.06em] text-faint")}>
+              <div>Terminal</div>
+              <div>Merchant</div>
+              <div>Device</div>
+              <div>Status</div>
+              <div>Last heartbeat</div>
+              <div className="text-right">Txns</div>
+              <div className="text-right">Volume today</div>
+              <div />
+            </div>
+            {error && <div className="p-12 text-center text-fail">{error}</div>}
+            {!error && !data && <div className="p-12 text-center text-muted">Loading…</div>}
+            {!error && data && data.rows.length === 0 && <div className="p-12 text-center text-muted">No terminals here.</div>}
+            {data?.rows.map((t) => {
+              const [label, tone] = TERMINAL_STATUS[t.state];
+              return (
+                <div key={t.id} className={clsx(COLS, "h-[52px] items-center border-b border-line2 px-5 hover:bg-hover")}>
+                  <div className="font-mono text-[12.5px] font-semibold">{t.tid}</div>
+                  <button
+                    type="button"
+                    onClick={() => navigate(merchantPath("/dashboard/", t.merchantId))}
+                    className="truncate text-left font-medium hover:underline"
+                  >
+                    {t.merchant ?? "—"}
+                  </button>
+                  <div className="truncate text-[13px] text-muted">
+                    {t.model} · <span className="font-mono">{t.serial}</span>
+                  </div>
+                  <div>
+                    <Pill tone={tone} pulse={t.state === "online"}>
+                      {label}
+                    </Pill>
+                  </div>
+                  <div className={clsx("text-[13px]", t.state === "offline" ? "text-fail" : "text-muted")}>{heartbeatLabel(t.lastHeartbeat)}</div>
+                  <div className="text-right tabular-nums">{t.txnsToday}</div>
+                  <div className="text-right font-semibold tabular-nums">{formatNairaWhole(t.volumeToday)}</div>
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => toggle(t)}
+                      className={clsx("flex h-[30px] items-center gap-1.5 rounded-lg border border-line px-2.5 text-xs font-semibold", t.active ? "text-fail" : "text-brand-text")}
+                    >
+                      {t.active ? <Power size={13} aria-hidden="true" /> : <RotateCcw size={13} aria-hidden="true" />}
+                      {t.active ? "Deactivate" : "Reactivate"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <div className="text-2xl font-bold font-data text-white">{activeUnits}</div>
-          <p className="text-xs text-status-ok mt-1 font-mono">Active payment processing units</p>
-        </div>
-
-        <div className="bg-ledger-raised border border-white/[0.06] rounded-xl p-5">
-          <div className="flex items-center justify-between text-ink-muted mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Blacklisted / Stolen</span>
-            <ShieldAlert className="w-4 h-4 text-status-fail" />
-          </div>
-          <div className="text-2xl font-bold font-data text-white">{blacklistedUnits}</div>
-          <p className="text-xs text-status-fail mt-1 font-mono">Hardware lockdown enforced</p>
         </div>
       </div>
 
-      {/* Search Toolbar */}
-      <div className="bg-ledger-raised border border-white/[0.06] rounded-xl p-4 flex items-center justify-between">
-        <div className="relative w-full md:w-96">
-          <Search className="w-4 h-4 text-ink-faint absolute left-3.5 top-3" />
-          <input
-            type="text"
-            placeholder="Search by Terminal ID, Serial Number, or Merchant..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white/[0.03] border border-ledger-line2 rounded-lg text-sm text-ink outline-none focus:border-signal/60"
-          />
-        </div>
-      </div>
-
-      {/* Fleet Table */}
-      <div className="bg-ledger-raised border border-white/[0.06] rounded-xl overflow-hidden shadow-xl">
-        {loading ? (
-          <div className="p-12">
-            <LoadingState title="Loading Fleet" description="Querying hardware fleet inventory..." />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="p-12 text-center">
-            <Cpu className="w-10 h-10 text-ink-faint mx-auto mb-3" />
-            <h3 className="text-base font-bold text-white mb-1">No Terminals Found</h3>
-            <p className="text-xs text-ink-muted">
-              {search ? "No devices match your search query." : "No POS terminals have been registered yet."}
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-white/[0.02] border-b border-white/[0.06] text-xs font-semibold text-ink-muted uppercase tracking-wider font-mono">
-                <tr>
-                  <th className="py-4 px-6">Terminal ID</th>
-                  <th className="py-4 px-6">Assigned Merchant</th>
-                  <th className="py-4 px-6">Hardware Model</th>
-                  <th className="py-4 px-6">Serial Number</th>
-                  <th className="py-4 px-6">Assigned By (Audit)</th>
-                  <th className="py-4 px-6">Security State</th>
-                  <th className="py-4 px-6 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.04]">
-                {filtered.map((t) => (
-                  <tr key={t.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="py-4 px-6">
-                      <button
-                        onClick={() => setSelectedTerminal(t)}
-                        className="font-mono font-bold text-signal-bright hover:text-white transition-colors flex items-center gap-1.5 group text-left"
-                        title="Click to view full terminal details & transactions"
-                      >
-                        <span>{t.terminalId}</span>
-                        <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 transition-opacity" />
-                      </button>
-                    </td>
-
-                    <td className="py-4 px-6">
-                      <button
-                        onClick={() => navigate(`/dashboard/merchants/${t.merchantId}`)}
-                        className="font-semibold text-white hover:text-signal transition-colors text-left flex items-center gap-1.5"
-                      >
-                        <Building2 className="w-3.5 h-3.5 text-ink-faint" />
-                        {t.merchantName || "Unassigned"}
-                      </button>
-                    </td>
-
-                    <td className="py-4 px-6">
-                      <span className="inline-block px-2.5 py-1 rounded-md text-[11px] font-medium bg-white/[0.04] border border-white/[0.08] text-ink">
-                        {t.deviceModel}
-                      </span>
-                    </td>
-
-                    <td className="py-4 px-6 font-mono text-xs text-ink-muted">
-                      {t.deviceSerialNumber}
-                    </td>
-
-                    <td className="py-4 px-6">
-                      <div className="flex items-center gap-1.5">
-                        <UserCheck className="w-3.5 h-3.5 text-signal shrink-0" />
-                        <div className="text-xs">
-                          <span className="text-white font-medium block">
-                            {t.assignedByName || "MiliPay Staff"}
-                          </span>
-                          {t.assignedByRole && (
-                            <span className="text-[10px] text-ink-muted block uppercase font-mono tracking-wider">
-                              {t.assignedByRole}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="py-4 px-6">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-                          t.isActive
-                            ? "bg-status-ok/10 text-status-ok border border-status-ok/20"
-                            : "bg-status-fail/10 text-status-fail border border-status-fail/20"
-                        }`}
-                      >
-                        {t.isActive ? "Authorized" : "Blacklisted / Disabled"}
-                      </span>
-                    </td>
-
-                    <td className="py-4 px-6 text-right space-x-2">
-                      <Button
-                        variant="ghost"
-                        onClick={() => setSelectedTerminal(t)}
-                        className="text-xs py-1.5 px-2.5 text-ink-muted hover:text-white"
-                      >
-                        {isAgent ? "Hardware Specs" : "Transactions"}
-                      </Button>
-                      {!isAgent && (
-                        <Button
-                          variant={t.isActive ? "secondary" : "primary"}
-                          onClick={() => handleToggleActive(t)}
-                          className="text-xs py-1.5 px-3"
-                        >
-                          {t.isActive ? "Lockdown" : "Reauthorize"}
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Terminal Details & Transactions Modal */}
-      <TerminalDetailsModal
-        terminal={selectedTerminal}
-        isOpen={!!selectedTerminal}
-        onClose={() => setSelectedTerminal(null)}
-        onToggleActive={!isAgent ? handleToggleActive : undefined}
-      />
+      {dialog && <ReasonDialog open onClose={() => setDialog(null)} {...dialog} />}
     </div>
   );
 }

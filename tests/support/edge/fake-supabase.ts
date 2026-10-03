@@ -21,7 +21,7 @@ interface Result {
 
 class Query implements PromiseLike<Result> {
   private filters: Filter[] = [];
-  private mode: "select" | "update" | "insert" | "upsert" = "select";
+  private mode: "select" | "update" | "insert" | "upsert" | "delete" = "select";
   private patch: Row = {};
   private inserted: Row[] = [];
   private limitTo: number | null = null;
@@ -46,6 +46,12 @@ class Query implements PromiseLike<Result> {
   upsert(values: Row | Row[]): this {
     this.mode = "upsert";
     this.inserted = (Array.isArray(values) ? values : [values]).map((v) => ({ ...v }));
+    return this;
+  }
+
+  /** Remove the rows the filters match (they are returned, as delete().select() does). */
+  delete(): this {
+    this.mode = "delete";
     return this;
   }
 
@@ -142,6 +148,9 @@ class Query implements PromiseLike<Result> {
     if (this.mode === "update") {
       for (const row of matched) Object.assign(row, this.patch);
     }
+    if (this.mode === "delete") {
+      for (const row of matched) rows.splice(rows.indexOf(row), 1);
+    }
     return this.limitTo === null ? matched : matched.slice(0, this.limitTo);
   }
 
@@ -227,6 +236,11 @@ export class FakeSupabase {
         return { data: { properties: { hashed_token: token }, user: null }, error: null };
       },
       createUser: async (attributes: Record<string, unknown>) => {
+        // GoTrue refuses a second account with the same email.
+        const email = String(attributes.email ?? "").toLowerCase();
+        if (email && [...this.authUsers.values()].some((u) => (u.email ?? "").toLowerCase() === email)) {
+          return { data: { user: null }, error: { message: "A user with this email address has already been registered" } };
+        }
         const id = `auth-${this.createdUsers.length + 1}`;
         this.createdUsers.push({ id, attributes });
         this.authUsers.set(id, { id, email: (attributes.email as string) ?? null });

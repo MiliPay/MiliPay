@@ -1,51 +1,68 @@
-interface Step {
-  id: number;
+import clsx from "clsx";
+
+/**
+ * The register pages' step boxes (design handoff, "Register customer" /
+ * "Register merchant"): a numbered box per step, a tick once it's done, the
+ * current one highlighted. A finished step can be clicked to go back to it
+ * while `canRevisit` holds (until the form is submitted).
+ */
+export interface StepItem {
   label: string;
+  sub?: string;
 }
 
-interface StepProgressProps {
-  steps: Step[];
+export function StepProgress({
+  steps,
+  current,
+  onPick,
+  canRevisit = true,
+}: {
+  steps: StepItem[];
+  /** 0-based; steps.length means everything is done. */
   current: number;
-}
-
-export function StepProgress({ steps, current }: StepProgressProps) {
+  onPick?: (index: number) => void;
+  canRevisit?: boolean;
+}) {
   return (
-    <div className="border-b border-ledger-line bg-ledger-raised px-3 sm:px-6 pt-4 sm:pt-6 pb-4 sm:pb-5">
-      <div className="relative mx-auto flex max-w-xl items-center justify-between">
-        {/* connector track */}
-        <div className="absolute left-[9%] right-[9%] top-[16px] sm:top-[18px] h-px bg-ledger-line2" />
-        <div
-          className="absolute left-[9%] top-[16px] sm:top-[18px] h-px bg-signal transition-all duration-500"
-          style={{ width: `${((current - 1) / (steps.length - 1)) * 82}%` }}
-        />
-
-        {steps.map((step) => {
-          const done = current > step.id;
-          const active = current === step.id;
-          return (
-            <div key={step.id} className="relative z-10 flex flex-col items-center gap-1 sm:gap-1.5">
-              <div
-                className={`flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full border text-xs font-display font-bold transition-all ${
-                  done
-                    ? "border-status-ok bg-status-ok text-ledger"
-                    : active
-                    ? "border-signal-bright bg-signal text-signal-ink shadow-[0_0_12px_rgba(var(--color-signal),0.4)]"
-                    : "border-ledger-line2 bg-ledger-line text-ink-faint"
-                }`}
-              >
-                {done ? "✓" : step.id}
-              </div>
+    <ol
+      className="grid gap-2.5"
+      style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
+      aria-label="Steps"
+    >
+      {steps.map((s, i) => {
+        const done = i < current;
+        const on = i === current;
+        const clickable = done && canRevisit && Boolean(onPick);
+        return (
+          <li key={s.label}>
+            <button
+              type="button"
+              disabled={!clickable}
+              onClick={() => clickable && onPick?.(i)}
+              aria-current={on ? "step" : undefined}
+              aria-label={`Step ${i + 1}: ${s.label}${done ? ", done" : ""}`}
+              className={clsx(
+                "flex w-full items-center gap-2.5 rounded-[14px] border px-3.5 py-3 text-left",
+                on ? "border-brand bg-brand-soft" : "border-line bg-panel",
+                clickable ? "cursor-pointer" : "cursor-default",
+              )}
+            >
               <span
-                className={`whitespace-nowrap text-[9px] sm:text-[10px] font-display font-semibold uppercase tracking-wide ${
-                  active ? "text-signal" : done ? "text-status-ok" : "text-ink-faint"
-                }`}
+                className={clsx(
+                  "flex h-[26px] w-[26px] flex-none items-center justify-center rounded-full text-xs font-bold",
+                  done || on ? "bg-brand text-brand-ink" : "bg-chip text-muted",
+                )}
               >
-                {step.label}
+                {done ? "✓" : i + 1}
               </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+              <span className="hidden min-w-0 sm:block">
+                <span className={clsx("block truncate text-[13px] font-semibold", i > current ? "text-muted" : "text-fg")}>{s.label}</span>
+                {s.sub && <span className="block truncate text-xs text-muted">{s.sub}</span>}
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ol>
   );
 }

@@ -1,329 +1,160 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Building2, Search } from "lucide-react";
+import clsx from "clsx";
+import { Chips, ToolbarSearch } from "@milipay/shared/components/ui/Tabs";
+import { Pill } from "@milipay/shared/components/ui/StatusBadge";
+import { useAuth } from "@milipay/shared/features/auth/AuthContext";
 import {
-  Store,
-  Plus,
-  Building2,
-  CheckCircle2,
-  Cpu,
-  Search,
-  Filter,
-  ArrowUpRight,
-  ShieldCheck,
-  RefreshCw,
-  UserCheck,
-} from "lucide-react";
-import { Button } from "@milipay/shared/components/ui/Button";
-import { LoadingState } from "@milipay/shared/components/ui/LoadingState";
-import { ROUTES } from "@milipay/shared/lib/constants";
-import { fetchMerchants, MERCHANT_CATEGORIES } from "@milipay/shared/features/merchants/merchantService";
-import type { Merchant } from "@milipay/shared/types";
+  MERCHANT_STATUS,
+  categoryStyle,
+  feeLabel,
+  fetchMerchantList,
+  merchantPath,
+  onboardedLabel,
+  registerMerchantPath,
+  scheduleLabel,
+  type MerchantFilter,
+  type MerchantList,
+  type MerchantRow,
+} from "@milipay/shared/features/merchants/admin";
+import { formatNairaCompact } from "@milipay/shared/lib/utils/format";
+import { CategoryIcon, StatTile } from "./parts";
+
+/**
+ * Merchants (design handoff, admin "Merchants"): totals, search by business
+ * or director, a status filter, and a row per business. Shared by the admin
+ * and agent portals; an agent sees the merchants they registered.
+ */
+
+const FILTERS: { id: MerchantFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "active", label: "Active" },
+  { id: "pending", label: "Pending" },
+  { id: "suspended", label: "Suspended" },
+];
+const COLS = "grid grid-cols-[minmax(0,1.6fr)_90px_110px_130px_70px_100px_120px_90px] gap-3.5";
 
 export default function MerchantsPage() {
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const [merchants, setMerchants] = useState<Merchant[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [selectedStatus, setSelectedStatus] = useState("all");
-
-  const loadMerchants = async () => {
-    try {
-      setLoading(true);
-      const data = await fetchMerchants({
-        search,
-        category: selectedCategory,
-        status: selectedStatus,
-      });
-      setMerchants(data);
-    } catch (err) {
-      console.error("Failed to load merchants:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { pathname } = useLocation();
+  const [filter, setFilter] = useState<MerchantFilter>("all");
+  const [q, setQ] = useState("");
+  const [query, setQuery] = useState("");
+  const [data, setData] = useState<MerchantList | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const isAgent = user?.role === "agent";
 
   useEffect(() => {
-    loadMerchants();
-  }, [selectedCategory, selectedStatus]);
+    const t = setTimeout(() => setQuery(q.trim()), 250);
+    return () => clearTimeout(t);
+  }, [q]);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    loadMerchants();
-  };
+  const load = useCallback(async () => {
+    try {
+      setData(await fetchMerchantList(filter, query));
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load merchants.");
+    }
+  }, [filter, query]);
 
-  const totalMerchants = merchants.length;
-  const activeMerchants = merchants.filter((m) => m.status === "active").length;
-  const totalTerminals = merchants.reduce((sum, m) => sum + (m.terminalCount || 0), 0);
-  const activeTerminals = merchants.reduce((sum, m) => sum + (m.activeTerminalCount || 0), 0);
-  const suspendedMerchants = merchants.filter((m) => m.status === "suspended").length;
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const s = data?.stats;
+  const stats: [string, string][] = [
+    ["Active merchants", s ? String(s.active) : "—"],
+    ["Volume · 30 days", s ? formatNairaCompact(s.volume) : "—"],
+    ["Fees earned · 30 days", s ? formatNairaCompact(s.fees) : "—"],
+    ["Awaiting approval", s ? String(s.pending) : "—"],
+  ];
 
   return (
-    <div className="p-6 md:p-10 max-w-7xl mx-auto animate-rise-in space-y-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Store className="w-5 h-5 text-signal-bright" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-signal-bright">
-              Merchant network
-            </span>
+    <div className="flex max-w-[1480px] animate-fade-in flex-col gap-[18px] p-4 sm:p-7">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-[260px] flex-1">
+          <h1 className="text-2xl font-bold tracking-[-.02em]">Merchants</h1>
+          <div className="mt-1 text-muted">
+            {isAgent ? "The businesses you've registered. New merchants wait for an admin to approve them." : "Businesses that accept palm payments on MiliPay terminals."}
           </div>
-          <h1 className="font-display text-3xl font-bold text-ink">Merchants & Terminals</h1>
-          <p className="text-sm text-ink-muted mt-1">
-            Monitor verified businesses, POS hardware allocations, and automated Mono settlements.
-          </p>
         </div>
-
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={loadMerchants}>
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh
-          </Button>
-          <Button
-            variant="primary"
-            onClick={() => navigate(ROUTES.registerMerchant || "/dashboard/register/merchant")}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Register Merchant
-          </Button>
-        </div>
+        <Link
+          to={registerMerchantPath(pathname)}
+          className="flex h-[38px] items-center gap-2 rounded-[10px] bg-brand px-3.5 font-bold text-brand-ink"
+        >
+          <Building2 size={16} aria-hidden="true" />
+          Register merchant
+        </Link>
       </div>
 
-      {/* KPI Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-ledger-raised border border-white/[0.06] rounded-xl p-5">
-          <div className="flex items-center justify-between text-ink-muted mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Total Merchants</span>
-            <Building2 className="w-4 h-4 text-signal-bright" />
-          </div>
-          <div className="text-2xl font-bold font-data text-white">{totalMerchants}</div>
-          <p className="text-xs text-status-ok mt-1 flex items-center gap-1 font-mono">
-            <CheckCircle2 className="w-3 h-3" /> {activeMerchants} Active Partners
-          </p>
-        </div>
-
-        <div className="bg-ledger-raised border border-white/[0.06] rounded-xl p-5">
-          <div className="flex items-center justify-between text-ink-muted mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Deployed Terminals</span>
-            <Cpu className="w-4 h-4 text-status-info" />
-          </div>
-          <div className="text-2xl font-bold font-data text-white">{totalTerminals}</div>
-          <p className="text-xs text-ink-muted mt-1 font-mono">
-            {activeTerminals} active
-          </p>
-        </div>
-
-        <div className="bg-ledger-raised border border-white/[0.06] rounded-xl p-5">
-          <div className="flex items-center justify-between text-ink-muted mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Suspended</span>
-            <ShieldCheck className="w-4 h-4 text-status-warn" />
-          </div>
-          <div className="text-2xl font-bold font-data text-white">{suspendedMerchants}</div>
-          <p className="text-xs text-ink-muted mt-1">Cannot take payments</p>
-        </div>
-
-        <div className="bg-ledger-raised border border-white/[0.06] rounded-xl p-5">
-          <div className="flex items-center justify-between text-ink-muted mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Default Platform Fee</span>
-            <Store className="w-4 h-4 text-signal" />
-          </div>
-          <div className="text-2xl font-bold font-data text-white">1.50%</div>
-          <p className="text-xs text-ink-muted mt-1">Applied unless a merchant is set otherwise</p>
-        </div>
+      <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+        {stats.map(([label, value]) => (
+          <StatTile key={label} label={label} value={value} />
+        ))}
       </div>
 
-      {/* Filter Toolbar */}
-      <div className="bg-ledger-raised border border-white/[0.06] rounded-xl p-4 flex flex-col md:flex-row gap-3 items-center justify-between">
-        <form onSubmit={handleSearchSubmit} className="relative w-full md:w-80">
-          <Search className="w-4 h-4 text-ink-faint absolute left-3.5 top-3" />
-          <input
-            type="text"
-            placeholder="Search by store name or account..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white/[0.03] border border-ledger-line2 rounded-lg text-sm text-ink outline-none focus:border-signal/60"
-          />
-        </form>
-
-        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-          <div className="flex items-center gap-2">
-            <Filter className="w-3.5 h-3.5 text-ink-faint" />
-            <span className="text-xs text-ink-muted uppercase tracking-wider font-semibold">
-              Category:
-            </span>
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="bg-white/[0.03] border border-ledger-line2 text-xs rounded-lg px-3 py-1.5 text-ink outline-none"
-            >
-              <option value="all" className="bg-ledger">
-                All Categories
-              </option>
-              {MERCHANT_CATEGORIES.map((c) => (
-                <option key={c.value} value={c.value} className="bg-ledger">
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-ink-muted uppercase tracking-wider font-semibold">
-              Status:
-            </span>
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="bg-white/[0.03] border border-ledger-line2 text-xs rounded-lg px-3 py-1.5 text-ink outline-none"
-            >
-              <option value="all" className="bg-ledger">
-                All Status
-              </option>
-              <option value="active" className="bg-ledger">
-                Active
-              </option>
-              <option value="suspended" className="bg-ledger">
-                Suspended
-              </option>
-              <option value="blacklisted" className="bg-ledger">
-                Blacklisted
-              </option>
-            </select>
-          </div>
+      <div className="overflow-hidden rounded-card border border-line bg-panel shadow-card">
+        <div className="flex flex-wrap items-center gap-2.5 border-b border-line px-4 py-3">
+          <ToolbarSearch value={q} onChange={setQ} width={320} placeholder="Business or director name" icon={<Search size={15} aria-hidden="true" />} />
+          <Chips<MerchantFilter> options={FILTERS} value={filter} onChange={setFilter} />
         </div>
-      </div>
 
-      {/* Merchants Table / Content */}
-      <div className="bg-ledger-raised border border-white/[0.06] rounded-xl overflow-hidden shadow-xl">
-        {loading ? (
-          <div className="p-12">
-            <LoadingState title="Loading Merchants" description="Retrieving registered retail partners..." />
-          </div>
-        ) : merchants.length === 0 ? (
-          <div className="p-12 text-center">
-            <div className="w-12 h-12 rounded-full bg-white/[0.03] border border-white/[0.08] flex items-center justify-center mx-auto mb-4">
-              <Store className="w-6 h-6 text-ink-faint" />
+        <div className="overflow-x-auto">
+          <div className="min-w-[1000px]">
+            <div className={clsx(COLS, "border-b border-line bg-field px-5 py-2.5 text-[11px] font-semibold uppercase tracking-[.06em] text-faint")}>
+              <div>Business</div>
+              <div>State</div>
+              <div>Terminals</div>
+              <div className="text-right">Volume · 30d</div>
+              <div className="text-right">Fee</div>
+              <div>Settlement</div>
+              <div>Status</div>
+              <div className="text-right">Onboarded</div>
             </div>
-            <h3 className="text-lg font-bold text-ink mb-1">No Merchants Found</h3>
-            <p className="text-sm text-ink-muted mb-6 max-w-sm mx-auto">
-              No registered merchants match your current search or filters. Onboard a new business to get started.
-            </p>
-            <Button
-              variant="primary"
-              onClick={() => navigate(ROUTES.registerMerchant || "/dashboard/register/merchant")}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Register First Merchant
-            </Button>
+            {error && <div className="p-12 text-center text-fail">{error}</div>}
+            {!error && !data && <div className="p-12 text-center text-muted">Loading…</div>}
+            {!error && data && data.rows.length === 0 && (
+              <div className="p-12 text-center text-muted">{query || filter !== "all" ? "No merchants match." : "No merchants yet."}</div>
+            )}
+            {data?.rows.map((m) => (
+              <Row key={m.id} m={m} onOpen={() => navigate(merchantPath(pathname, m.id))} />
+            ))}
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-white/[0.02] border-b border-white/[0.06] text-xs font-semibold text-ink-muted uppercase tracking-wider font-mono">
-                <tr>
-                  <th className="py-4 px-6">Business Name</th>
-                  <th className="py-4 px-6">Category</th>
-                  <th className="py-4 px-6">Settlement Bank & NUBAN</th>
-                  <th className="py-4 px-6">POS Terminals</th>
-                  <th className="py-4 px-6">Onboarded By (Audit)</th>
-                  <th className="py-4 px-6">Status</th>
-                  <th className="py-4 px-6 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.04]">
-                {merchants.map((merchant) => (
-                  <tr
-                    key={merchant.id}
-                    className="hover:bg-white/[0.02] transition-colors cursor-pointer group"
-                    onClick={() => navigate(`/dashboard/merchants/${merchant.id}`)}
-                  >
-                    <td className="py-4 px-6">
-                      <div className="font-semibold text-white group-hover:text-signal transition-colors">
-                        {merchant.businessName}
-                      </div>
-                      <div className="text-xs text-ink-muted mt-0.5">
-                        {merchant.address}, {merchant.state}
-                      </div>
-                    </td>
-
-                    <td className="py-4 px-6">
-                      <span className="inline-block px-2.5 py-1 rounded-md text-[11px] font-medium uppercase tracking-wider bg-white/[0.04] border border-white/[0.08] text-ink">
-                        {merchant.category}
-                      </span>
-                    </td>
-
-                    <td className="py-4 px-6 font-mono">
-                      <div className="text-xs text-white font-medium flex items-center gap-1.5">
-                        {merchant.settlementBankName}
-                        <ShieldCheck className="w-3.5 h-3.5 text-status-ok" />
-                      </div>
-                      <div className="text-xs text-ink-muted mt-0.5">
-                        {merchant.settlementAccountNumber} • {merchant.settlementAccountName}
-                      </div>
-                    </td>
-
-                    <td className="py-4 px-6 font-mono">
-                      <div className="flex items-center gap-2">
-                        <span className="text-signal-bright font-bold">
-                          {merchant.terminalCount || 0}
-                        </span>
-                        <span className="text-xs text-ink-muted">terminals</span>
-                      </div>
-                    </td>
-
-                    <td className="py-4 px-6">
-                      <div className="flex items-center gap-1.5">
-                        <UserCheck className="w-3.5 h-3.5 text-signal shrink-0" />
-                        <div className="text-xs">
-                          <span className="text-white font-medium block">
-                            {merchant.onboardedByName || "MiliPay Staff"}
-                          </span>
-                          {merchant.onboardedByRole && (
-                            <span className="text-[10px] text-ink-muted block uppercase font-mono tracking-wider">
-                              {merchant.onboardedByRole}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="py-4 px-6">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                          merchant.status === "active"
-                            ? "bg-status-ok/10 text-status-ok border border-status-ok/20"
-                            : merchant.status === "blacklisted"
-                            ? "bg-status-fail/20 text-status-fail border border-status-fail/40"
-                            : "bg-status-warn/10 text-status-warn border border-status-warn/20"
-                        }`}
-                      >
-                        {merchant.status === "active"
-                          ? "Active"
-                          : merchant.status === "blacklisted"
-                          ? "Blacklisted"
-                          : "Suspended"}
-                      </span>
-                    </td>
-
-                    <td className="py-4 px-6 text-right">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/dashboard/merchants/${merchant.id}`);
-                        }}
-                        className="p-2 rounded-lg bg-white/[0.03] hover:bg-signal/10 hover:text-signal text-ink-muted transition-colors"
-                      >
-                        <ArrowUpRight className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        </div>
       </div>
     </div>
+  );
+}
+
+function Row({ m, onOpen }: { m: MerchantRow; onOpen: () => void }) {
+  const cat = categoryStyle(m.category);
+  const [label, tone] = MERCHANT_STATUS[m.status] ?? [m.status, "muted"];
+  return (
+    <button type="button" onClick={onOpen} className={clsx(COLS, "h-14 w-full items-center border-b border-line2 px-5 text-left hover:bg-hover")}>
+      <div className="flex min-w-0 items-center gap-2.5">
+        <CategoryIcon category={m.category} size={32} />
+        <div className="min-w-0">
+          <div className="truncate font-semibold">{m.name}</div>
+          <div className="text-xs text-muted">{cat.label}</div>
+        </div>
+      </div>
+      <div className="truncate text-muted">{m.state}</div>
+      <div className="flex items-center gap-2">
+        <span className="font-semibold tabular-nums">
+          {m.online} / {m.terminals}
+        </span>
+        {m.offline > 0 && <span className="h-[7px] w-[7px] rounded-full bg-fail" title={`${m.offline} offline`} aria-label={`${m.offline} offline`} />}
+      </div>
+      <div className="text-right font-semibold tabular-nums">{formatNairaCompact(m.volume)}</div>
+      <div className="text-right tabular-nums text-muted">{feeLabel(m.fee)}</div>
+      <div className="text-[13px] text-muted">{scheduleLabel(m.schedule)}</div>
+      <div>
+        <Pill tone={tone}>{label}</Pill>
+      </div>
+      <div className="text-right text-[13px] text-muted">{onboardedLabel(m.createdAt)}</div>
+    </button>
   );
 }

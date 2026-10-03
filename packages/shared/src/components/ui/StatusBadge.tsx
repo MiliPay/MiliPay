@@ -23,16 +23,17 @@ const CUSTOMER_CONFIG: Record<CustomerStatus, { label: string; tone: Tone }> = {
 
 /**
  * A status pill: a dot and a word on a soft tint, never colour alone.
- * `size="lg"` is the larger pill in drawer and page headers.
+ * `size="lg"` is the larger pill in drawer and page headers; `pulse` makes
+ * the dot beat, for something live (an online terminal).
  */
-export function Pill({ tone, children, size = "md" }: { tone: Tone; children: ReactNode; size?: "md" | "lg" }) {
+export function Pill({ tone, children, size = "md", pulse }: { tone: Tone; children: ReactNode; size?: "md" | "lg"; pulse?: boolean }) {
   return (
     <span
       className={`inline-flex items-center whitespace-nowrap rounded-full font-semibold ${TONE_CLASSES[tone]} ${
         size === "lg" ? "gap-1.5 px-[11px] py-[5px] text-[13px]" : "gap-1.5 px-[9px] py-[3px] text-xs"
       }`}
     >
-      <span className={`rounded-full bg-current ${size === "lg" ? "h-[7px] w-[7px]" : "h-1.5 w-1.5"}`} aria-hidden="true" />
+      <span className={`rounded-full bg-current ${size === "lg" ? "h-[7px] w-[7px]" : "h-1.5 w-1.5"}${pulse ? " animate-pulse-dot" : ""}`} aria-hidden="true" />
       {children}
     </span>
   );
