@@ -174,8 +174,16 @@ describe("waitlist", () => {
     const csv = waitlistCsv([{ phone: "08031234567", page: "/business", createdAt: "2026-10-14T09:00:00Z", notifiedAt: null }]);
     expect(csv.split("\r\n")).toEqual([
       '"Phone","Joined from","Joined (UTC)","Launch SMS sent (UTC)"',
-      '"08031234567","Business","2026-10-14T09:00:00Z",""',
+      '"0803 123 4567","Business","2026-10-14T09:00:00Z",""',
     ]);
+  });
+
+  it("phones in the CSV can't be read as numbers, so a spreadsheet keeps the leading 0", () => {
+    const [, row] = waitlistCsv([{ phone: "07061234567", page: null, createdAt: "", notifiedAt: null }]).split("\r\n");
+    const phone = row.split(",")[0].slice(1, -1);
+    expect(phone).toBe("0706 123 4567");
+    expect(phone.startsWith("0")).toBe(true);
+    expect(Number.isNaN(Number(phone))).toBe(true);
   });
 });
 

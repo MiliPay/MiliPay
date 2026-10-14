@@ -223,9 +223,13 @@ export function csvCell(v: unknown): string {
   return `"${s.replace(/"/g, '""')}"`;
 }
 
+/**
+ * Phones go out spaced ("0803 123 4567"): a bare 08031234567 is read as a
+ * number by Excel and Sheets, which drop the leading 0. With spaces it stays text.
+ */
 export function waitlistCsv(rows: Omit<WaitlistRow, "id">[]): string {
   const head = ["Phone", "Joined from", "Joined (UTC)", "Launch SMS sent (UTC)"];
-  const body = rows.map((r) => [r.phone, waitlistPageLabel(r.page), r.createdAt, r.notifiedAt ?? ""]);
+  const body = rows.map((r) => [formatLocalPhone(r.phone), waitlistPageLabel(r.page), r.createdAt, r.notifiedAt ?? ""]);
   return [head, ...body].map((r) => r.map(csvCell).join(",")).join("\r\n");
 }
 
