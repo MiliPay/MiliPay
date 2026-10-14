@@ -14,6 +14,8 @@ export interface AdminNavCounts {
   signupReviews: number | null;
   offlineTerminals: number | null;
   openTickets: number | null;
+  /** Website applications nobody has followed up yet (merchant and agent). */
+  newLeads: number | null;
   /** Denied sign-ins and actions today: the dot on the top-bar bell. */
   deniedToday: number | null;
 }
@@ -24,6 +26,7 @@ const EMPTY: AdminNavCounts = {
   signupReviews: null,
   offlineTerminals: null,
   openTickets: null,
+  newLeads: null,
   deniedToday: null,
 };
 
@@ -43,12 +46,19 @@ async function countOf(query: PromiseLike<{ count: number | null; error: unknown
   return r && !r.error ? r.count ?? 0 : null;
 }
 
+/** The Leads badge from admin_website_summary; blank when the function is missing or failed. */
+export function newLeadsOf(r: { data?: unknown; error?: unknown } | null): number | null {
+  const d = r && !r.error ? (r.data as { newMerchantLeads?: number; newAgentApplications?: number } | null) : null;
+  if (!d || typeof d.newMerchantLeads !== "number" || typeof d.newAgentApplications !== "number") return null;
+  return d.newMerchantLeads + d.newAgentApplications;
+}
+
 export async function fetchAdminNavCounts(): Promise<AdminNavCounts> {
   const offlineSince = new Date(Date.now() - OFFLINE_AFTER_MS).toISOString();
   // Midnight in Lagos (UTC+1 all year) as an instant.
   const lagos = new Date(Date.now() + 3_600_000);
   const lagosMidnight = new Date(Date.UTC(lagos.getUTCFullYear(), lagos.getUTCMonth(), lagos.getUTCDate()) - 3_600_000).toISOString();
-  const [ops, pendingCustomers, reviews, offlineTerminals, openTickets, deniedToday] = await Promise.all([
+  const [ops, pendingCustomers, reviews, offlineTerminals, openTickets, deniedToday, website] = await Promise.all([
     settle(supabase.rpc("vtu_operations_snapshot", { p_hours: 24 })),
     countOf(supabase.from("customers").select("id", { count: "exact", head: true }).eq("status", "pending")),
     settle(fetchSignupReviews()),
@@ -63,6 +73,7 @@ export async function fetchAdminNavCounts(): Promise<AdminNavCounts> {
     countOf(
       supabase.from("audit_events").select("id", { count: "exact", head: true }).eq("result", "denied").gte("occurred_at", lagosMidnight),
     ),
+    settle(supabase.rpc("admin_website_summary")),
   ]);
   const queues = (ops as { data?: { queues?: { pending?: number; quarantined?: number } } } | null)?.data?.queues;
   return {
@@ -71,6 +82,7 @@ export async function fetchAdminNavCounts(): Promise<AdminNavCounts> {
     signupReviews: reviews ? reviews.length : null,
     offlineTerminals,
     openTickets,
+    newLeads: newLeadsOf(website),
     deniedToday,
   };
 }

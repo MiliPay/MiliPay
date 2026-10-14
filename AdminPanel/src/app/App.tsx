@@ -25,6 +25,9 @@ import { AdminSupportPage } from "@milipay/shared/pages/dashboard/AdminSupportPa
 import { OperationsPage } from "@milipay/shared/pages/operations/OperationsPage";
 import NotFoundPage from "@milipay/shared/pages/not-found/NotFoundPage";
 import AuditLogPage from "@milipay/shared/pages/audit/AuditLogPage";
+import LeadsPage from "@milipay/shared/pages/website/LeadsPage";
+import WaitlistPage from "@milipay/shared/pages/website/WaitlistPage";
+import AgentLocationsPage from "@milipay/shared/pages/website/AgentLocationsPage";
 
 
 export default function App() {
@@ -66,6 +69,9 @@ export default function App() {
             <Route path="audit" element={<AuditLogPage />} />
             <Route path="support" element={<AdminSupportPage />} />
             <Route path="support/:id" element={<AdminSupportPage />} />
+            <Route path="website/leads" element={<LeadsPage />} />
+            <Route path="website/waitlist" element={<WaitlistPage />} />
+            <Route path="website/agents" element={<AgentLocationsPage />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

@@ -3,8 +3,11 @@ import {
   ArrowLeftRight,
   Bell,
   Building2,
+  Inbox,
+  ListOrdered,
   LayoutDashboard,
   LifeBuoy,
+  MapPin,
   MonitorSmartphone,
   ScrollText,
   Settings,
@@ -19,6 +22,7 @@ import { AppShell, ThemeToggle, TopBarButton, type NavGroup } from "@milipay/sha
 import { GlobalSearch } from "@milipay/shared/components/layout/GlobalSearch";
 import { useAdminNavCounts } from "@milipay/shared/features/navCounts/useNavCounts";
 import { ROUTES } from "@milipay/shared/lib/constants";
+import { WEBSITE_ROUTES } from "@milipay/shared/features/website/admin";
 
 /**
  * The status pill in the top bar. It says "All systems normal" only when no
@@ -86,6 +90,14 @@ export default function DashboardLayout() {
       items: [
         { label: "Staff", icon: Shield, to: ROUTES.staff },
         { label: "Support", icon: LifeBuoy, to: ROUTES.support, badge: counts.openTickets, badgeTone: "info" },
+      ],
+    },
+    {
+      title: "Website",
+      items: [
+        { label: "Leads", icon: Inbox, to: WEBSITE_ROUTES.leads, badge: counts.newLeads, badgeTone: "warn" },
+        { label: "Waitlist", icon: ListOrdered, to: WEBSITE_ROUTES.waitlist },
+        { label: "Agent locations", icon: MapPin, to: WEBSITE_ROUTES.agents },
       ],
     },
     { title: "System", items: [{ label: "Settings", icon: Settings, to: ROUTES.settings }] },
