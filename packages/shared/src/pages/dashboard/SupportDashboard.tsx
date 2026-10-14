@@ -1,135 +1,202 @@
-import { useState, useEffect } from "react";
-import { Search, AlertCircle, Clock, ShieldCheck, Activity } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@milipay/shared/components/ui/Button";
-import { fetchCustomers } from "@milipay/shared/features/customers/api";
-import { fetchSupportTicketStats } from "@milipay/shared/features/support/api";
-import { LiveChatQueue } from "@milipay/shared/components/support/LiveChatQueue";
-import { Skeleton } from "@milipay/shared/components/ui/Skeleton";
+import { MessageCircle, Timer, Zap } from "lucide-react";
+import clsx from "clsx";
+import { TONE_CLASSES } from "@milipay/shared/components/ui/StatusBadge";
+import { PRESENCE_DOT } from "@milipay/shared/components/layout/ServiceLayout";
+import { useAuth } from "@milipay/shared/features/auth/AuthContext";
+import { useClock, useDesk } from "@milipay/shared/features/support/DeskContext";
+import { CHANNEL_LABEL, fetchToday, firstNameOf, slaOf, type SupportToday } from "@milipay/shared/features/support/desk";
+import { CHANNEL_ICON } from "@milipay/shared/pages/complaints/ComplaintsDesk";
+import { SUPPORT_ROUTES } from "@milipay/shared/lib/constants";
+import { initials } from "@milipay/shared/lib/utils/format";
+
+/**
+ * Support › Dashboard (design handoff, MiliPay Support "today"): your queue,
+ * your numbers, the tickets closest to breaching, who is on, and anything
+ * that will bring in tickets today (a provider that's slow right now).
+ */
+
+export function greeting(now = new Date()): string {
+  const h = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: "Africa/Lagos" }).format(now));
+  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+}
+
+export function durationLabel(seconds: number | null | undefined): string {
+  if (seconds == null) return "—";
+  const s = Math.round(seconds);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${String(s % 60).padStart(2, "0")}s`;
+  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
+}
+
+const SERVICE_WORD: Record<string, string> = {
+  power: "Electricity tokens",
+  electricity: "Electricity tokens",
+  airtime: "Airtime top-ups",
+  data: "Data bundles",
+  cable: "Cable TV renewals",
+};
+
+/** The banner for a provider that's slow right now. */
+export function slowBanner(s: SupportToday["slow"][number]): { title: string; body: string } {
+  const what = (s.service && SERVICE_WORD[s.service.toLowerCase()]) || "Payments";
+  return {
+    title: `${s.provider} is slow right now.`,
+    body: `${what} are taking up to ${Math.max(1, s.oldestMinutes)} minutes (${s.pending} waiting). Use the "Payment still pending" reply and don't request refunds before 60 minutes.`,
+  };
+}
 
 export function SupportDashboard() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isSearching, setIsSearching] = useState(false);
-  const [stats, setStats] = useState({ openComplaints: 0, escalations: 0, avgResolution: "N/A", isLoading: true });
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { inbox, presence } = useDesk();
+  const now = useClock(1000);
+  const [today, setToday] = useState<SupportToday | null>(null);
 
   useEffect(() => {
-    fetchSupportTicketStats().then((data) => {
-      setStats({ openComplaints: data.openComplaints, escalations: data.escalations, avgResolution: data.avgResolution, isLoading: false });
-    });
+    let live = true;
+    const load = () => fetchToday().then((t) => live && setToday(t), () => undefined);
+    void load();
+    const timer = setInterval(load, 60_000);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
   }, []);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchQuery.trim() || isSearching) return;
-    
-    setIsSearching(true);
-    try {
-      const res = await fetchCustomers({ search: searchQuery.trim(), pageSize: 2 });
-      if (res.items.length === 1) {
-        // Direct hit, go straight to customer
-        navigate(`/customers/${res.items[0].id}`);
-      } else {
-        // Multiple or zero hits, go to customers page with query
-        navigate(`/customers?search=${encodeURIComponent(searchQuery.trim())}`);
-      }
-    } catch (err) {
-      console.error(err);
-      navigate(`/customers?search=${encodeURIComponent(searchQuery.trim())}`);
-    } finally {
-      setIsSearching(false);
-    }
-  };
+  const tickets = inbox?.tickets ?? [];
+  const open = tickets.filter((t) => t.status !== "resolved");
+  const mine = open.filter((t) => t.assignedTo === user?.id);
+  const dueSoon = mine.filter((t) => {
+    const s = slaOf(t, now);
+    return s.left >= 0 && s.left < 60;
+  }).length;
+  const overdue = open.filter((t) => slaOf(t, now).left < 0).length;
+  const teamAvg = today && today.solvers > 0 ? Math.round(today.solvedToday / today.solvers) : null;
+
+  const stats: { label: string; value: string | number; hint: string; cls: string }[] = [
+    { label: "Assigned to me", value: mine.length, hint: "Open right now", cls: "text-fg" },
+    { label: "Due within 1 hour", value: dueSoon, hint: "Across your queue", cls: "text-warn" },
+    { label: "Overdue", value: overdue, hint: "Whole team", cls: "text-fail" },
+    { label: "Solved today", value: today?.solvedTodayMine ?? "—", hint: teamAvg != null ? `Team avg ${teamAvg}` : "Team avg —", cls: "text-brand-text" },
+    {
+      label: "First reply",
+      value: durationLabel(today?.firstReplySeconds),
+      hint: today?.firstReplyCount ? `Median · last 7 days` : "No replies yet this week",
+      cls: "text-fg",
+    },
+    { label: "Satisfaction", value: "—", hint: "Ratings not collected yet", cls: "text-faint" },
+  ];
+
+  const risk = [...open].sort((a, b) => slaOf(a, now).left - slaOf(b, now).left).slice(0, 6);
+  const team = (inbox?.agents ?? []).map((a) => {
+    const you = a.id === user?.id;
+    const p = you ? presence : a.presence;
+    return {
+      id: a.id,
+      name: you ? `${a.name} (you)` : a.name,
+      ini: initials(a.name),
+      dot: PRESENCE_DOT[p],
+      status: p === "online" ? (you ? "Online" : "Online · in chats") : p === "away" ? "Away" : "Offline",
+      load: you ? mine.length : a.open,
+    };
+  });
 
   return (
-    <div className="flex-1 overflow-auto bg-ledger min-h-screen">
-      <div className="max-w-5xl mx-auto p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-10 pb-32">
-        
-        {/* Header Section */}
-        <div className="text-center space-y-2 sm:space-y-3 mt-4 sm:mt-8">
-          <div className="w-12 h-12 sm:w-16 sm:h-16 bg-signal/10 rounded-2xl flex items-center justify-center mx-auto mb-4 sm:mb-6 shadow-[inset_0_0_20px_rgba(var(--color-signal),0.2)]">
-            <Search className="w-6 h-6 sm:w-8 sm:h-8 text-signal" />
+    <div className="flex max-w-[1400px] animate-fade-in flex-col gap-[18px] px-4 py-[26px] sm:px-7">
+      <div>
+        <div className="text-2xl font-bold tracking-[-.02em]">
+          {greeting(new Date(now))}, {firstNameOf(user?.fullName)}
+        </div>
+        <div className="mt-1 text-muted">Your queue, your numbers, and anything that will bring in tickets today.</div>
+      </div>
+
+      {(today?.slow ?? []).slice(0, 2).map((s) => {
+        const b = slowBanner(s);
+        return (
+          <div key={`${s.provider}-${s.service}`} className="flex items-center gap-3 rounded-[14px] bg-warn-soft px-4 py-3.5 text-warn">
+            <Zap size={18} className="flex-none" aria-hidden="true" />
+            <div className="flex-1 text-[13px] leading-[1.45] text-fg">
+              <b>{b.title}</b> {b.body}
+            </div>
+            <div className="hidden text-xs text-muted sm:block">Live from payments</div>
           </div>
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-display text-white tracking-tight">Global Customer Lookup</h1>
-          <p className="text-ink-muted text-sm sm:text-base md:text-lg max-w-xl mx-auto px-2">
-            Search across the MiliPay network by NIN, Phone Number, or full name to assist customers.
-          </p>
+        );
+      })}
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {stats.map((k) => (
+          <div key={k.label} className="rounded-2xl border border-line bg-panel px-4 py-3.5 shadow-card">
+            <div className="text-[12.5px] text-muted">{k.label}</div>
+            <div className={clsx("mt-1 text-2xl font-bold tabular-nums", k.cls)}>{k.value}</div>
+            <div className="mt-0.5 text-xs text-faint">{k.hint}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid items-start gap-3.5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <div className="overflow-hidden rounded-card border border-line bg-panel shadow-card">
+          <div className="flex items-center px-5 pb-3 pt-4">
+            <div className="flex-1 text-[15px] font-bold">Closest to breaching</div>
+            <button type="button" onClick={() => navigate(SUPPORT_ROUTES.complaints)} className="text-[13px] font-semibold text-brand-text">
+              Open inbox
+            </button>
+          </div>
+          {inbox && risk.length === 0 && <div className="border-t border-line2 px-5 py-5 text-[13px] text-muted">Nothing open. Nice work.</div>}
+          {risk.map((t) => {
+            const s = slaOf(t, now);
+            const Icon = CHANNEL_ICON[t.channel] ?? MessageCircle;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => navigate(SUPPORT_ROUTES.complaintDetails.replace(":id", t.id))}
+                className="grid h-[52px] w-full grid-cols-[96px_minmax(0,1fr)_90px] items-center gap-3 border-t border-line2 px-5 text-left hover:bg-hover sm:grid-cols-[96px_minmax(0,1fr)_110px_90px]"
+              >
+                <span className={clsx("inline-flex h-6 items-center justify-center gap-1 rounded-[7px] text-xs font-bold tabular-nums", TONE_CLASSES[s.tone])}>
+                  <Timer size={12} aria-hidden="true" />
+                  {s.label}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[13px] font-semibold">{t.subject}</span>
+                  <span className="block truncate text-xs text-muted">
+                    {t.customer} · <span className="font-mono">{t.ticketId}</span>
+                  </span>
+                </span>
+                <span className="hidden items-center gap-[5px] text-xs text-muted sm:flex">
+                  <Icon size={13} aria-hidden="true" />
+                  {CHANNEL_LABEL[t.channel]}
+                </span>
+                <span className="text-right text-xs text-muted">
+                  {t.assignedTo ? (t.assignedTo === user?.id ? "You" : firstNameOf(t.assigneeName)) : "Unassigned"}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Big Search Bar */}
-        <div className="max-w-2xl mx-auto">
-          <form onSubmit={handleSearch} className="relative group">
-            <div className="absolute inset-0 bg-signal/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-            <div className="relative flex flex-col sm:flex-row sm:items-center bg-white/[0.02] border border-white/[0.1] rounded-2xl p-2 gap-2 backdrop-blur-xl transition-all focus-within:border-signal/50 focus-within:bg-white/[0.04]">
-              <div className="flex items-center flex-1">
-                <div className="pl-3 sm:pl-4">
-                  <Search className="w-5 h-5 sm:w-6 sm:h-6 text-ink-muted group-focus-within:text-signal transition-colors" />
-                </div>
-                <input
-                  type="text"
-                  className="flex-1 bg-transparent border-none px-3 sm:px-4 py-3 sm:py-4 text-base sm:text-lg text-white placeholder-ink-faint outline-none font-display"
-                  placeholder="Enter NIN, Phone, or Name..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  autoFocus
-                />
+        <div className="overflow-hidden rounded-card border border-line bg-panel shadow-card">
+          <div className="px-5 pb-3 pt-4 text-[15px] font-bold">Team right now</div>
+          {inbox && team.length === 0 && <div className="border-t border-line2 px-5 py-5 text-[13px] text-muted">No support agents yet.</div>}
+          {team.map((a) => (
+            <div key={a.id} className="flex items-center gap-2.5 border-t border-line2 px-5 py-2.5">
+              <div className="relative">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-chip text-[11px] font-bold text-muted">{a.ini}</div>
+                <div className="absolute -bottom-px -right-px h-2.5 w-2.5 rounded-full border-2 border-panel" style={{ background: a.dot }} />
               </div>
-              <Button type="submit" isLoading={isSearching} className="w-full sm:w-auto bg-signal hover:brightness-110 text-ledger font-semibold rounded-xl px-6 sm:px-8 h-11 sm:h-12 text-sm sm:text-base shadow-[0_0_15px_rgba(var(--color-signal),0.3)]">
-                Search
-              </Button>
+              <div className="flex-1">
+                <div className="text-[13px] font-semibold">{a.name}</div>
+                <div className="text-xs text-muted">{a.status}</div>
+              </div>
+              <div className="text-xs tabular-nums text-muted">{a.load} open</div>
             </div>
-          </form>
+          ))}
         </div>
-
-        {/* Quick Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 pt-6 sm:pt-10 border-t border-white/[0.05]">
-          <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl sm:rounded-3xl p-4 sm:p-6 backdrop-blur-xl">
-            <div className="w-10 h-10 rounded-full bg-status-fail/10 flex items-center justify-center mb-4 border border-status-fail/20">
-              <AlertCircle className="w-5 h-5 text-status-fail" />
-            </div>
-            <h3 className="text-sm font-medium text-ink-muted uppercase tracking-wider">Open Complaints</h3>
-            <div className="mt-2">
-              {stats.isLoading ? <Skeleton className="h-8 w-12" /> : <span className="text-3xl font-display text-ink">{stats.openComplaints}</span>}
-            </div>
-          </div>
-          
-          <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl p-6 backdrop-blur-xl">
-            <div className="w-10 h-10 rounded-full bg-status-warn/10 flex items-center justify-center mb-4 border border-status-warn/20">
-              <Clock className="w-5 h-5 text-status-warn" />
-            </div>
-            <h3 className="text-sm font-medium text-ink-muted uppercase tracking-wider">Avg Resolution</h3>
-            <div className="mt-2">
-              {stats.isLoading ? <Skeleton className="h-8 w-16" /> : <span className="text-3xl font-display text-ink">{stats.avgResolution}</span>}
-            </div>
-          </div>
-
-          <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl p-6 backdrop-blur-xl">
-            <div className="w-10 h-10 rounded-full bg-status-ok/10 flex items-center justify-center mb-4 border border-status-ok/20">
-              <ShieldCheck className="w-5 h-5 text-status-ok" />
-            </div>
-            <h3 className="text-sm font-medium text-ink-muted uppercase tracking-wider">KYC Escalations</h3>
-            <div className="mt-2">
-              {stats.isLoading ? <Skeleton className="h-8 w-12" /> : <span className="text-3xl font-display text-ink">{stats.escalations}</span>}
-            </div>
-          </div>
-
-          <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl p-6 backdrop-blur-xl">
-            <div className="w-10 h-10 rounded-full bg-signal/10 flex items-center justify-center mb-4 border border-signal/20">
-              <Activity className="w-5 h-5 text-signal" />
-            </div>
-            <h3 className="text-sm font-medium text-ink-muted uppercase tracking-wider">Network Status</h3>
-            <div className="mt-2">
-              <span className="text-xl font-display text-status-ok">All Systems Go</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Live Chat Queue Addition */}
-        <div className="pt-6 h-[500px]">
-           <LiveChatQueue routePrefix="/complaints" />
-        </div>
-
       </div>
     </div>
   );
 }
+
+export default SupportDashboard;

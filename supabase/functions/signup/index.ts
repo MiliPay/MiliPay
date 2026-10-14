@@ -119,8 +119,13 @@ async function phoneTaken(admin: SupabaseClient, phone: string): Promise<boolean
 }
 
 async function ninTaken(admin: SupabaseClient, nin: string): Promise<boolean> {
+  return (await ninHolder(admin, nin)) !== null;
+}
+
+/** The customer who already holds this NIN, if any. */
+async function ninHolder(admin: SupabaseClient, nin: string): Promise<string | null> {
   const { data } = await admin.from("customers").select("id").eq("nin", nin).limit(1).maybeSingle();
-  return Boolean(data);
+  return (data?.id as string | undefined) ?? null;
 }
 
 async function sendCode(phone: string, code: string): Promise<boolean> {
@@ -326,7 +331,13 @@ async function nin(admin: SupabaseClient, body: Record<string, unknown>) {
   if (!dob.ok) throw new ApiError(dob.error, 400, "BAD_DOB");
   if (body.consent !== true) throw new ApiError("Tick the box to agree to the identity check.", 400, "NO_CONSENT");
   await rateLimit(admin, `signup:nin:${s.id}`, 10, 60 * 60);
-  if (await ninTaken(admin, number)) throw new ApiError(NIN_TAKEN, 409, "NIN_TAKEN");
+  const holder = await ninHolder(admin, number);
+  if (holder) {
+    // Kept (which account, never the NIN) so support can see why this
+    // sign-up stopped and report possible identity misuse to the fraud team.
+    await update(admin, s.id, { nin_blocked_at: new Date().toISOString(), nin_blocked_customer_id: holder }).catch(() => {});
+    throw new ApiError(NIN_TAKEN, 409, "NIN_TAKEN");
+  }
 
   // A changed NIN or birthday starts the selfie over: an earlier match was
   // for the old details.

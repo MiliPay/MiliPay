@@ -243,7 +243,14 @@ export default function SignupsPage() {
                   <div className="flex min-w-0 items-center gap-2.5">
                     <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-chip text-[11px] font-bold text-muted">{initials(x.name) || "?"}</div>
                     <div className="min-w-0">
-                      <div className="truncate font-semibold">{x.name || "Name not confirmed yet"}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate font-semibold">{x.name || "Name not confirmed yet"}</span>
+                        {x.priorityAt && x.status === "review" && (
+                          <span className="flex-none rounded-[5px] bg-info-soft px-1.5 py-px text-[10.5px] font-semibold text-info" title="Support asked to prioritise this review">
+                            Priority
+                          </span>
+                        )}
+                      </div>
                       <div className="font-mono text-xs text-muted">{x.phone}</div>
                     </div>
                   </div>
@@ -469,6 +476,23 @@ function SignupDrawer({
         {error && <div className="rounded-xl bg-fail-soft p-3.5 text-[13px] text-fail">{error}</div>}
         {d && (
           <>
+            {d.priority && d.status === "review" && (
+              <div className="flex gap-2.5 rounded-xl bg-info-soft px-3.5 py-3 text-[13px] leading-[1.45] text-info">
+                <MessageSquare size={16} className="mt-px flex-none" aria-hidden="true" />
+                <div>
+                  <b>Support asked to prioritise this</b>
+                  {d.priority.by ? ` (${d.priority.by}, ${timeAgo(d.priority.at)})` : ""}: {d.priority.note || "No note."}
+                </div>
+              </div>
+            )}
+            {(d.fraudReports ?? []).map((f) => (
+              <div key={f.caseNumber} className="flex gap-2.5 rounded-xl bg-fail-soft px-3.5 py-3 text-[13px] leading-[1.45] text-fail">
+                <ShieldAlert size={16} className="mt-px flex-none" aria-hidden="true" />
+                <div>
+                  <b>Possible NIN misuse · {f.caseNumber}</b> ({f.status}). The NIN entered belongs to another account; reported by {f.by ?? "support"}: {f.note}
+                </div>
+              </div>
+            ))}
             {why && d.status === "review" && (
               <div className="flex gap-2.5 rounded-xl bg-warn-soft px-3.5 py-3 text-[13px] leading-[1.45] text-warn">
                 <ShieldAlert size={16} className="mt-px flex-none" aria-hidden="true" />

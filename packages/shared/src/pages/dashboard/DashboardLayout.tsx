@@ -14,7 +14,7 @@ import {
   UserRoundPlus,
   Users,
 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AppShell, ThemeToggle, TopBarButton, type NavGroup } from "@milipay/shared/components/layout/AppShell";
 import { GlobalSearch } from "@milipay/shared/components/layout/GlobalSearch";
 import { useAdminNavCounts } from "@milipay/shared/features/navCounts/useNavCounts";
@@ -53,6 +53,7 @@ function SystemStatus({ waiting }: { waiting: number | null }) {
 export default function DashboardLayout() {
   const counts = useAdminNavCounts();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   const nav: NavGroup[] = [
     { items: [{ label: "Dashboard", icon: LayoutDashboard, to: ROUTES.dashboard, end: true }] },
@@ -94,6 +95,7 @@ export default function DashboardLayout() {
     <AppShell
       portal="admin"
       nav={nav}
+      mainScroll={!pathname.startsWith(ROUTES.support)}
       header={
         <>
           <GlobalSearch />

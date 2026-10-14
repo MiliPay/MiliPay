@@ -24,6 +24,7 @@ import {
   ScanFace,
   Send,
   Shield,
+  ShieldAlert,
   Smartphone,
   Tv,
   Unlink,
@@ -444,7 +445,7 @@ export default function CustomerDetailsPage() {
         <Panel title="Connected records">
           {records.length === 0 && <div className="border-t border-line2 px-[18px] py-4 text-[13px] text-muted">Nothing connected yet.</div>}
           {records.map((r, i) => {
-            const Icon = r.kind === "ticket" ? LifeBuoy : r.kind === "mismatch" ? Unlink : UserRoundPlus;
+            const Icon = r.kind === "ticket" ? LifeBuoy : r.kind === "mismatch" ? Unlink : r.kind === "fraud" ? ShieldAlert : UserRoundPlus;
             const to =
               r.kind === "ticket" && r.id && role !== "agent"
                 ? ticketPath(r.id)

@@ -29,4 +29,16 @@ export const ROUTES = {
   supportDetails: "/dashboard/support/:id",
   operations: "/dashboard/operations",
   audit: "/dashboard/audit",
+} as const;
+
+/** The support portal's own routes (design handoff, support nav). */
+export const SUPPORT_ROUTES = {
+  dashboard: "/dashboard",
+  complaints: "/complaints",
+  complaintDetails: "/complaints/:id",
+  calls: "/calls",
+  replies: "/replies",
+  customers: "/customers",
+  customerDetails: "/customers/:id",
+  applicant: "/customers/signup/:id",
 } as const;

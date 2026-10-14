@@ -23,6 +23,8 @@ export interface SignupRow {
   createdAt: string;
   updatedAt: string;
   customerId: string | null;
+  /** Support asked the admins to look at this review first. */
+  priorityAt?: string | null;
 }
 
 export interface SignupsData {
@@ -61,6 +63,11 @@ export interface SignupDetail {
   reviewedBy: string | null;
   remindedAt: string | null;
   customerId: string | null;
+  /** Support asked for this review to go first, and why. */
+  priority?: { at: string; note: string | null; by: string | null } | null;
+  /** The NIN entered belongs to another account (the sign-up was stopped). */
+  ninBlockedAt?: string | null;
+  fraudReports?: { caseNumber: string; status: string; note: string; createdAt: string; customerId: string | null; by: string | null }[];
   smile: {
     jobId: string | null;
     status: string | null;

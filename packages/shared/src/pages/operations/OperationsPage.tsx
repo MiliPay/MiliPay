@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { supabase } from "@milipay/shared/lib/supabase";
 import { Pill } from "@milipay/shared/components/ui/StatusBadge";
 import { LoadingState } from "@milipay/shared/components/ui/LoadingState";
+import { RefundRequestsCard } from "@milipay/shared/pages/operations/RefundRequestsCard";
 import { TransactionDrawer } from "@milipay/shared/components/transactions/TransactionDrawer";
 import { SERVICE, providerName } from "@milipay/shared/features/dashboard/view";
 import { presentTransactionStatus } from "@milipay/shared/lib/transactionStatus";
@@ -229,6 +230,8 @@ export function OperationsPage() {
               </div>
             </div>
           </div>
+
+          <RefundRequestsCard onDecided={() => void load()} />
 
           <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
             <div className="rounded-card border border-line bg-panel px-[18px] py-4 shadow-card">

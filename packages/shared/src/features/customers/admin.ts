@@ -94,6 +94,8 @@ export interface CustomerDetail {
   };
   tickets: { id: string; ticketId: string | null; subject: string | null; status: string; createdAt: string }[];
   mismatches: { bank: string | null; accountName: string | null; createdAt: string }[];
+  /** Support reported someone else signing up with this customer's NIN. */
+  fraudReports?: { caseNumber: string; status: string; note: string; createdAt: string }[];
   audit: { actorName: string; action: string; reason: string | null; at: string }[];
   txCount: number;
   txTotal: number;
@@ -246,7 +248,7 @@ export function securityEvents(c: CustomerDetail): SecurityEvent[] {
 }
 
 export interface ConnectedRecord {
-  kind: "ticket" | "mismatch" | "signup";
+  kind: "ticket" | "mismatch" | "signup" | "fraud";
   label: string;
   sub: string;
   id?: string;
@@ -259,6 +261,11 @@ export function connectedRecords(c: CustomerDetail): ConnectedRecord[] {
       id: t.id,
       label: [t.ticketId, t.subject].filter(Boolean).join(" · ") || "Ticket",
       sub: t.status === "resolved" ? "Solved ticket" : "Open ticket",
+    })),
+    ...(c.fraudReports ?? []).map((f) => ({
+      kind: "fraud" as const,
+      label: `Possible NIN misuse · ${f.caseNumber}`,
+      sub: `Someone tried to sign up with this NIN · ${f.status === "open" ? "open" : "closed"} · ${timeAgo(f.createdAt)}`,
     })),
     ...c.mismatches.map((m) => ({
       kind: "mismatch" as const,

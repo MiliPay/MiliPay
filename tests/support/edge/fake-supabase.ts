@@ -91,6 +91,18 @@ class Query implements PromiseLike<Result> {
     return this;
   }
 
+  gt(column: string, value: unknown): this {
+    this.filters.push((row) => String(row[column]) > String(value));
+    return this;
+  }
+
+  /** Case-insensitive match; % is the only wildcard used here. */
+  ilike(column: string, pattern: string): this {
+    const re = new RegExp(`^${pattern.split("%").map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`, "i");
+    this.filters.push((row) => re.test(String(row[column] ?? "")));
+    return this;
+  }
+
   gte(column: string, value: unknown): this {
     this.filters.push((row) => String(row[column]) >= String(value));
     return this;

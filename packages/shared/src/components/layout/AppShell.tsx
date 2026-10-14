@@ -106,9 +106,11 @@ interface AppShellProps {
   presenceColor?: string;
   /** Main area scrolls by itself (default) or leaves it to the page (inboxes). */
   mainScroll?: boolean;
+  /** Runs before signing out (support goes offline first). Never blocks it. */
+  onBeforeSignOut?: () => Promise<unknown> | void;
 }
 
-export function AppShell({ portal, nav, header, presenceColor, mainScroll = true }: AppShellProps) {
+export function AppShell({ portal, nav, header, presenceColor, mainScroll = true, onBeforeSignOut }: AppShellProps) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -127,15 +129,17 @@ export function AppShell({ portal, nav, header, presenceColor, mainScroll = true
 
   const signOut = async () => {
     setMenuOpen(false);
+    await Promise.resolve(onBeforeSignOut?.()).catch(() => undefined);
     await logout();
     navigate(ROUTES.login, { replace: true });
   };
 
   // Settings › Security: the admin and support portals sign out when idle.
   const signOutIdle = useCallback(async () => {
+    await Promise.resolve(onBeforeSignOut?.()).catch(() => undefined);
     await logout();
     navigate(`${ROUTES.login}?idle=1`, { replace: true });
-  }, [logout, navigate]);
+  }, [logout, navigate, onBeforeSignOut]);
   useIdleSignOut(Boolean(user) && (portal === "admin" || portal === "support"), signOutIdle);
 
   const sidebar = (

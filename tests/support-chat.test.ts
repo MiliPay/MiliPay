@@ -22,7 +22,8 @@ const ROOT = join(__dirname, "..");
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 const MIGRATION = read("supabase/migrations/20260928120000_support_chat_hardening.sql");
 const PORTAL_API = read("packages/shared/src/features/support/api.ts");
-const PORTAL_CHAT = read("packages/shared/src/pages/complaints/TicketDetailsPage.tsx");
+// The ticket thread is the middle pane of the complaints desk (portal redesign, step 7).
+const PORTAL_CHAT = read("packages/shared/src/pages/complaints/ComplaintsDesk.tsx");
 const STORE = read("mobile-app/src/store/useStore.ts");
 const supportStore = STORE.slice(STORE.indexOf("export const useSupportStore"), STORE.indexOf("export interface AppTransaction"));
 
@@ -119,7 +120,7 @@ describe("the staff portal's side", () => {
   });
 
   it("typing dots: the portal and the app use the same live channel", () => {
-    expect(PORTAL_CHAT).toMatch(/supabase\.channel\(`support_typing_\$\{id\}`\)/);
+    expect(PORTAL_CHAT).toMatch(/supabase\.channel\(`support_typing_\$\{ticket\.id\}`\)/);
     expect(PORTAL_CHAT).toMatch(/event: "typing", payload: \{ from: "staff" \}/);
     expect(supportStore).toMatch(/\.channel\(`support_typing_\$\{ticketId\}`\)/);
     expect(supportStore).toMatch(/\.on\('broadcast', \{ event: 'typing' \}/);
