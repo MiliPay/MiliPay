@@ -88,6 +88,10 @@ two-factor sign-in for everyone.
    Firebase and GitHub with the company accounts.
 6. Enter live Mono, VTPass, Termii and Smile ID keys yourself in the
    production project's secrets. Never in chat, never in a `.env` file.
+7. **NIPOST digital postcode:** register MiliPay on the developer dashboard
+   at postcode.gov.ng and complete KYB with the company details. Then add a
+   test key as `NIPOST_API_KEY` in the development project's secrets (and,
+   later, a live key in production only). Used by the agent-locations plan.
 
 ### Then Claude does
 
@@ -107,6 +111,12 @@ two-factor sign-in for everyone.
 
 - **Agent locations are empty**, so the website's Find an agent says "no
   agents listed". Add them in Admin › Website › Agent locations.
+- **Agent locations with NIPOST digital postcodes** (planned, not started):
+  LGA, map coordinates and the building postcode on each location; Find an
+  agent by "near me", state + LGA, or postcode. Full plan:
+  [docs/plans/agent-locations-postcode.md](plans/agent-locations-postcode.md).
+  It can be built before the NIPOST key arrives; only the automatic
+  postcode fill waits for it.
 - **Leaked-password protection** is off in Supabase Auth. Turn it on in the
   dashboard (Authentication › password security). Only the owner should
   change it.
