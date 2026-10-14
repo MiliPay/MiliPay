@@ -1,52 +1,35 @@
 /** @type {import('tailwindcss').Config} */
+// Tokens from the website design handoff (design_handoff_website/README.md).
 export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
+  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
-        display: ['Inter', 'sans-serif'],
+        sans: ["'Plus Jakarta Sans'", "system-ui", "sans-serif"],
       },
       colors: {
-        primary: {
-          DEFAULT: '#0ead69',
-          dark: '#0a844f',
-          light: '#f0fdf4'
-        },
-        accent: {
-          DEFAULT: '#096da9',
-          light: '#eff6ff'
-        },
-        ink: {
-          DEFAULT: '#111827', // text-gray-900
-          muted: '#6b7280', // text-gray-500
-          faint: '#9ca3af', // text-gray-400
-        }
+        brand: { DEFAULT: "#00C896", hover: "#33E0B5", on: "#04120E", text: "#0A6650" },
+        deep: { 1: "#0a7a5a", 2: "#065f46", 3: "#022c22" },
+        ink: { DEFAULT: "#0B1A15", muted: "#56695F", faint: "#8A9C95" },
+        soft: "#F2F5F4",
+        field: "#F8FAF9",
+        line: { DEFAULT: "#E3EAE7", 2: "#E9EFEC", 3: "#EEF2F0" },
+        night: "#04120E",
+        danger: "#D2383E",
       },
+      maxWidth: { site: "1240px" },
       keyframes: {
-        'pulse-dot': {
-          '0%, 100%': { opacity: '1', transform: 'scale(1)' },
-          '50%': { opacity: '0.5', transform: 'scale(1.4)' },
-        },
-        'float': {
-          '0%, 100%': { transform: 'translateY(0)' },
-          '50%': { transform: 'translateY(-8px)' },
-        },
-        'fade-up': {
-          '0%': { opacity: '0', transform: 'translateY(24px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
+        rise: { from: { opacity: "0", transform: "translateY(14px)" }, to: { opacity: "1", transform: "none" } },
+        ringPulse: { "0%": { transform: "scale(.96)", opacity: ".7" }, "100%": { transform: "scale(1.08)", opacity: "0" } },
       },
       animation: {
-        'pulse-dot': 'pulse-dot 2s infinite',
-        'float': 'float 3s ease-in-out infinite',
-        'float-delayed': 'float 3s ease-in-out 1.5s infinite',
-        'fade-up': 'fade-up 0.6s ease-out forwards',
+        rise: "rise .6s cubic-bezier(.2,.8,.2,1) both",
+        "rise-late": "rise .6s .4s cubic-bezier(.2,.8,.2,1) both",
+        "rise-fast": "rise .4s both",
+        "rise-short": "rise .25s",
+        ring: "ringPulse 2.6s ease-out infinite",
       },
     },
   },
   plugins: [],
-}
+};

@@ -1,60 +1,47 @@
-import { motion } from 'framer-motion';
+import { ABOUT_COLS, STACK } from "@/lib/content";
 
 export function About() {
   return (
-    <section className="relative py-32 bg-[#050b1a] text-white overflow-hidden border-t border-white/5">
-      
-      <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
-        <div className="relative h-16 w-48 mx-auto mb-10">
-          <motion.img 
-            initial={{ opacity: 0, scale: 0.8 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            src="/logo-main.png" 
-            alt="MiliPay" 
-            className="absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 h-32 w-auto object-contain scale-125" 
-          />
+    <>
+      <section className="wrap animate-rise-fast pb-16 pt-24">
+        <div className="kicker">About MiliPay</div>
+        <h1 className="m-0 mt-4 max-w-[1000px] text-[clamp(40px,6vw,76px)] font-extrabold leading-[1.03] tracking-[-.035em]" style={{ textWrap: "balance" }}>
+          We're building a way for anyone to pay with nothing but their hand.
+        </h1>
+      </section>
+
+      <section className="wrap pb-[88px]">
+        <div className="relative mx-auto aspect-square max-w-[760px] overflow-hidden rounded-[40px] bg-soft">
+          <img src="/web/palm-woman.jpg" alt="A customer paying with her palm" className="absolute inset-0 h-full w-full object-cover" />
         </div>
-        
-        <motion.h2 
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.1 }}
-          className="text-4xl md:text-6xl font-extrabold mb-8 leading-tight"
-        >
-          Building the future of <br/>
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">Identity-driven Finance</span>.
-        </motion.h2>
+      </section>
 
-        <motion.p 
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.2 }}
-          className="text-xl text-slate-400 mb-12 leading-relaxed"
-        >
-          MiliPay is on a mission to eliminate financial friction. 
-          By combining Open Banking with military-grade Palm Vein biometrics, we are ensuring that anyone, anywhere can access their money with nothing but their hand.
-        </motion.p>
+      <section className="wrap grid-fit gap-10 pb-24" style={{ ["--min" as string]: "320px" }}>
+        {ABOUT_COLS.map((c) => (
+          <div key={c.title} className="flex flex-col gap-3 border-t-2 border-ink pt-6">
+            <div className="text-[22px] font-extrabold tracking-[-.015em]">{c.title}</div>
+            <div className="pretty text-base leading-[1.65] text-ink-muted">{c.body}</div>
+          </div>
+        ))}
+      </section>
 
-        <motion.div 
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.3 }}
-          className="flex flex-col sm:flex-row justify-center gap-6"
-        >
-          <div className="px-8 py-6 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-md">
-            <h4 className="text-4xl font-extrabold text-white mb-2">99.9%</h4>
-            <p className="text-slate-400">Uptime Reliability</p>
+      <section className="bg-soft">
+        <div className="wrap py-[88px]">
+          <div className="flex max-w-[640px] flex-col gap-3">
+            <div className="kicker">Under the hood</div>
+            <h2 className="h2">How it fits together</h2>
           </div>
-          <div className="px-8 py-6 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-md">
-            <h4 className="text-4xl font-extrabold text-white mb-2">&lt;0.5s</h4>
-            <p className="text-slate-400">Scan to Payment</p>
+          <div className="grid-fit mt-11 gap-5" style={{ ["--min" as string]: "260px" }}>
+            {STACK.map((s) => (
+              <div key={s.title} className="flex flex-col gap-2.5 rounded-3xl border border-line-2 bg-white p-7">
+                <s.icon size={26} className="text-brand-text" />
+                <div className="text-lg font-extrabold">{s.title}</div>
+                <div className="text-[15px] leading-[1.55] text-ink-muted">{s.body}</div>
+              </div>
+            ))}
           </div>
-        </motion.div>
-      </div>
-    </section>
+        </div>
+      </section>
+    </>
   );
 }

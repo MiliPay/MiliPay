@@ -66,6 +66,11 @@ verify_jwt = false
 [functions.signup]
 verify_jwt = false
 
+# The marketing website's waitlist, applications and agent list. Visitors
+# have no account; every write is validated and rate-limited by address.
+[functions.website]
+verify_jwt = false
+
 # Smile ID results. Authenticated by Smile ID's Response-Signature (HMAC
 # with the API key), checked before the body is read.
 [functions.smile-webhook]

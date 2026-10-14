@@ -7,6 +7,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // The form rules the `website` Edge Function also runs, so the two can't drift.
+      "@rules": path.resolve(__dirname, "../supabase/functions/_shared/website.ts"),
     },
   },
 });

@@ -1,124 +1,112 @@
-import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, ChevronDown } from 'lucide-react';
-import { cn } from '../ui/FadeIn';
+import { useEffect, useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
+import { ChevronRight, MapPin, Menu, X } from "lucide-react";
+import { APP_LIVE } from "@/lib/config";
+import { NAV, ROUTES, useGo } from "@/lib/nav";
 
+/** Sticky header. Full nav at 980px and up; below that, a menu button and a full-width list. */
 export function Navbar() {
-  const [isScrolled, setIsScrolled] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const location = useLocation();
+  const go = useGo();
+  const { pathname } = useLocation();
+  const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 20);
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  // Choosing a page closes the menu.
+  useEffect(() => setOpen(false), [pathname]);
 
-  useEffect(() => {
-    setMobileMenuOpen(false);
-  }, [location.pathname]);
-
-  const navItems = [
-    { name: 'Home', path: '/' },
-    { name: 'Customers', path: '/customers' },
-    { name: 'Merchants', path: '/merchants' },
-    { name: 'Agents', path: '/agents' },
-    { name: 'Company', path: '/about' },
-  ];
+  const cta = APP_LIVE ? "Get the app" : "Get early access";
+  const toDownload = () => {
+    setOpen(false);
+    go(null, "download");
+  };
+  const toFindAgent = () => {
+    setOpen(false);
+    go(ROUTES.help, "find-agent");
+  };
 
   return (
-    <header
-      className={cn(
-        'fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b',
-        isScrolled
-          ? 'bg-[#020617]/95 backdrop-blur-md border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.5)] py-3'
-          : 'bg-transparent border-transparent py-6'
-      )}
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-        
-        {/* Logo */}
-        <Link to="/" className="flex items-center group relative h-12 w-32 -ml-2">
-          <img src="/logo-main.png" alt="MiliPay Logo" className="absolute top-1/2 -translate-y-1/2 left-0 h-28 w-auto object-contain scale-125 origin-left" />
-        </Link>
-
-        {/* Desktop Nav */}
-        <nav className="hidden lg:flex items-center gap-8">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.path;
-            return (
-              <Link
-                key={item.name}
-                to={item.path}
-                className={cn(
-                  'text-sm font-medium transition-all duration-200',
-                  isActive ? 'text-emerald-400' : 'text-slate-300 hover:text-white'
-                )}
-              >
-                {item.name}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Desktop CTA */}
-        <div className="hidden lg:flex items-center gap-4">
-          <div className="relative group">
-            <button className="flex items-center gap-2 text-sm font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-full transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] hover:shadow-[0_0_25px_rgba(16,185,129,0.6)]">
-              Get Started
-              <ChevronDown className="w-4 h-4 transition-transform group-hover:rotate-180" />
-            </button>
-            <div className="absolute top-full right-0 mt-2 w-56 bg-[#0f172a]/95 backdrop-blur-xl rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.5)] border border-white/10 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all transform origin-top-right scale-95 group-hover:scale-100">
-              <Link to="/customers" className="block px-5 py-2.5 text-sm text-slate-300 hover:text-emerald-400 hover:bg-white/5">
-                As a Customer
-              </Link>
-              <Link to="/merchants" className="block px-5 py-2.5 text-sm text-slate-300 hover:text-emerald-400 hover:bg-white/5">
-                As a Merchant
-              </Link>
-              <Link to="/agents" className="block px-5 py-2.5 text-sm text-slate-300 hover:text-emerald-400 hover:bg-white/5">
-                Become an Agent
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        {/* Mobile Toggle */}
-        <button
-          className="lg:hidden p-2 -mr-2 text-slate-300 hover:bg-white/5 rounded-xl transition-colors"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-        >
-          {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+    <>
+      <div className="flex flex-wrap items-center justify-center gap-2.5 bg-brand-text px-6 py-2.5 text-center text-sm text-white">
+        <div>Open a MiliPay account from your phone in about 5 minutes.</div>
+        <button type="button" onClick={() => go(ROUTES.personal)} className="cursor-pointer font-bold underline">
+          See how
         </button>
       </div>
 
-      {/* Mobile Menu */}
-      {mobileMenuOpen && (
-        <div className="lg:hidden absolute top-full left-0 right-0 bg-[#0f172a] border-b border-white/10 shadow-2xl px-4 py-4 flex flex-col gap-2">
-          {navItems.map((item) => (
-            <Link
-              key={item.name}
-              to={item.path}
-              className={cn(
-                'px-4 py-3 text-sm font-medium rounded-xl transition-colors',
-                location.pathname === item.path
-                  ? 'bg-emerald-500/10 text-emerald-400'
-                  : 'text-slate-300 hover:bg-white/5'
-              )}
-            >
-              {item.name}
-            </Link>
-          ))}
-          <div className="h-px bg-white/10 my-2" />
-          <Link
-            to="/customers"
-            className="px-4 py-3 text-sm font-bold bg-emerald-500 text-white text-center rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+      <header className="sticky top-0 z-30 border-b border-line bg-white/[.94] backdrop-blur-md">
+        <div className="wrap flex min-h-[72px] items-center gap-2.5 min-[980px]:gap-7">
+          <button type="button" onClick={() => go(ROUTES.home)} className="flex-none cursor-pointer" aria-label="MiliPay home">
+            <img src="/brand/logo.png" alt="MiliPay" className="h-[34px] w-auto" />
+          </button>
+
+          <nav className="hidden min-w-0 flex-1 items-center gap-1 min-[980px]:flex" aria-label="Main">
+            {NAV.map((n) => (
+              <NavLink
+                key={n.to}
+                to={n.to}
+                className={({ isActive }) =>
+                  `border-b-2 px-3 pb-[22px] pt-6 text-[15px] font-semibold transition-colors hover:text-brand-text ${
+                    isActive ? "border-brand text-brand-text" : "border-transparent text-ink"
+                  }`
+                }
+              >
+                {n.label}
+              </NavLink>
+            ))}
+          </nav>
+
+          <div className="hidden flex-none items-center gap-4 min-[980px]:flex">
+            <button type="button" onClick={toFindAgent} className="flex cursor-pointer items-center gap-1.5 text-[15px] font-semibold hover:text-brand-text">
+              <MapPin size={17} />
+              Find an agent
+            </button>
+            <button type="button" onClick={toDownload} className="btn-dark h-11 px-5 text-[15px]">
+              {cta}
+            </button>
+          </div>
+
+          <div className="flex-1 min-[980px]:hidden" />
+          <button type="button" onClick={toDownload} className="btn-dark h-10 px-4 text-sm min-[980px]:hidden">
+            {cta}
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-label="Menu"
+            aria-expanded={open}
+            className="flex h-11 w-11 flex-none cursor-pointer items-center justify-center rounded-xl border border-line min-[980px]:hidden"
           >
-            Get Started
-          </Link>
+            {open ? <X size={20} /> : <Menu size={20} />}
+          </button>
         </div>
-      )}
-    </header>
+
+        {open && (
+          <div className="flex animate-rise-short flex-col border-t border-line bg-white px-6 pb-5 pt-2 min-[980px]:hidden">
+            {NAV.map((n) => (
+              <NavLink
+                key={n.to}
+                to={n.to}
+                onClick={() => setOpen(false)}
+                className={() =>
+                  `flex min-h-[52px] items-center justify-between border-b border-line-3 text-[17px] font-semibold ${
+                    pathname === n.to ? "text-brand-text" : "text-ink"
+                  }`
+                }
+              >
+                {n.label}
+                <ChevronRight size={18} />
+              </NavLink>
+            ))}
+            <button
+              type="button"
+              onClick={toFindAgent}
+              className="mt-4 flex h-[52px] cursor-pointer items-center justify-center gap-2 rounded-full border-[1.5px] border-ink text-base font-bold"
+            >
+              <MapPin size={18} />
+              Find an agent
+            </button>
+          </div>
+        )}
+      </header>
+    </>
   );
 }

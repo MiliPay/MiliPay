@@ -24,6 +24,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--workspace", "milipay-merchant-portal"],
       "port": 5176
+    },
+    {
+      "name": "website",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace", "milipay-website", "--", "--port", "5177", "--strictPort"],
+      "port": 5177
     }
   ]
 }
