@@ -20,7 +20,8 @@ import {
 const ROOT = join(__dirname, "..");
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 const MIGRATION = read("supabase/migrations/20261001120000_palm_controls.sql");
-const PAYMENT = read("supabase/functions/process-payment/index.ts");
+// The checkout both process-payment and the POS terminal's `pos` function use.
+const PAYMENT = read("supabase/functions/_shared/palm-checkout.ts");
 
 describe("what the Palm tab says", () => {
   it("in the design's words", () => {

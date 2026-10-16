@@ -66,6 +66,12 @@ verify_jwt = false
 [functions.signup]
 verify_jwt = false
 
+# The POS terminal app. A terminal signs in with the merchant's phone and
+# password and then carries its own device token and cashier session, checked
+# by the function itself; it never holds a Supabase JWT.
+[functions.pos]
+verify_jwt = false
+
 # The marketing website's waitlist, applications and agent list. Visitors
 # have no account; every write is validated and rate-limited by address.
 [functions.website]

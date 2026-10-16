@@ -30,6 +30,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--workspace", "milipay-website", "--", "--port", "5177", "--strictPort"],
       "port": 5177
+    },
+    {
+      "name": "pos",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "pos-app", "run", "web", "--", "--port", "8090"],
+      "port": 8090
     }
   ]
 }

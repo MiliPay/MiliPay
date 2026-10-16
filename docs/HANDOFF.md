@@ -107,6 +107,35 @@ two-factor sign-in for everyone.
    hosting once nothing points at them (only with the founder's OK).
 7. Write the architecture document for the team or investors.
 
+## POS terminal app (built 2026-10-16, not yet deployed)
+
+From `merchant-portal/design_handoff_pos`: a new Expo app, `pos-app/`, for
+the HF-HP605PV palm-vein terminal. Every screen in the design is built.
+
+- **Run it:** `npm --prefix pos-app run web` (or the `pos` entry in
+  `.claude/launch.json`). With no `EXPO_PUBLIC_SUPABASE_URL` it runs in
+  demo mode with the prototype's shop (owner PIN 1234; customer PIN 0000 is
+  "wrong", anything else approves).
+- **Live:** set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_POS_SERIAL`.
+  The terminal must be registered in Admin (POS terminals) with that serial,
+  and the merchant needs a `director_phone` and portal password.
+- **Backend:** `supabase/functions/pos` (device token + cashier PIN
+  sessions), `_shared/pos.ts`, and `_shared/palm-checkout.ts`, now shared
+  with `process-payment`. Migration `20261016090000_pos_terminal.sql`:
+  `pos_cashiers`, `pos_refunds`, and `payment_method` / `cashier_id` /
+  `used_pin` on transactions. Tests: `tests/pos.test.ts`.
+- **Simulated until the terminal arrives:** palm scanner, printer and serial
+  (`pos-app/src/hardware.ts` is the only file to replace with the vendor
+  SDK). A simulated palm won't match, so live payments show "Payment
+  couldn't be checked" until real templates come from the scanner.
+- **Switched off:** QR (needs the customer app to make a signed one-time
+  QR) and card (needs an acquirer). Their screens exist.
+- **Refunds are requests:** the till marks a payment `refund_pending` with
+  a supervisor's PIN; nothing yet sends the money back. Operations needs a
+  screen to complete `pos_refunds`.
+- **Cashiers:** the owner is created at first login. There's no screen yet
+  to add more cashiers (merchant portal or admin).
+
 ## Other open items
 
 - **Agent locations are empty**, so the website's Find an agent says "no

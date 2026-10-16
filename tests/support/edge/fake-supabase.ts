@@ -226,6 +226,9 @@ export class FakeSupabase {
   /** Authenticator factors per user, for auth.admin.mfa. */
   readonly factors = new Map<string, { id: string; factor_type: string; status: string }[]>();
 
+  /** email -> password, for auth.signInWithPassword. */
+  readonly passwords = new Map<string, string>();
+
   readonly auth = {
     getUser: async (token: string) => {
       const user = this.users.get(token);
@@ -233,6 +236,10 @@ export class FakeSupabase {
         ? { data: { user }, error: null }
         : { data: { user: null }, error: { message: "invalid token" } };
     },
+    signInWithPassword: async ({ email, password }: { email: string; password: string }) =>
+      this.passwords.get(email) === password
+        ? { data: { user: { id: `auth-${email}`, email } }, error: null }
+        : { data: { user: null }, error: { message: "Invalid login credentials" } },
     admin: {
       updateUserById: async (id: string, attributes: Record<string, unknown>) => {
         if (this.authUpdateError) return { data: { user: null }, error: { message: this.authUpdateError } };
