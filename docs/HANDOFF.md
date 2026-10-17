@@ -1,7 +1,7 @@
 # MiliPay: where the project stands
 
 Read this first when picking the project up on a new machine or in a new
-session. Last updated 2026-10-14.
+session. Last updated 2026-10-17.
 
 No secrets live in this file or anywhere in the repo. Keys are in each
 environment's own settings (Supabase secrets, local `.env` files that git
@@ -20,7 +20,11 @@ ignores).
 | GitHub | https://github.com/Alashabeeb/BioPay, branch `main` |
 
 All migrations in `supabase/migrations` are applied to that Supabase
-project, and every function in `supabase/functions` is deployed.
+project. Every function in `supabase/functions` is deployed **except**
+`pos`, the updated `process-payment` and the new `agent-upgrade`: these wait
+for the founder to run `npx.cmd -y supabase@2.48.3 login`, then Claude runs
+`npx -y supabase@2.48.3 functions deploy <name> --project-ref hkhnduxbxfcqjgrdnqcz`
+for each.
 
 ## Recently finished
 
@@ -135,6 +139,40 @@ the HF-HP605PV palm-vein terminal. Every screen in the design is built.
   screen to complete `pos_refunds`.
 - **Cashiers:** the owner is created at first login. There's no screen yet
   to add more cashiers (merchant portal or admin).
+
+## Agent portal redesign (built 2026-10-17, not yet deployed)
+
+From `agent-portal/design_handoff_agent`; plan in
+[docs/plans/agent-portal.md](plans/agent-portal.md).
+
+- **New screens** (`packages/shared/src/pages/agent/`): Dashboard (target
+  ring, earnings, rank in your state, needs attention, recent), Find
+  customer, My registrations (tabs, drawer, Fix and resubmit), Upgrade to
+  Tier 2, Merchants (cards, merchant drawer, terminal stock and assign),
+  Earnings, Leaderboard. Shell: `AgentLayout` on `AppShell`.
+- **Backend:** migration `20261017090000_agent_portal.sql` (applied):
+  `agent_commission_rates`, `agent_payouts`, `agent_upgrade_codes`,
+  `customers.upgraded_by/upgraded_at`, `pos_terminals.held_by` (and
+  `merchant_id` is now nullable for terminals in an agent's stock), RPCs
+  `agent_home`, `agent_find_customers`, `agent_registrations`,
+  `agent_earnings`, `agent_leaderboard`, `agent_stock`,
+  `agent_assign_terminal`. Edge Function `agent-upgrade` (Tier 2 upgrade
+  by SMS code + palm, and Fix and resubmit). Tests:
+  `tests/agent-portal.test.ts`.
+- **Commission rates are placeholders** (₦200 customer, ₦300 upgrade,
+  ₦1,000 merchant). Confirm the real ones and change the
+  `agent_commission_rates` rows. Payouts are recorded by finance in
+  `agent_payouts`; there's no screen for that yet.
+- **Terminal stock:** nothing gives an agent stock yet. Set `held_by` to the
+  agent (and `merchant_id` null) on a `pos_terminals` row; an Admin screen
+  for handing out stock is still to do.
+- **Not restyled yet:** Register customer and Register merchant still use
+  the previous pages (they work, under the new shell). Their redesign (6
+  steps; bank dropdown, "Check account name", "Use my location", terminal
+  from stock) is the next agent-portal step. Bank name lookup and the NIMC
+  photo need provider work.
+- Agent portal hosting not redeployed yet: build `agent-portal` and deploy
+  `--only hosting:agent` once `agent-upgrade` is deployed.
 
 ## Other open items
 

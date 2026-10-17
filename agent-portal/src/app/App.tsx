@@ -4,10 +4,14 @@ import { ThemeProvider } from "@milipay/shared/lib/theme";
 import { ProtectedRoute } from "@milipay/shared/components/layout/ProtectedRoute";
 import { AgentLayout } from "@milipay/shared/components/layout/AgentLayout";
 import LoginPage from "@milipay/shared/pages/login/LoginPage";
-import { AgentDashboard } from "@milipay/shared/pages/dashboard/AgentDashboard";
+import AgentHomePage from "@milipay/shared/pages/agent/AgentHomePage";
+import FindCustomerPage from "@milipay/shared/pages/agent/FindCustomerPage";
+import RegistrationsPage from "@milipay/shared/pages/agent/RegistrationsPage";
+import UpgradePage from "@milipay/shared/pages/agent/UpgradePage";
+import AgentMerchantsPage from "@milipay/shared/pages/agent/AgentMerchantsPage";
+import { EarningsPage, LeaderboardPage } from "@milipay/shared/pages/agent/PerformancePages";
 import RegisterCustomerPage from "@milipay/shared/pages/register-customer/RegisterCustomerPage";
 import RegisterMerchantPage from "@milipay/shared/pages/merchants/RegisterMerchantPage";
-import MerchantsPage from "@milipay/shared/pages/merchants/MerchantsPage";
 import MerchantDetailsPage from "@milipay/shared/pages/merchants/MerchantDetailsPage";
 import CustomersPage from "@milipay/shared/pages/customers/CustomersPage";
 import CustomerDetailsPage from "@milipay/shared/pages/customers/CustomerDetailsPage";
@@ -30,10 +34,15 @@ export default function App() {
             }
           >
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<AgentDashboard />} />
+            <Route path="/dashboard" element={<AgentHomePage />} />
+            <Route path="/find" element={<FindCustomerPage />} />
             <Route path="/register" element={<RegisterCustomerPage />} />
+            <Route path="/upgrade" element={<UpgradePage />} />
+            <Route path="/registrations" element={<RegistrationsPage />} />
+            <Route path="/earnings" element={<EarningsPage />} />
+            <Route path="/leaderboard" element={<LeaderboardPage />} />
             <Route path="/merchants/register" element={<RegisterMerchantPage />} />
-            <Route path="/merchants" element={<MerchantsPage />} />
+            <Route path="/merchants" element={<AgentMerchantsPage />} />
             <Route path="/merchants/:id" element={<MerchantDetailsPage />} />
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/customers/:id" element={<CustomerDetailsPage />} />
@@ -41,7 +50,7 @@ export default function App() {
             <Route path="/support/:id" element={<AgentTicketDetailsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             {/* Compatibility Aliases for shared /dashboard prefixes */}
-            <Route path="/dashboard/merchants" element={<MerchantsPage />} />
+            <Route path="/dashboard/merchants" element={<AgentMerchantsPage />} />
             <Route path="/dashboard/merchants/:id" element={<MerchantDetailsPage />} />
             <Route path="/dashboard/register/merchant" element={<RegisterMerchantPage />} />
             <Route path="/dashboard/customers" element={<CustomersPage />} />

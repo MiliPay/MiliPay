@@ -1,113 +1,76 @@
 import { useState } from "react";
-import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
-import { UserPlus, History, Settings, LogOut, Users, UserCheck, Ticket, Store } from "lucide-react";
-import clsx from "clsx";
-import { useAuth } from "@milipay/shared/features/auth/AuthContext";
-import { MobileHeader, type MobileNavItem } from "@milipay/shared/components/layout/MobileHeader";
-import { LogoutModal } from "@milipay/shared/components/layout/LogoutModal";
+import { useNavigate } from "react-router-dom";
+import { ArrowUpCircle, LayoutDashboard, ListChecks, Search, Store, Trophy, UserPlus, Wallet, Building2 } from "lucide-react";
+import { AppShell, type NavGroup } from "@milipay/shared/components/layout/AppShell";
+
+/**
+ * The agent portal's shell (agent-portal/design_handoff_agent): the shared
+ * AppShell with the agent's nav (Work / Records / Performance) and a header
+ * search that goes to Find customer on Enter.
+ */
+
+export const AGENT_ROUTES = {
+  dashboard: "/dashboard",
+  find: "/find",
+  register: "/register",
+  upgrade: "/upgrade",
+  registerMerchant: "/merchants/register",
+  registrations: "/registrations",
+  merchants: "/merchants",
+  earnings: "/earnings",
+  leaderboard: "/leaderboard",
+} as const;
+
+const NAV: NavGroup[] = [
+  {
+    title: "Work",
+    items: [
+      { label: "Dashboard", icon: LayoutDashboard, to: AGENT_ROUTES.dashboard, end: true },
+      { label: "Find customer", icon: Search, to: AGENT_ROUTES.find },
+      { label: "Register customer", icon: UserPlus, to: AGENT_ROUTES.register },
+      { label: "Upgrade to Tier 2", icon: ArrowUpCircle, to: AGENT_ROUTES.upgrade },
+      { label: "Register merchant", icon: Building2, to: AGENT_ROUTES.registerMerchant },
+    ],
+  },
+  {
+    title: "Records",
+    items: [
+      { label: "My registrations", icon: ListChecks, to: AGENT_ROUTES.registrations },
+      { label: "Merchants", icon: Store, to: AGENT_ROUTES.merchants, alsoActive: ["/merchants/"] },
+    ],
+  },
+  {
+    title: "Performance",
+    items: [
+      { label: "Earnings", icon: Wallet, to: AGENT_ROUTES.earnings },
+      { label: "Leaderboard", icon: Trophy, to: AGENT_ROUTES.leaderboard },
+    ],
+  },
+];
+
+function HeaderSearch() {
+  const navigate = useNavigate();
+  const [q, setQ] = useState("");
+  return (
+    <form
+      className="flex h-10 w-full max-w-md items-center gap-2 rounded-xl border border-line bg-panel px-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        navigate(`${AGENT_ROUTES.find}${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ""}`);
+      }}
+    >
+      <Search className="h-4 w-4 shrink-0 text-muted" />
+      <input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Find a customer by phone, NIN last 4 or name"
+        aria-label="Find a customer"
+        className="min-w-0 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-faint"
+      />
+    </form>
+  );
+}
 
 export function AgentLayout() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { user, logout } = useAuth();
-  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
-
-  const navItems: MobileNavItem[] = [
-    { name: "Dashboard", path: "/dashboard", icon: History, end: true },
-    { name: "Register Customer", path: "/register", icon: UserPlus },
-    { name: "Register Merchant", path: "/merchants/register", icon: Store },
-    { name: "Merchants", path: "/merchants", icon: Store },
-    { name: "Customers", path: "/customers", icon: Users },
-    { name: "Complaints", path: "/support", icon: Ticket },
-    { name: "Settings", path: "/settings", icon: Settings },
-  ];
-
-
-  const handleConfirmLogout = async () => {
-    await logout();
-    navigate("/login", { replace: true });
-  };
-
-  return (
-    <div className="flex flex-col md:flex-row h-screen bg-ledger text-ink font-sans">
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-64 border-r border-white/[0.05] bg-ledger-line flex-col shrink-0">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-9 mt-4 relative h-10 w-full -ml-2">
-            <div className="relative h-10 w-32">
-              <img src="/main.png" alt="MiliPay Agent" className="absolute top-1/2 -translate-y-1/2 left-0 h-28 w-auto object-contain scale-125 origin-left" />
-            </div>
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-signal/15 text-signal-bright border border-signal/25 shrink-0 mr-2">
-              Agent
-            </span>
-          </div>
-        </div>
-
-        <nav className="flex-1 px-4 space-y-1 mt-2">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.path || (item.path !== "/dashboard" && location.pathname.startsWith(item.path));
-            return (
-              <Link
-                key={item.name}
-                to={item.path}
-                className={clsx(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200",
-                  isActive
-                    ? "bg-signal/10 text-signal border border-signal/20"
-                    : "text-ink-muted hover:text-ink hover:bg-white/[0.03]"
-                )}
-              >
-                <item.icon className="w-5 h-5" />
-                <span className="font-medium text-sm">{item.name}</span>
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* User Card & Logout */}
-        <div className="p-4 border-t border-white/[0.05] space-y-2">
-          {user && (
-            <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-signal/10 border border-signal/20 flex items-center justify-center text-signal">
-                <UserCheck className="w-4 h-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium text-white truncate">{user.fullName || "Field Agent"}</p>
-                <p className="text-[10px] text-ink-muted uppercase font-semibold">{user.role}</p>
-              </div>
-            </div>
-          )}
-          <button 
-            onClick={() => setIsLogoutModalOpen(true)}
-            className="flex items-center gap-3 px-3 py-2 rounded-xl text-ink-muted hover:text-status-warn hover:bg-status-warn/10 transition-colors w-full text-left text-xs font-medium"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Sign Out</span>
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        <MobileHeader
-          portalName="Agent"
-          portalBadge="Field Agent"
-          navItems={navItems}
-          user={user}
-          onLogout={() => setIsLogoutModalOpen(true)}
-        />
-        <main className="flex-1 min-w-0 overflow-y-auto pb-16 md:pb-0">
-          <Outlet />
-        </main>
-      </div>
-
-      <LogoutModal
-        isOpen={isLogoutModalOpen}
-        onClose={() => setIsLogoutModalOpen(false)}
-        onConfirm={handleConfirmLogout}
-        portalName="Field Agent Portal"
-        user={user}
-      />
-    </div>
-  );
+  return <AppShell portal="agent" nav={NAV} header={<HeaderSearch />} />;
 }
