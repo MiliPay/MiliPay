@@ -197,6 +197,8 @@ From `agent-portal/design_handoff_agent`; plan in
   [docs/plans/agent-locations-postcode.md](plans/agent-locations-postcode.md).
   It can be built before the NIPOST key arrives; only the automatic
   postcode fill waits for it.
+- **Super admin login** is the founder's company email (changed from the
+  sample address on 2026-10-17); same password and authenticator.
 - **Leaked-password protection** is off in Supabase Auth. Turn it on in the
   dashboard (Authentication › password security). Only the owner should
   change it.
