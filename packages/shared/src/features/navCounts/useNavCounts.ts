@@ -67,6 +67,7 @@ export async function fetchAdminNavCounts(): Promise<AdminNavCounts> {
         .from("pos_terminals")
         .select("id", { count: "exact", head: true })
         .eq("is_active", true)
+        .not("merchant_id", "is", null)
         .or(`last_heartbeat.is.null,last_heartbeat.lt.${offlineSince}`),
     ),
     countOf(supabase.from("support_tickets").select("id", { count: "exact", head: true }).neq("status", "resolved")),

@@ -22,6 +22,7 @@ export const ROUTES = {
   merchants: "/dashboard/merchants",
   merchantDetails: "/dashboard/merchants/:id",
   terminals: "/dashboard/terminals",
+  terminalStock: "/dashboard/terminals/stock",
   settings: "/dashboard/settings",
   staff: "/dashboard/staff",
   staffDetails: "/dashboard/staff/:id",

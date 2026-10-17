@@ -16,6 +16,7 @@ import {
   UserPlus,
   UserRoundPlus,
   Users,
+  Boxes,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AppShell, ThemeToggle, TopBarButton, type NavGroup } from "@milipay/shared/components/layout/AppShell";
@@ -75,7 +76,8 @@ export default function DashboardLayout() {
         { label: "Customers", icon: Users, to: ROUTES.customers, badge: counts.pendingCustomers, badgeTone: "warn" },
         { label: "Sign-ups", icon: UserRoundPlus, to: ROUTES.signups, badge: counts.signupReviews, badgeTone: "warn" },
         { label: "Merchants", icon: Store, to: ROUTES.merchants },
-        { label: "POS terminals", icon: MonitorSmartphone, to: ROUTES.terminals, badge: counts.offlineTerminals, badgeTone: "fail" },
+        { label: "POS terminals", icon: MonitorSmartphone, to: ROUTES.terminals, end: true, badge: counts.offlineTerminals, badgeTone: "fail" },
+        { label: "Agent stock", icon: Boxes, to: ROUTES.terminalStock },
       ],
     },
     {

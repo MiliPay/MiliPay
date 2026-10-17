@@ -83,7 +83,33 @@ export interface TerminalRow extends MerchantTerminal {
 export interface TerminalList {
   counts: Record<TerminalTab, number>;
   paymentsToday: number;
+  /** Terminals not at a merchant yet (Agent stock). */
+  stock?: number;
   rows: TerminalRow[];
+}
+
+/** A terminal not yet at a merchant: in the warehouse or an agent's bag. */
+export interface StockRow {
+  id: string;
+  tid: string;
+  model: string | null;
+  serial: string | null;
+  active: boolean;
+  /** Given to the agent, or added to the warehouse. */
+  since: string;
+  heldBy: { id: string; name: string; state: string | null } | null;
+}
+
+export interface StockAgent {
+  id: string;
+  name: string;
+  state: string | null;
+  holding: number;
+}
+
+export interface StockList {
+  rows: StockRow[];
+  agents: StockAgent[];
 }
 
 const rpc = async <T>(name: string, args: Record<string, unknown>): Promise<T> => {
@@ -114,6 +140,35 @@ export const addTerminal = (merchantId: string, tid: string, serial: string, mod
     p_serial: serial,
     p_model: model,
   });
+
+// ── Agent stock (20261017110000_admin_terminal_stock) ─────────────────────
+
+export const fetchStock = () => rpc<StockList>("admin_stock", {});
+
+/** Add a new terminal to stock, given straight to an agent or kept in the warehouse (agent null). */
+export const addStockTerminal = (tid: string, serial: string, model: string, agentId: string | null) =>
+  rpc<{ success: true; id: string; tid: string; heldBy: string }>("admin_stock_add", {
+    p_tid: tid,
+    p_serial: serial,
+    p_model: model,
+    p_agent: agentId,
+  });
+
+/** Give a terminal to an agent, move it to another, or take it back (agent null). Audited with the reason. */
+export const moveStockTerminal = (terminalId: string, agentId: string | null, reason: string) =>
+  rpc<{ success: true; tid: string; heldBy: string }>("admin_stock_move", { p_terminal: terminalId, p_agent: agentId, p_reason: reason });
+
+/** Stock by holder, warehouse first: what the page's summary chips show. */
+export function stockByHolder(rows: StockRow[]): { id: string | null; name: string; count: number }[] {
+  const map = new Map<string | null, { id: string | null; name: string; count: number }>();
+  for (const r of rows) {
+    const key = r.heldBy?.id ?? null;
+    const cur = map.get(key) ?? { id: key, name: r.heldBy?.name ?? "Warehouse", count: 0 };
+    cur.count += 1;
+    map.set(key, cur);
+  }
+  return [...map.values()].sort((a, b) => (a.id === null ? -1 : b.id === null ? 1 : b.count - a.count || a.name.localeCompare(b.name)));
+}
 
 // ── Presentation ─────────────────────────────────────────────────────────
 

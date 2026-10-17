@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Hand, Power, RotateCcw, Wifi, WifiOff } from "lucide-react";
+import { Boxes, Hand, Power, RotateCcw, Wifi, WifiOff } from "lucide-react";
+import { ROUTES } from "@milipay/shared/lib/constants";
 import clsx from "clsx";
 import { ReasonDialog, type ReasonDialogProps } from "@milipay/shared/components/ui/ReasonDialog";
 import { StatCard } from "@milipay/shared/components/ui/StatCard";
@@ -76,9 +77,18 @@ export default function TerminalsPage() {
   const c = data?.counts;
   return (
     <div className="flex max-w-[1480px] animate-fade-in flex-col gap-[18px] p-4 sm:p-7">
-      <div>
-        <h1 className="text-2xl font-bold tracking-[-.02em]">Terminals</h1>
-        <div className="mt-1 text-muted">Palm terminals in the field. A terminal is offline after 15 minutes without a heartbeat.</div>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-[-.02em]">Terminals</h1>
+          <div className="mt-1 text-muted">Palm terminals at merchants. A terminal is offline after 15 minutes without a heartbeat.</div>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate(ROUTES.terminalStock)}
+          className="flex h-10 items-center gap-2 rounded-[10px] border border-line px-4 font-semibold hover:bg-hover"
+        >
+          <Boxes size={16} aria-hidden="true" /> Agent stock{data?.stock !== undefined ? ` · ${data.stock}` : ""}
+        </button>
       </div>
 
       <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">

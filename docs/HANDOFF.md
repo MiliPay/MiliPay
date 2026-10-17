@@ -162,9 +162,13 @@ From `agent-portal/design_handoff_agent`; plan in
   ₦1,000 merchant). Confirm the real ones and change the
   `agent_commission_rates` rows. Payouts are recorded by finance in
   `agent_payouts`; there's no screen for that yet.
-- **Terminal stock:** nothing gives an agent stock yet. Set `held_by` to the
-  agent (and `merchant_id` null) on a `pos_terminals` row; an Admin screen
-  for handing out stock is still to do.
+- **Terminal stock:** Admin › POS terminals › **Agent stock**
+  (`/dashboard/terminals/stock`, `AgentStockPage`). Admins add new
+  terminals to the warehouse or straight to an agent, give, move and take
+  them back with a reason (audited). Migration
+  `20261017110000_admin_terminal_stock.sql` (applied): `held_since`, RPCs
+  `admin_stock`, `admin_stock_add`, `admin_stock_move`. The Terminals page
+  and the offline badge now count only terminals at a merchant.
 - **Register customer and Register merchant** (agent only; admin keeps its
   own pages): `AgentRegisterCustomerPage` (6 steps: phone + SMS code, NIN
   + date of birth with NIMC, contact with LGA, face, palm, review and

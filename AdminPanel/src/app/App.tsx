@@ -20,6 +20,7 @@ import StaffDetailsPage from "@milipay/shared/pages/staff/StaffDetailsPage";
 import MerchantsPage from "@milipay/shared/pages/merchants/MerchantsPage";
 import MerchantDetailsPage from "@milipay/shared/pages/merchants/MerchantDetailsPage";
 import TerminalsPage from "@milipay/shared/pages/merchants/TerminalsPage";
+import AgentStockPage from "@milipay/shared/pages/merchants/AgentStockPage";
 import RegisterMerchantPage from "@milipay/shared/pages/merchants/RegisterMerchantPage";
 import { AdminSupportPage } from "@milipay/shared/pages/dashboard/AdminSupportPage";
 import { OperationsPage } from "@milipay/shared/pages/operations/OperationsPage";
@@ -56,6 +57,7 @@ export default function App() {
             <Route path="merchants" element={<MerchantsPage />} />
             <Route path="merchants/:id" element={<MerchantDetailsPage />} />
             <Route path="terminals" element={<TerminalsPage />} />
+            <Route path="terminals/stock" element={<AgentStockPage />} />
             <Route path="transactions" element={<TransactionsPage />} />
             <Route path="transactions/:id" element={<TransactionsPage />} />
             <Route path="register" element={<RegisterHubPage />} />

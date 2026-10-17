@@ -223,3 +223,38 @@ describe("agent-upgrade function", () => {
     expect((await call({ action: "resubmit", customerId: D, palmVeinTemplate: "SIMULATED-PVT-9", palmQuality: 80 })).body.code).toBe("NOT_DECLINED");
   });
 });
+
+// ── Admin › Agent stock (20261017110000_admin_terminal_stock) ──────────────
+describe("admin agent stock", () => {
+  const STOCK = read("supabase/migrations/20261017110000_admin_terminal_stock.sql");
+
+  it("is admin-only, audited, needs a reason to move, and keeps stock off the field counts", () => {
+    for (const sig of ["admin_stock()", "admin_stock_add(text, text, text, uuid)", "admin_stock_move(uuid, uuid, text)"]) {
+      const name = sig.split("(")[0];
+      const body = STOCK.slice(STOCK.indexOf(`FUNCTION public.${name}(`));
+      expect(body.slice(0, body.indexOf("$$;"))).toContain("PERFORM public.assert_admin();");
+      expect(STOCK).toContain(`REVOKE ALL ON FUNCTION public.${sig} FROM PUBLIC, anon;`);
+    }
+    expect(STOCK).toContain("'added terminal to stock'");
+    expect(STOCK).toContain("Give a reason. It goes on the audit log.");
+    // Only active agents can hold stock.
+    expect(STOCK).toContain("role = 'agent' AND coalesce(status, 'active') = 'active'");
+    // The Terminals page lists only terminals at a merchant.
+    expect(STOCK).toContain("FROM public.pos_terminals p JOIN public.merchants m ON m.id = p.merchant_id");
+    expect(read("packages/shared/src/features/navCounts/useNavCounts.ts")).toContain('.not("merchant_id", "is", null)');
+  });
+
+  it("groups stock by holder, warehouse first", async () => {
+    const { stockByHolder } = await import("../packages/shared/src/features/merchants/admin");
+    const row = (id: string, heldBy: { id: string; name: string } | null) => ({
+      id, tid: id, model: null, serial: null, active: true, since: "2026-10-17", heldBy: heldBy && { ...heldBy, state: null },
+    });
+    const g = stockByHolder([
+      row("a", { id: "ag1", name: "Chidi" }),
+      row("b", null),
+      row("c", { id: "ag2", name: "Bola" }),
+      row("d", { id: "ag2", name: "Bola" }),
+    ]);
+    expect(g.map((h) => [h.name, h.count])).toEqual([["Warehouse", 1], ["Bola", 2], ["Chidi", 1]]);
+  });
+});
