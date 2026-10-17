@@ -63,9 +63,27 @@ const createSchema = z.object({
   settlementAccountName: z.string().trim().max(120).optional().nullable(),
   platformFeePercent: z.number().gt(0, "Fee must be between 0 and 5%.").lte(5, "Fee must be between 0 and 5%."),
   settlementSchedule: z.enum(["instant", "daily_eod"]),
-  terminalId: z.string().trim().toUpperCase().regex(TERMINAL_ID, "Enter the terminal ID printed on the device, like TRM-1234."),
-  deviceSerialNumber: z.string().trim().min(3, "Enter the serial number.").max(60),
-  deviceModel: z.string().trim().min(2).max(80),
+  /**
+   * The first terminal: "new" registers one from its ID and serial (admin),
+   * "stock" hands over one from the agent's own stock, "later" registers the
+   * merchant with no terminal yet (agent portal, "Assign later").
+   */
+  terminalMode: z.enum(["new", "stock", "later"]).default("new"),
+  stockTerminalId: z.string().uuid().optional(),
+  terminalId: z.string().trim().toUpperCase().regex(TERMINAL_ID, "Enter the terminal ID printed on the device, like TRM-1234.").optional(),
+  deviceSerialNumber: z.string().trim().min(3, "Enter the serial number.").max(60).optional(),
+  deviceModel: z.string().trim().min(2).max(80).optional(),
+  /** "Use my location" on the agent's device. */
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+}).superRefine((d, ctx) => {
+  if (d.terminalMode === "new") {
+    if (!d.terminalId) ctx.addIssue({ code: "custom", message: "Enter the terminal ID printed on the device, like TRM-1234." });
+    else if (!d.deviceSerialNumber) ctx.addIssue({ code: "custom", message: "Enter the serial number." });
+    else if (!d.deviceModel) ctx.addIssue({ code: "custom", message: "Choose the device model." });
+  }
+  if (d.terminalMode === "stock" && !d.stockTerminalId) ctx.addIssue({ code: "custom", message: "Choose a terminal from your stock." });
+  if ((d.latitude === undefined) !== (d.longitude === undefined)) ctx.addIssue({ code: "custom", message: "Send both coordinates or neither." });
 });
 
 /** Whose name the account is in, from the bank, or null when we can't ask. */
@@ -116,14 +134,26 @@ serve(handler(async (req) => {
   const d = parsed.data;
 
   // Clashes first, before anything is created.
-  const { data: tidTaken } = await admin.from("pos_terminals").select("id").eq("terminal_id", d.terminalId).maybeSingle();
-  if (tidTaken) throw new ApiError(`Terminal ${d.terminalId} is already assigned to a merchant.`, 409, "TERMINAL_TAKEN");
-  const { data: serialTaken } = await admin
-    .from("pos_terminals")
-    .select("id")
-    .eq("device_serial_number", d.deviceSerialNumber)
-    .maybeSingle();
-  if (serialTaken) throw new ApiError("A terminal with that serial number is already registered.", 409, "SERIAL_TAKEN");
+  if (d.terminalMode === "new") {
+    const { data: tidTaken } = await admin.from("pos_terminals").select("id").eq("terminal_id", d.terminalId!).maybeSingle();
+    if (tidTaken) throw new ApiError(`Terminal ${d.terminalId} is already assigned to a merchant.`, 409, "TERMINAL_TAKEN");
+    const { data: serialTaken } = await admin
+      .from("pos_terminals")
+      .select("id")
+      .eq("device_serial_number", d.deviceSerialNumber!)
+      .maybeSingle();
+    if (serialTaken) throw new ApiError("A terminal with that serial number is already registered.", 409, "SERIAL_TAKEN");
+  }
+  if (d.terminalMode === "stock") {
+    const { data: held } = await admin
+      .from("pos_terminals")
+      .select("id, merchant_id, held_by, is_active")
+      .eq("id", d.stockTerminalId!)
+      .maybeSingle();
+    if (!held || held.held_by !== caller.id || held.merchant_id || !held.is_active) {
+      throw new ApiError("That terminal isn't in your stock.", 409, "NOT_IN_STOCK");
+    }
+  }
 
   const bankName = await lookupAccountName(d.settlementBankCode, d.settlementAccountNumber);
   const accountName = bankName ?? d.settlementAccountName?.trim().toUpperCase() ?? "";
@@ -173,6 +203,9 @@ serve(handler(async (req) => {
       settlement_schedule: d.settlementSchedule,
       status: "pending",
       onboarded_by: caller.id,
+      latitude: d.latitude ?? null,
+      longitude: d.longitude ?? null,
+      location_captured_at: d.latitude !== undefined ? new Date().toISOString() : null,
     })
     .select("id")
     .single();
@@ -182,22 +215,46 @@ serve(handler(async (req) => {
     throw new ApiError("Could not save the merchant. Nothing was created; please try again.", 503, "UNAVAILABLE");
   }
 
-  const { data: terminal, error: terminalError } = await admin
-    .from("pos_terminals")
-    .insert({
-      terminal_id: d.terminalId,
-      merchant_id: merchant.id,
-      device_serial_number: d.deviceSerialNumber,
-      device_model: d.deviceModel,
-      is_active: true,
-      assigned_by: caller.id,
-    })
-    .select("id, terminal_id")
-    .single();
-  if (terminalError || !terminal) {
-    // Undo, so a retry starts clean rather than with a merchant and no till.
+  const undo = async () => {
     await admin.from("merchants").delete().eq("id", merchant.id);
     await admin.auth.admin.deleteUser(authUserId);
+  };
+  let terminal: { id: string; terminal_id: string } | null = null;
+  let terminalError: { code?: string; message?: string } | null = null;
+  if (d.terminalMode === "new") {
+    const res = await admin
+      .from("pos_terminals")
+      .insert({
+        terminal_id: d.terminalId,
+        merchant_id: merchant.id,
+        device_serial_number: d.deviceSerialNumber,
+        device_model: d.deviceModel,
+        is_active: true,
+        assigned_by: caller.id,
+      })
+      .select("id, terminal_id")
+      .single();
+    terminal = res.data;
+    terminalError = res.error ?? (res.data ? null : { message: "no row" });
+  } else if (d.terminalMode === "stock") {
+    // Only if it's still in this agent's bag: a second tab may have used it.
+    const res = await admin
+      .from("pos_terminals")
+      .update({ merchant_id: merchant.id, held_by: null, assigned_by: caller.id })
+      .eq("id", d.stockTerminalId!)
+      .eq("held_by", caller.id)
+      .is("merchant_id", null)
+      .select("id, terminal_id")
+      .maybeSingle();
+    if (res.error || !res.data) {
+      await undo();
+      throw new ApiError("That terminal isn't in your stock any more. Nothing was created.", 409, "NOT_IN_STOCK");
+    }
+    terminal = res.data;
+  }
+  if (d.terminalMode === "new" && (terminalError || !terminal)) {
+    // Undo, so a retry starts clean rather than with a merchant and no till.
+    await undo();
     if (terminalError?.code === "23505") {
       throw new ApiError("That terminal ID or serial number was registered just now by someone else.", 409, "TERMINAL_TAKEN");
     }
@@ -215,7 +272,8 @@ serve(handler(async (req) => {
       platformFeePercent: d.platformFeePercent,
       settlement: d.settlementSchedule,
       accountNameChecked: bankName !== null,
-      terminal: d.terminalId,
+      terminal: terminal?.terminal_id ?? "assign later",
+      location: d.latitude !== undefined ? "captured" : null,
     },
   });
 
@@ -228,7 +286,7 @@ serve(handler(async (req) => {
   return json({
     success: true,
     merchant: { id: merchant.id, status: "pending" },
-    terminal: { id: terminal.id, terminal_id: terminal.terminal_id },
+    terminal: terminal ? { id: terminal.id, terminal_id: terminal.terminal_id } : null,
     accountName,
     accountNameChecked: bankName !== null,
     credentials: { email: d.email, portalUrl: "https://merchant.milipayz.com", delivered: sent.delivered, deliveryChannel: sent.channel },

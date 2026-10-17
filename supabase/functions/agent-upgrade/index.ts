@@ -10,7 +10,9 @@ import {
   RESEND_GAP_MS,
   captureClosed,
   codeClosed,
+  localPhone,
   maskedPhone,
+  phoneCheckSms,
   upgradeRefusal,
   upgradeSms,
   type UpgradeCodeState,
@@ -27,6 +29,9 @@ import {
  *             upgraded_by = the agent. Audited.
  *   resubmit  Fix and resubmit: the registering agent recaptures the palm
  *             and/or face of a declined customer -> Pending review. Audited.
+ *   phone_request / phone_resend / phone_verify
+ *             Register customer, step 1: text a code to a new customer's
+ *             phone; enrol-customer then needs the confirmed check.
  *
  * Codes are stored only as an HMAC bound to their row.
  */
@@ -56,11 +61,11 @@ async function rateLimit(admin: SupabaseClient, key: string, limit: number, wind
 
 const encoder = new TextEncoder();
 
-async function codeHash(rowId: string, code: string): Promise<string> {
+async function codeHash(rowId: string, code: string, scope = "agent-upgrade"): Promise<string> {
   const secret = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SERVICE_ROLE_KEY") ?? "";
   if (!secret) throw new ApiError("Upgrades are unavailable right now.", 503, "UNAVAILABLE");
   const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(`agent-upgrade:${rowId}:${code}`));
+  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(`${scope}:${rowId}:${code}`));
   return Array.from(new Uint8Array(sig), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
@@ -281,6 +286,94 @@ async function resubmit(admin: SupabaseClient, req: Request, caller: Caller, bod
   return json({ success: true, status: "pending" });
 }
 
+// ── Register customer: check the phone with an SMS code ─────────────────────
+
+const PHONE_TABLE = "agent_phone_checks";
+
+async function loadPhoneCheck(admin: SupabaseClient, caller: Caller, checkId: unknown): Promise<CodeRow> {
+  if (typeof checkId !== "string" || checkId.length === 0 || checkId.length > 64) {
+    throw new ApiError("Send the customer a new code.", 400, "BAD_REQUEST");
+  }
+  const { data } = await admin.from(PHONE_TABLE).select("*").eq("id", checkId).maybeSingle();
+  if (!data || data.agent_id !== caller.id) throw new ApiError("Send the customer a new code.", 404, "NOT_FOUND");
+  return data as CodeRow;
+}
+
+async function sendPhoneCode(rowId: string, phone: string): Promise<string> {
+  const code = newCode();
+  const result = await dispatchSms(phone, phoneCheckSms(code));
+  if (!result.delivered) {
+    console.error("[agent-upgrade] phone check SMS not sent", result.attempts);
+    throw new ApiError("We couldn't text that number right now. Check it and try again.", 503, "CODE_NOT_SENT");
+  }
+  return codeHash(rowId, code, "phone-check");
+}
+
+async function phoneRequest(admin: SupabaseClient, caller: Caller, body: Record<string, unknown>) {
+  const phone = localPhone(body.phone);
+  if (!phone) throw new ApiError("Enter the customer's 11-digit phone number.", 400, "BAD_PHONE");
+  await rateLimit(admin, `agent-phone:agent:${caller.id}`, 40, 60 * 60);
+  await rateLimit(admin, `agent-phone:phone:${phone}`, 5, 60 * 60);
+
+  // Phones are stored as 0803… or +234803…; either means already registered.
+  const { data: taken } = await admin.from("customers").select("id").in("phone", [phone, `+234${phone.slice(1)}`]).limit(1);
+  if ((taken ?? []).length > 0) {
+    throw new ApiError("This phone number is already registered with MiliPay. Use Find customer.", 409, "PHONE_ALREADY_ENROLLED");
+  }
+
+  const now = new Date();
+  await admin.from(PHONE_TABLE).update({ cancelled_at: now.toISOString() }).eq("phone", phone).is("consumed_at", null).is("cancelled_at", null);
+  const { data: created, error } = await admin
+    .from(PHONE_TABLE)
+    .insert({ agent_id: caller.id, phone, expires_at: new Date(now.getTime() + CODE_TTL_MS).toISOString(), resends: 0, attempts: 0 })
+    .select("id")
+    .single();
+  if (error || !created) {
+    console.error("[agent-upgrade] phone check not saved", error);
+    throw new ApiError("Could not send a code. Please try again.", 503, "UNAVAILABLE");
+  }
+  let hash: string;
+  try {
+    hash = await sendPhoneCode(created.id, phone);
+  } catch (err) {
+    await admin.from(PHONE_TABLE).update({ cancelled_at: new Date().toISOString() }).eq("id", created.id);
+    throw err;
+  }
+  await admin.from(PHONE_TABLE).update({ code_hash: hash, sent_at: new Date().toISOString() }).eq("id", created.id);
+  return json({ success: true, checkId: created.id });
+}
+
+async function phoneResend(admin: SupabaseClient, caller: Caller, body: Record<string, unknown>) {
+  const row = await loadPhoneCheck(admin, caller, body.checkId);
+  const closed = codeClosed(row, new Date());
+  if (closed) throw new ApiError(closed, 410, "CODE_CLOSED");
+  if (row.code_verified_at) throw new ApiError("That number is already checked.", 400, "ALREADY_VERIFIED");
+  if ((row.resends ?? 0) >= MAX_RESENDS) throw new ApiError("Too many new codes. Go back and start again.", 429, "RESEND_LIMIT");
+  if (row.sent_at && Date.now() - new Date(row.sent_at).getTime() < RESEND_GAP_MS) {
+    throw new ApiError("Wait a few seconds before sending another code.", 429, "RESEND_TOO_SOON");
+  }
+  const hash = await sendPhoneCode(row.id, row.phone);
+  await admin
+    .from(PHONE_TABLE)
+    .update({ code_hash: hash, sent_at: new Date().toISOString(), resends: (row.resends ?? 0) + 1, expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString() })
+    .eq("id", row.id);
+  return json({ success: true });
+}
+
+async function phoneVerify(admin: SupabaseClient, caller: Caller, body: Record<string, unknown>) {
+  const row = await loadPhoneCheck(admin, caller, body.checkId);
+  const closed = codeClosed(row, new Date());
+  if (closed) throw new ApiError(closed, 410, "CODE_CLOSED");
+  if (row.code_verified_at) return json({ success: true });
+  const code = typeof body.code === "string" ? body.code.replace(/\D/g, "") : "";
+  if (!row.code_hash || code.length !== 6 || !sameHash(row.code_hash, await codeHash(row.id, code, "phone-check"))) {
+    await admin.from(PHONE_TABLE).update({ attempts: (row.attempts ?? 0) + 1 }).eq("id", row.id);
+    throw new ApiError("That code isn't right. Ask the customer to read it again.", 400, "WRONG_CODE");
+  }
+  await admin.from(PHONE_TABLE).update({ code_verified_at: new Date().toISOString() }).eq("id", row.id);
+  return json({ success: true });
+}
+
 serve(handler(async (req) => {
   const caller = await requireCaller(req);
   const admin = adminClient();
@@ -297,6 +390,12 @@ serve(handler(async (req) => {
       return complete(admin, req, caller, body);
     case "resubmit":
       return resubmit(admin, req, caller, body);
+    case "phone_request":
+      return phoneRequest(admin, caller, body);
+    case "phone_resend":
+      return phoneResend(admin, caller, body);
+    case "phone_verify":
+      return phoneVerify(admin, caller, body);
     default:
       throw new ApiError("Unknown action.", 400, "BAD_REQUEST");
   }

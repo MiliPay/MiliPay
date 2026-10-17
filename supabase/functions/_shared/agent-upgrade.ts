@@ -62,6 +62,44 @@ export function codeClosed(r: UpgradeCodeState, now: Date): string | null {
   return null;
 }
 
+// ── Register customer: checking the phone with an SMS code ──────────────────
+
+/** After the code is right, how long the agent has to finish the registration. */
+export const PHONE_CHECK_WINDOW_MS = 60 * 60 * 1000;
+
+export function phoneCheckSms(code: string): string {
+  return `Your MiliPay registration code is ${code}. Give it only to the MiliPay agent registering you. It expires in 10 minutes.`;
+}
+
+/** 0803…: the form phone checks are kept in (+234 803… and 803… allowed). */
+export function localPhone(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  let d = value.replace(/\D/g, "");
+  if (d.startsWith("234") && d.length === 13) d = "0" + d.slice(3);
+  if (d.length === 10 && /^[789]/.test(d)) d = "0" + d;
+  return /^0[789][01]\d{8}$/.test(d) ? d : null;
+}
+
+export interface PhoneCheckState extends UpgradeCodeState {
+  agent_id: string;
+  phone: string;
+}
+
+/**
+ * Why enrol-customer can't use this phone check, or null when it can: it
+ * must be this agent's, for this phone, confirmed, unused and recent.
+ */
+export function phoneCheckRefusal(r: PhoneCheckState | null, agentId: string, phone: string, now: Date): string | null {
+  if (!r || r.agent_id !== agentId) return "Check the customer's phone with an SMS code first.";
+  if (localPhone(r.phone) !== localPhone(phone)) return "The phone number changed after it was checked. Check it again.";
+  if (r.consumed_at) return "That phone check was already used. Check the phone again.";
+  if (r.cancelled_at || !r.code_verified_at) return "Check the customer's phone with an SMS code first.";
+  if (now.getTime() - new Date(r.code_verified_at).getTime() > PHONE_CHECK_WINDOW_MS) {
+    return "The phone check is over an hour old. Check the phone again.";
+  }
+  return null;
+}
+
 /** Why the palm can't be saved against this code yet, or null when it can. */
 export function captureClosed(r: UpgradeCodeState, now: Date): string | null {
   if (r.consumed_at) return "This upgrade is already finished.";

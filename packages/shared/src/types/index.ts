@@ -233,6 +233,10 @@ export interface CustomerDraft {
   email: string;
   address: string;
   state: string;
+  /** Agent portal: local government area. */
+  lga?: string;
+  /** Agent portal: the confirmed SMS check of `phone` (agent-upgrade). */
+  phoneCheckId?: string;
   palmVeinTemplate: string;
   /**
    * Everything RegisterPalm returned. palmVeinTemplate above is the legacy

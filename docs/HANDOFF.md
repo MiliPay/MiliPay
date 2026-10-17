@@ -21,7 +21,8 @@ ignores).
 
 All migrations in `supabase/migrations` are applied to that Supabase
 project. Every function in `supabase/functions` is deployed **except**
-`pos`, the updated `process-payment` and the new `agent-upgrade`: these wait
+`pos`, the updated `process-payment`, the new `agent-upgrade`, and the
+updated `enrol-customer` and `onboard-merchant`: these wait
 for the founder to run `npx.cmd -y supabase@2.48.3 login`, then Claude runs
 `npx -y supabase@2.48.3 functions deploy <name> --project-ref hkhnduxbxfcqjgrdnqcz`
 for each.
@@ -166,13 +167,24 @@ From `agent-portal/design_handoff_agent`; plan in
 - **Terminal stock:** nothing gives an agent stock yet. Set `held_by` to the
   agent (and `merchant_id` null) on a `pos_terminals` row; an Admin screen
   for handing out stock is still to do.
-- **Not restyled yet:** Register customer and Register merchant still use
-  the previous pages (they work, under the new shell). Their redesign (6
-  steps; bank dropdown, "Check account name", "Use my location", terminal
-  from stock) is the next agent-portal step. Bank name lookup and the NIMC
-  photo need provider work.
-- Agent portal hosting not redeployed yet: build `agent-portal` and deploy
-  `--only hosting:agent` once `agent-upgrade` is deployed.
+- **Register customer and Register merchant** (agent only; admin keeps its
+  own pages): `AgentRegisterCustomerPage` (6 steps: phone + SMS code, NIN
+  + date of birth with NIMC, contact with LGA, face, palm, review and
+  consent) and `AgentRegisterMerchantPage` (business and owner, bank with
+  "Check account name", location with "Use my location", terminal from
+  stock or "Assign later", review with the CAC consent). Migration
+  `20261017100000_agent_registration.sql` (applied): `agent_phone_checks`,
+  `customers.phone_verified_at`, `merchants.latitude/longitude`.
+  `enrol-customer` now **requires an agent to send a confirmed phone check**
+  (admins exempt) and takes `lga`; `onboard-merchant` takes
+  `terminalMode` new / stock / later and the coordinates. Tests:
+  `tests/agent-registration.test.ts`.
+- The NIMC photo slot is a placeholder: the identity provider doesn't
+  return a photo yet. Bank name lookup works only when Mono's key is set.
+- **Deploy together:** the new `enrol-customer` refuses agents who don't
+  send a phone check, which the live agent portal doesn't yet. Deploy
+  `agent-upgrade`, `enrol-customer` and `onboard-merchant`, then
+  immediately build `agent-portal` and deploy `--only hosting:agent`.
 
 ## Other open items
 

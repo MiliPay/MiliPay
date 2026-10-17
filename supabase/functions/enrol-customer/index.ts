@@ -9,6 +9,7 @@ import {
   requireStaffRole,
 } from "../_shared/auth.ts";
 import { verifyIdentity } from "../_shared/identity.ts";
+import { phoneCheckRefusal, type PhoneCheckState } from "../_shared/agent-upgrade.ts";
 
 /**
  * Agent enrolment.
@@ -37,6 +38,12 @@ const bodySchema = z.object({
   email: z.string().email().optional().or(z.literal("")),
   address: z.string().trim().min(3).max(500),
   state: z.string().trim().min(2).max(100),
+  lga: z.string().trim().max(100).optional(),
+  /**
+   * The agent portal's SMS check of the customer's phone (agent-upgrade
+   * phone_request / phone_verify). Required when an agent enrols.
+   */
+  phoneCheckId: z.string().min(1).max(64).optional(),
   palmVeinTemplate: z.string().trim().min(1, "a palm vein capture is required"),
   faceTemplate: z.string().trim().min(1, "a facial capture is required"),
 
@@ -178,6 +185,19 @@ serve(handler(async (req) => {
     );
   }
 
+  // An agent can only enrol a phone the customer proved they hold: the code
+  // texted to it was read back to the agent. Administrators enrolling in
+  // person are exempt.
+  let phoneCheck: PhoneCheckState & { id: string } | null = null;
+  if (!isAdmin) {
+    if (draft.phoneCheckId) {
+      const { data } = await admin.from("agent_phone_checks").select("*").eq("id", draft.phoneCheckId).maybeSingle();
+      phoneCheck = data as typeof phoneCheck;
+    }
+    const refusal = phoneCheckRefusal(phoneCheck, caller.id, draft.phone, new Date());
+    if (refusal) throw new ApiError(refusal, 400, "PHONE_NOT_CHECKED");
+  }
+
   // Re-verify server-side. The client's claim that the NIN passed is not
   // evidence; in simulated mode this is deterministic and costs nothing.
   const ninOutcome = await verifyIdentity("nin", draft.nin, draft.fullName);
@@ -213,6 +233,8 @@ serve(handler(async (req) => {
       email,
       address: draft.address,
       state: draft.state,
+      lga: draft.lga || null,
+      phone_verified_at: phoneCheck?.code_verified_at ?? null,
       date_of_birth: draft.dateOfBirth,
       gender: draft.gender,
       nin: draft.nin,
@@ -253,6 +275,10 @@ serve(handler(async (req) => {
     }
     console.error("[enrol-customer] insert failed", insertError);
     throw new ApiError("Could not save this enrolment. Please try again.", 400, "ENROLMENT_FAILED");
+  }
+
+  if (phoneCheck) {
+    await admin.from("agent_phone_checks").update({ consumed_at: now }).eq("id", phoneCheck.id);
   }
 
   // A simulated capture has no real vector, and palm_templates requires one

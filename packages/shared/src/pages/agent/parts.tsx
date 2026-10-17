@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Hand, Loader2, ScanFace } from "lucide-react";
-import { registerPalm } from "@milipay/shared/features/biometrics/palmScanner";
+import { registerPalm, type PalmEnrolment } from "@milipay/shared/features/biometrics/palmScanner";
 import { captureFaceTemplate } from "@milipay/shared/features/biometrics/faceScanner";
 import { QUALITY_MIN } from "@milipay/shared/features/agent/api";
 
@@ -9,6 +9,8 @@ export interface Captured {
   /** 0–100. */
   quality: number;
   simulated: boolean;
+  /** Palm only: everything RegisterPalm returned, for palm_templates. */
+  enrolment?: PalmEnrolment;
 }
 
 /**
@@ -25,7 +27,7 @@ export function CaptureTile({ kind, value, onChange }: { kind: "palm" | "face"; 
     try {
       if (kind === "palm") {
         const p = await registerPalm();
-        onChange({ template: p.template, quality: Math.round(p.qualityScore * 100), simulated: p.simulated });
+        onChange({ template: p.template, quality: Math.round(p.qualityScore * 100), simulated: p.simulated, enrolment: p });
       } else {
         const f = await captureFaceTemplate();
         onChange({ template: f.template, quality: Math.round(f.score * 100), simulated: f.simulated });

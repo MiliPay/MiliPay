@@ -121,6 +121,17 @@ export const verifyUpgradeCode = (requestId: string, code: string) => upgrade<{ 
 export const completeUpgrade = (requestId: string, palmVeinTemplate: string, quality: number) =>
   upgrade<{ customerId: string; tier: 2; maxSingle: number; maxDaily: number }>({ action: "complete", requestId, palmVeinTemplate, quality });
 
+/** Register customer, step 1: text a code to the customer's phone. */
+export const sendPhoneCheck = (phone: string) => upgrade<{ checkId: string }>({ action: "phone_request", phone });
+export const resendPhoneCheck = (checkId: string) => upgrade<{ success: true }>({ action: "phone_resend", checkId });
+export const verifyPhoneCheck = (checkId: string, code: string) => upgrade<{ success: true }>({ action: "phone_verify", checkId, code });
+
+/** "1234 567 8901": the NIN as the design shows it (4-3-4). */
+export function formatNin(digits: string): string {
+  const d = digits.replace(/\D/g, "").slice(0, 11);
+  return [d.slice(0, 4), d.slice(4, 7), d.slice(7)].filter(Boolean).join(" ");
+}
+
 /** Fix and resubmit: send only what was recaptured (quality 0–100). */
 export const resubmitRegistration = (
   customerId: string,

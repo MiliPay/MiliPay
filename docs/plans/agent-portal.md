@@ -1,6 +1,6 @@
 # Plan: agent portal redesign (agent-portal/design_handoff_agent)
 
-Status: steps 1–3, 5 and most of 4 done on 2026-10-17 (see docs/HANDOFF.md, "Agent portal redesign"). Left: restyle Register customer and Register merchant.
+Status: done on 2026-10-17 (see docs/HANDOFF.md, "Agent portal redesign"). Waiting on deployment.
 
 Follow the handoff README; the HTML
 prototype (`MiliPay Agent.dc.html`) wins where they disagree.

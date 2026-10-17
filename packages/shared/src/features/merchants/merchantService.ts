@@ -1,6 +1,6 @@
 import { supabase } from "@milipay/shared/lib/supabase";
 import type { Merchant, POSTerminal, MerchantStatus, MerchantCredentials, MerchantTransaction } from "@milipay/shared/types";
-import type { onboardingBody } from "./register";
+import type { agentOnboardingBody, onboardingBody } from "./register";
 
 export interface OnboardMerchantResult {
   merchantId: string;
@@ -143,7 +143,9 @@ export async function fetchMerchantById(id: string): Promise<{
  * One path now: the Edge Function creates the login, generates the password
  * with crypto and sends it to the director's phone.
  */
-export async function onboardMerchant(body: ReturnType<typeof onboardingBody>): Promise<OnboardMerchantResult> {
+export async function onboardMerchant(
+  body: ReturnType<typeof onboardingBody> | ReturnType<typeof agentOnboardingBody>,
+): Promise<OnboardMerchantResult> {
   const { data, error } = await supabase.functions.invoke("onboard-merchant", { body });
 
   if (error) {

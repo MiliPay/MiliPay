@@ -107,3 +107,46 @@ export function onboardingBody(f: MerchantForm, bankCode: string) {
     deviceModel: f.model,
   };
 }
+
+/** The agent portal's first terminal: one from their stock, or none yet. */
+export type AgentTerminalChoice = { mode: "stock"; id: string; terminalId: string } | { mode: "later" };
+
+/** What's wrong with the agent's step `step` (0 business, 1 bank, 2 location, 3 terminal), or "". */
+export function agentMerchantStepError(step: number, f: MerchantForm, lookup: "idle" | "checking" | "done", terminal: AgentTerminalChoice | null): string {
+  if (step === 0) {
+    if (!f.biz.trim()) return "Enter the business name.";
+    if (!f.cat) return "Choose the type of business.";
+    if (!f.dir.trim()) return "Enter the owner's name.";
+    if (!PHONE_NG.test(f.dphone)) return "Enter a valid owner phone number.";
+    if (!/^\d{11}$/.test(f.dbvn)) return "BVN must be 11 digits.";
+    if (!/^\S+@\S+\.\S+$/.test(f.email.trim())) return "Enter a valid login email.";
+  }
+  if (step === 1) {
+    if (!f.bank) return "Choose the settlement bank.";
+    if (!/^\d{10}$/.test(f.acct)) return "Enter a 10-digit account number.";
+    if (lookup === "checking") return "Checking the account name with the bank…";
+    if (lookup === "idle" && !f.acctName) return "Tap Check account name.";
+    if (!accountName(f)) return "Type the name on the account.";
+  }
+  if (step === 2) {
+    if (!f.state) return "Choose a state.";
+    if (!f.addr.trim()) return "Enter the business address.";
+  }
+  if (step === 3 && !terminal) return "Pick a terminal from your stock, or Assign later.";
+  return "";
+}
+
+export function agentOnboardingBody(
+  f: MerchantForm,
+  bankCode: string,
+  terminal: AgentTerminalChoice,
+  location: { latitude: number; longitude: number } | null,
+) {
+  const { terminalId: _t, deviceSerialNumber: _s, deviceModel: _m, ...base } = onboardingBody(f, bankCode);
+  return {
+    ...base,
+    terminalMode: terminal.mode,
+    ...(terminal.mode === "stock" ? { stockTerminalId: terminal.id } : {}),
+    ...(location ?? {}),
+  };
+}

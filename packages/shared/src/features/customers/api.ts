@@ -228,6 +228,8 @@ export async function registerCustomer(
       email: draft.email?.trim() || undefined,
       address: draft.address.trim(),
       state: draft.state,
+      lga: draft.lga?.trim() || undefined,
+      phoneCheckId: draft.phoneCheckId || undefined,
       palmVeinTemplate: draft.palmVeinTemplate,
       // Absent on agent shells still running the v1 bridge. The Edge Function
       // treats it as optional and falls back to the legacy column.
