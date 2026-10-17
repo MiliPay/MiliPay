@@ -20,12 +20,10 @@ ignores).
 | GitHub | https://github.com/Alashabeeb/BioPay, branch `main` |
 
 All migrations in `supabase/migrations` are applied to that Supabase
-project. Every function in `supabase/functions` is deployed **except**
-`pos`, the updated `process-payment`, the new `agent-upgrade`, and the
-updated `enrol-customer` and `onboard-merchant`: these wait
-for the founder to run `npx.cmd -y supabase@2.48.3 login`, then Claude runs
-`npx -y supabase@2.48.3 functions deploy <name> --project-ref hkhnduxbxfcqjgrdnqcz`
-for each.
+project, and every function in `supabase/functions` is deployed (last
+deploy 2026-10-17: `pos`, `process-payment`, `agent-upgrade`,
+`enrol-customer`, `onboard-merchant`, plus the admin, support and agent
+portals' hosting).
 
 ## Recently finished
 
@@ -112,7 +110,7 @@ two-factor sign-in for everyone.
    hosting once nothing points at them (only with the founder's OK).
 7. Write the architecture document for the team or investors.
 
-## POS terminal app (built 2026-10-16, not yet deployed)
+## POS terminal app (built 2026-10-16; backend deployed 2026-10-17, app not yet built for the terminal)
 
 From `merchant-portal/design_handoff_pos`: a new Expo app, `pos-app/`, for
 the HF-HP605PV palm-vein terminal. Every screen in the design is built.
@@ -141,7 +139,7 @@ the HF-HP605PV palm-vein terminal. Every screen in the design is built.
 - **Cashiers:** the owner is created at first login. There's no screen yet
   to add more cashiers (merchant portal or admin).
 
-## Agent portal redesign (built 2026-10-17, not yet deployed)
+## Agent portal redesign (built and deployed 2026-10-17)
 
 From `agent-portal/design_handoff_agent`; plan in
 [docs/plans/agent-portal.md](plans/agent-portal.md).
@@ -181,10 +179,9 @@ From `agent-portal/design_handoff_agent`; plan in
   `tests/agent-registration.test.ts`.
 - The NIMC photo slot is a placeholder: the identity provider doesn't
   return a photo yet. Bank name lookup works only when Mono's key is set.
-- **Deploy together:** the new `enrol-customer` refuses agents who don't
-  send a phone check, which the live agent portal doesn't yet. Deploy
-  `agent-upgrade`, `enrol-customer` and `onboard-merchant`, then
-  immediately build `agent-portal` and deploy `--only hosting:agent`.
+- **Deploy together:** `enrol-customer` refuses agents who don't send a
+  phone check, so a change to that rule and the agent portal go live
+  together (as on 2026-10-17).
 
 ## Other open items
 
@@ -215,7 +212,11 @@ From `agent-portal/design_handoff_agent`; plan in
   `npx.cmd -y firebase-tools@13.29.1 login`, then deploy with
   `--only hosting:<website|admin|agent|service>`. Build each app first.
 - **GitHub push** needs the `Alashabeeb` account signed in (`gh auth status`).
-- **Supabase CLI** isn't installed; migrations and functions have been
+- **Supabase CLI:** not installed globally. Log in with
+  `npx.cmd -y supabase@2.121.0 login`, then deploy with
+  `npx -y supabase@2.121.0 functions deploy <name> --project-ref <ref> --use-api`
+  (no Docker needed). Older CLIs such as 2.48.3 refuse this repo's
+  `config.toml` ("'auth' has invalid keys: phone"). Migrations have been
   applied through Claude's Supabase connector.
 - **New tables need `GRANT ... TO service_role`** explicitly in this
   project, or Edge Functions are refused. See
