@@ -17,7 +17,9 @@ ignores).
 | Agent portal | https://milipay-agentportal.web.app |
 | Supabase (dev today, see the plan below) | project `MiliPay`, ref `hkhnduxbxfcqjgrdnqcz`, eu-central-1, on the founder's personal account |
 | Firebase hosting | project `aniyu-b841b` (shared with another product, AniYu) |
-| GitHub | https://github.com/Alashabeeb/MiliPay, branch `main` |
+| GitHub | https://github.com/MiliPay/MiliPay (organisation `MiliPay`), branch `main` |
+| Expo | organisation `milipayltd`, project `biopay` |
+| Firebase (MiliPay, empty for now) | project `milipay-f2459` |
 
 All migrations in `supabase/migrations` are applied to that Supabase
 project, and every function in `supabase/functions` is deployed (last
@@ -76,19 +78,40 @@ to accounts MiliPay owns**, none on personal accounts.
   reads), Supabase read replicas, a queue for bill-payment fulfilment, and
   only if Supabase becomes the limit, PostgreSQL on AWS with load balancers.
 
+### Production must be hosted in Nigeria (found 2026-10-19)
+
+A CBN circular of 15 June 2026 requires payment transaction data
+generated in Nigeria to be processed and stored in Nigeria by
+**1 January 2027**. It binds licensed banks, switches and payment
+providers, and reaches fintechs through their licensed partners.
+Supabase's hosted cloud has no Nigerian region, so **production can't go
+on hosted Supabase**. Dev and staging hold only test data and can stay on
+hosted Supabase (free).
+
+Proposed, not yet decided: run **self-hosted Supabase** (open source, so
+sign-in, database rules, Edge Functions and realtime keep working without
+code changes) on Nigerian infrastructure, e.g. a Lagos data centre (MDXi,
+Rack Centre, Galaxy Backbone, Layer3, Cloudflex) or the AWS Lagos Local
+Zone. Before choosing: a Nigerian fintech lawyer reads the circular itself
+(scope, offshore backups, whether MiliPay is bound directly or through
+partners), and the founder picks the provider. This replaces the paid
+hosted production project in the plan above.
+
 ### Waiting on the founder
 
 Create every account with a MiliPay company email, at least two owners, and
 two-factor sign-in for everyone.
 
-1. **GitHub:** create a MiliPay organisation, then transfer
-   `Alashabeeb/MiliPay` into it (repo Settings › Transfer ownership).
-2. **Supabase:** a paid organisation with **milipay-production**, and a
-   free organisation with **milipay-development** and **milipay-staging**.
-   Same region for all three, nearest Nigeria. Billing on a company card.
-3. **Firebase:** a MiliPay project under the company Google account (two
-   projects if you want staging hosting separate from production).
-4. **Expo:** a MiliPay organisation; transfer the app's Expo project into it.
+1. ~~GitHub~~ done 2026-10-19: org `MiliPay`, repo
+   https://github.com/MiliPay/MiliPay.
+2. **Supabase:** a free organisation ("MiliPay Dev") with
+   **milipay-development** and **milipay-staging**, both in London
+   (eu-west-2). Production is on hold: see "Production must be hosted in
+   Nigeria" above.
+3. ~~Firebase~~ done 2026-10-19: project `milipay-f2459` under the
+   company Google account. Nothing is hosted there yet.
+4. ~~Expo~~ done 2026-10-19: organisation `milipayltd`, project `biopay`
+   (same projectId), and `owner` in `mobile-app/app.json` updated.
 5. Give Claude access: invite your personal accounts into the MiliPay
    organisations, or reconnect Claude's Supabase connector and sign in to
    Firebase and GitHub with the company accounts.
@@ -104,10 +127,10 @@ two-factor sign-in for everyone.
 1. Apply all migrations to development and staging, check them, then
    production.
 2. Deploy every Edge Function to all three.
-3. Point each app and portal at the right environment per build, and the
-   repo at the MiliPay GitHub remote.
-4. Move hosting to MiliPay Firebase and set up the Firebase push key in
-   Expo.
+3. Point each app and portal at the right environment per build. (The
+   repo already points at the MiliPay GitHub remote.)
+4. Move hosting to MiliPay Firebase (`milipay-f2459`; `.firebaserc` still
+   says `aniyu-b841b` until then) and set up the Firebase push key in Expo.
 5. Add GitHub Actions: staging on merge, production on approval.
 6. Retire the personal Supabase project and the shared `aniyu-b841b`
    hosting once nothing points at them (only with the founder's OK).
@@ -220,7 +243,9 @@ From `agent-portal/design_handoff_agent`; plan in
 - **Firebase CLI** isn't installed globally. Use
   `npx.cmd -y firebase-tools@13.29.1 login`, then deploy with
   `--only hosting:<website|admin|agent|service>`. Build each app first.
-- **GitHub push** needs the `Alashabeeb` account signed in (`gh auth status`).
+- **GitHub push** needs an account with write access to the `MiliPay`
+  organisation. The first push on a new machine opens a browser sign-in
+  (Git Credential Manager); run it yourself, then Claude can push.
 - **Supabase CLI:** not installed globally. Log in with
   `npx.cmd -y supabase@2.121.0 login`, then deploy with
   `npx -y supabase@2.121.0 functions deploy <name> --project-ref <ref> --use-api`

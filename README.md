@@ -424,8 +424,8 @@ endpoint declines every transaction — but nothing will authorise until a match
 ### Install
 
 ```bash
-git clone https://github.com/Alashabeeb/BioPay.git
-cd BioPay
+git clone https://github.com/MiliPay/MiliPay.git
+cd MiliPay
 npm install
 ```
 

@@ -68,7 +68,7 @@
         "projectId": "4b20c2a7-4c6e-4f04-8f8a-143b6edb139c"
       }
     },
-    "owner": "b.stallon",
+    "owner": "milipayltd",
     "description": "Pay with your palm. Airtime, data, electricity and TV, paid straight from your bank account.",
     "scheme": "milipay",
     "primaryColor": "#00C896",
