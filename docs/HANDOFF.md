@@ -26,7 +26,9 @@ ignores).
 All migrations in `supabase/migrations` are applied to all three Supabase
 projects, and every function in `supabase/functions` is deployed to all
 three (original project: last deploy 2026-10-17; development and staging:
-everything on 2026-10-19).
+everything on 2026-10-19). Admin, agent and support portal hosting last
+deployed 2026-10-19 (staff profile editing); the website on 2026-10-17 or
+earlier.
 
 ## Development and staging (set up 2026-10-19)
 
@@ -104,10 +106,10 @@ everything on 2026-10-19).
   Admin › Staff ("Profile changes waiting for you", with a Staff badge);
   approve and reject both ask to confirm, reject needs a reason, all of it
   is audited. Migration `20261019090000_staff_profile_changes.sql` is on
-  development and staging only: **apply it to the live project before
-  deploying the portals there**, or My profile and Settings fail to load.
-  Tests: `tests/staff-profile-changes.test.ts`; the rules were also run on
-  the development database in a rolled-back transaction.
+  all three projects (the founder ran it in the live project's SQL editor),
+  and the admin, agent and support portals were deployed with it on
+  2026-10-19. Tests: `tests/staff-profile-changes.test.ts`; the rules were
+  also run on the development database in a rolled-back transaction.
 - Removed the July 2026 planning draft from the repo root
   (`milipay_doc.txt` and its `.docx`); the current company documents are
   in `Claude outputs/`.
@@ -322,7 +324,10 @@ From `agent-portal/design_handoff_agent`; plan in
   `npx -y supabase@2.121.0 functions deploy <name> --project-ref <ref> --use-api`
   (no Docker needed). Older CLIs such as 2.48.3 refuse this repo's
   `config.toml` ("'auth' has invalid keys: phone"). Migrations go in with
-  `db push --linked` (see "Development and staging"). Claude's Supabase
+  `db push --linked` (see "Development and staging"), **except on the live
+  project**: its history was recorded by the connector under other version
+  numbers, so `db push` refuses there. Run a new migration file in its SQL
+  editor (or through the connector) instead; never "repair" its history. Claude's Supabase
   connector can be granted one organisation at a time; it's on "MiliPay
   Dev" since 2026-10-19.
 - **Dependencies:** run `npm.cmd install` at the root and
