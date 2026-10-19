@@ -3,6 +3,7 @@ import { AuthProvider } from "@milipay/shared/features/auth/AuthContext";
 import { ProtectedRoute } from "@milipay/shared/components/layout/ProtectedRoute";
 import LoginPage from "@milipay/shared/pages/login/MerchantLoginPage";
 import { MerchantLayout } from "@/components/MerchantLayout";
+import { MerchantSecondStep } from "@/components/MerchantSecondStep";
 import MerchantDashboardPage from "@/pages/MerchantDashboardPage";
 import MerchantTransactionsPage from "@/pages/MerchantTransactionsPage";
 import MerchantTerminalsPage from "@/pages/MerchantTerminalsPage";
@@ -17,7 +18,10 @@ export default function App() {
           <Route
             element={
               <ProtectedRoute>
-                <MerchantLayout />
+                {/* The code after the password; the database enforces it too. */}
+                <MerchantSecondStep>
+                  <MerchantLayout />
+                </MerchantSecondStep>
               </ProtectedRoute>
             }
           >

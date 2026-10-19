@@ -119,7 +119,9 @@ describe("pos function", () => {
         settlement_schedule: "instant", settlement_bank_name: "GTBank", settlement_account_number: "0123454410",
         director_name: "Tunde Adebayo", director_phone: "08031234567", email: "owner@lekkifresh.ng",
       }],
-      pos_terminals: [{ id: T, terminal_id: "TRM-2041", merchant_id: M, device_serial_number: "MP-P5-00921", is_active: true, terminal_api_key_hash: null, sms_receipts: true }],
+      // Already paired with this merchant; a new terminal is tested below.
+      pos_terminals: [{ id: T, terminal_id: "TRM-2041", merchant_id: M, device_serial_number: "MP-P5-00921", is_active: true, terminal_api_key_hash: null, sms_receipts: true, paired_merchant_id: M }],
+      pos_pairing_codes: [],
       pos_cashiers: [],
       pos_refunds: [],
       transactions: [],
@@ -252,5 +254,56 @@ describe("pos function", () => {
     expect(sent[0]).toMatch(/^MiliPay receipt: you paid ₦4,500\.00 at Lekki Fresh Mart\./);
     await call("/settings", { token, session, body: { smsReceipts: false } });
     expect((await call("/receipt/sms", { token, session, body: { reference: ref } })).body.code).toBe("SMS_OFF");
+  });
+
+  describe("a terminal not yet paired with this merchant (2026-10-20)", () => {
+    const fresh = () => {
+      db.table("pos_terminals")[0].paired_merchant_id = null;
+    };
+    const codeFrom = (text: string) => text.match(/(\d{6})/)![1];
+
+    it("the password alone isn't enough: a code goes to the merchant's phone, then it pairs", async () => {
+      fresh();
+      const first = await call("/login", { body: LOGIN });
+      expect(first.status).toBe(200);
+      expect(first.body).toMatchObject({ step: "code", sentTo: "+234 803 123 4567" });
+      expect(first.body.token).toBeUndefined();
+      expect(sent.at(-1)).toMatch(/^Your MiliPay terminal code is \d{6}\. Someone is setting up a new POS terminal/);
+      expect(db.table("pos_terminals")[0].terminal_api_key_hash).toBeNull();
+      // The code is stored only as a keyed hash.
+      expect(JSON.stringify(db.table("pos_pairing_codes"))).not.toContain(codeFrom(sent.at(-1)!));
+
+      const done = await call("/login/verify", { body: { pairingId: first.body.pairingId, code: codeFrom(sent.at(-1)!), serial: LOGIN.serial } });
+      expect(done.status).toBe(200);
+      expect(done.body.token).toBeTruthy();
+      expect(db.table("pos_terminals")[0].paired_merchant_id).toBe(M);
+      // Paired now: the next login needs no code.
+      expect((await call("/login", { body: LOGIN })).body.token).toBeTruthy();
+    });
+
+    it("another device can't finish the pairing, wrong codes run out, and a code works once", async () => {
+      fresh();
+      const first = await call("/login", { body: LOGIN });
+      const code = codeFrom(sent.at(-1)!);
+      expect((await call("/login/verify", { body: { pairingId: first.body.pairingId, code, serial: "OTHER-DEVICE" } })).status).toBe(404);
+      const wrongCode = code === "000000" ? "111111" : "000000";
+      for (let i = 0; i < 4; i++) {
+        expect((await call("/login/verify", { body: { pairingId: first.body.pairingId, code: wrongCode, serial: LOGIN.serial } })).body.code).toBe("CODE_INCORRECT");
+      }
+      expect((await call("/login/verify", { body: { pairingId: first.body.pairingId, code: wrongCode, serial: LOGIN.serial } })).body.code).toBe("CODE_CLOSED");
+      expect((await call("/login/verify", { body: { pairingId: first.body.pairingId, code, serial: LOGIN.serial } })).body.code).toBe("CODE_CLOSED");
+      expect(db.table("pos_terminals")[0].paired_merchant_id).toBeNull();
+    });
+
+    it("a terminal moved from another merchant needs the code again", async () => {
+      db.table("pos_terminals")[0].paired_merchant_id = "99999999-9999-4999-8999-999999999999";
+      expect((await call("/login", { body: LOGIN })).body.step).toBe("code");
+    });
+
+    it("a wrong password still sends nothing", async () => {
+      fresh();
+      await call("/login", { body: { ...LOGIN, password: "nope" } });
+      expect(sent).toEqual([]);
+    });
   });
 });

@@ -47,6 +47,8 @@ export interface Caller {
   email: string | null;
   /** Assurance level of this session: "aal2" once a second factor passed. */
   aal: string | null;
+  /** This sign-in session (the JWT's session_id), for checks bound to one session. */
+  sessionId: string | null;
 }
 
 /** The claims of a JWT the auth server has already verified. */
@@ -89,8 +91,15 @@ export async function requireCaller(req: Request): Promise<Caller> {
     throw new ApiError("Invalid or expired session", 401, "UNAUTHENTICATED");
   }
 
-  const aal = jwtClaims(token).aal;
-  return { id: data.user.id, email: data.user.email ?? null, aal: typeof aal === "string" ? aal : null };
+  const claims = jwtClaims(token);
+  const aal = claims.aal;
+  const sessionId = claims.session_id;
+  return {
+    id: data.user.id,
+    email: data.user.email ?? null,
+    aal: typeof aal === "string" ? aal : null,
+    sessionId: typeof sessionId === "string" ? sessionId : null,
+  };
 }
 
 export type StaffRole = "agent" | "support" | "admin" | "super_admin";

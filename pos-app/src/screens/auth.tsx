@@ -54,6 +54,10 @@ export function SignIn() {
   const [show, setShow] = useState(false);
   const [err, setErr] = useState("");
   const ready = phone.replace(/\D/g, "").length >= 10 && pass.length >= 1;
+  // A terminal not yet paired with this merchant: the code sent to the merchant's phone.
+  const [pairing, setPairing] = useState<{ id: string; sentTo: string } | null>(null);
+  const [code, setCode] = useState("");
+  const [note, setNote] = useState("");
 
   const submit = async () => {
     if (!ready) return;
@@ -61,12 +65,87 @@ export function SignIn() {
     if (!d) return setErr("Enter the 10 digits after +234.");
     try {
       const res = await s.wait("Signing in", async () => api.login(d, pass, await deviceSerial()));
+      if ("step" in res) {
+        setPairing({ id: res.pairingId, sentTo: res.sentTo });
+        setCode("");
+        setNote("");
+        return;
+      }
       await s.signedIn(res.token, res.setupGrant);
       s.go("setpin");
     } catch (e) {
       setErr(e instanceof PosError ? e.message : "Couldn't sign in. Try again.");
     }
   };
+
+  const verify = async () => {
+    if (!pairing || code.length !== 6) return;
+    try {
+      const res = await s.wait("Checking the code", async () => api.verifyPairing(pairing.id, code, await deviceSerial()));
+      await s.signedIn(res.token, res.setupGrant);
+      s.go("setpin");
+    } catch (e) {
+      setCode("");
+      if (e instanceof PosError && e.code === "CODE_CLOSED") {
+        setPairing(null);
+        return setErr(e.message);
+      }
+      setNote(e instanceof PosError ? e.message : "Couldn't check the code. Try again.");
+    }
+  };
+
+  const resend = async (channel: "sms" | "call") => {
+    if (!pairing) return;
+    try {
+      await s.wait(channel === "call" ? "Calling" : "Sending", async () => api.resendPairing(pairing.id, await deviceSerial(), channel));
+      setCode("");
+      setNote(channel === "call" ? "We're calling the account's phone. The code is read out twice." : "A new code is on its way.");
+    } catch (e) {
+      setNote(e instanceof PosError ? e.message : "Couldn't send a new code. Try again.");
+    }
+  };
+
+  if (pairing) {
+    return (
+      <Enter style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 16, gap: 14 }}>
+        <View style={{ alignItems: "center", gap: 6, marginBottom: 6 }}>
+          <Logo size={64} />
+          <T size={22} weight="800" center style={{ marginTop: 6 }}>Confirm this terminal</T>
+          <T size={13} color={t.muted} center>
+            {`This terminal is new to your account, so we sent a 6-digit code to ${pairing.sentTo}. Enter it to switch the terminal on.`}
+          </T>
+        </View>
+        <TextInput
+          value={code}
+          onChangeText={(v) => {
+            setCode(v.replace(/\D/g, "").slice(0, 6));
+            setNote("");
+          }}
+          inputMode="numeric"
+          placeholder="000000"
+          placeholderTextColor={t.faint}
+          accessibilityLabel="Code from the account's phone"
+          autoFocus
+          onSubmitEditing={verify}
+          style={{ height: 60, borderRadius: 16, backgroundColor: t.card, borderWidth: 1.5, borderColor: t.line, textAlign: "center", fontSize: 26, letterSpacing: 8, color: t.text, fontFamily: "Inter_700" }}
+        />
+        {note ? <T size={13} color={t.muted} center>{note}</T> : null}
+        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+          <Tap onPress={() => void resend("sms")} label="Send the code again">
+            <T size={13} weight="600" color={t.brandText}>Send again</T>
+          </Tap>
+          <Tap onPress={() => void resend("call")} label="Call me with the code instead">
+            <T size={13} weight="600" color={t.brandText}>Call me instead</T>
+          </Tap>
+        </View>
+        <View style={{ flex: 1 }} />
+        <Btn label="Confirm" onPress={verify} disabled={code.length !== 6} height={56} />
+        <Tap onPress={() => setPairing(null)} label="Back to log in">
+          <T size={12} color={t.muted} center>Back</T>
+        </Tap>
+      </Enter>
+    );
+  }
 
   const field = { height: 52, borderRadius: 16, backgroundColor: t.card, borderWidth: 1.5, borderColor: t.line, flexDirection: "row" as const, alignItems: "center" as const, gap: 10, paddingHorizontal: 14 };
   const input = { flex: 1, minWidth: 0, height: "100%" as const, fontSize: 16, color: t.text, fontFamily: "Inter_600" };

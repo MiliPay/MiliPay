@@ -2,7 +2,10 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { ApiError, adminClient, corsHeaders, handler, json } from "../_shared/auth.ts";
 import { loginPhone } from "../_shared/login-code.ts";
-import { dispatchSms } from "../_shared/notify.ts";
+import { consoleDeliveryAllowed, dispatchSms } from "../_shared/notify.ts";
+import { CHANNEL_UNAVAILABLE, pickChannel, sendCodeVia, type CodeChannel } from "../_shared/code-channels.ts";
+import { codeFrom } from "../_shared/contact-change.ts";
+import { sentTo } from "../_shared/login-code.ts";
 import { palmCheckout } from "../_shared/palm-checkout.ts";
 import {
   CASHIER_SESSION_HOURS,
@@ -26,7 +29,12 @@ import {
  * (X-Cashier-Session), signed, with no table behind it. Payments go through
  * the same palm checkout as process-payment.
  *
- *   POST /login           phone, password, serial  -> device token, setup grant
+ *   POST /login           phone, password, serial  -> device token, setup grant;
+ *                         or, for a terminal not yet paired with this
+ *                         merchant, { step: "code" }: a 6-digit code goes
+ *                         to the merchant's phone (SMS, call or WhatsApp)
+ *   POST /login/verify    pairingId, code, serial  -> device token, setup grant
+ *   POST /login/resend    pairingId, serial, channel -> a fresh code
  *   POST /set-pin         setup grant, pin         -> owner's PIN; session
  *   GET  /me                                       -> terminal, merchant, cashiers
  *   POST /unlock          cashierId, pin           -> session
@@ -227,7 +235,7 @@ async function login(admin: SupabaseClient, req: Request) {
 
   const { data: t } = await admin
     .from("pos_terminals")
-    .select("id, terminal_id, merchant_id, device_serial_number, is_active, sms_receipts")
+    .select("id, terminal_id, merchant_id, device_serial_number, is_active, sms_receipts, paired_merchant_id")
     .eq("merchant_id", m.id)
     .eq("device_serial_number", serial)
     .maybeSingle();
@@ -240,11 +248,127 @@ async function login(admin: SupabaseClient, req: Request) {
   }
   if (!t.is_active) throw new ApiError("This terminal has been switched off by MiliPay. Call 0700 MILIPAY.", 403, "TERMINAL_INACTIVE");
 
+  // A terminal not yet paired with this merchant needs the code sent to the
+  // merchant's phone too: a stolen password alone can't switch one on.
+  if (t.paired_merchant_id !== m.id) return startPairing(admin, t.id, m.id, serial, phone, b.channel);
+  return pair(admin, t.id, m);
+}
+
+// ── Pairing a new terminal: a code to the merchant's phone ─────────────────
+
+const PAIR_CODE_TTL_MS = 10 * 60_000;
+const PAIR_MAX_ATTEMPTS = 5;
+const PAIR_MAX_RESENDS = 3;
+const PAIR_RESEND_GAP_MS = 30_000;
+const PAIR_NOT_SENT = "We couldn't send the code that way right now. Try again shortly, or choose another way.";
+
+function pairChannel(value: unknown): CodeChannel {
+  const c = pickChannel(value, "prove_phone", Deno.env, consoleDeliveryAllowed());
+  if (!c) throw new ApiError(CHANNEL_UNAVAILABLE, 400, "CHANNEL_UNAVAILABLE");
+  return c;
+}
+
+const pairingText = (code: string) =>
+  `Your MiliPay terminal code is ${code}. Someone is setting up a new POS terminal on your account. If that isn't you, don't share it and call 0700 MILIPAY.`;
+
+async function sendPairingCode(rowId: string, phone: string, channel: CodeChannel): Promise<string> {
+  const code = codeFrom(crypto.getRandomValues(new Uint32Array(1))[0]);
+  if (!(await sendCodeVia(channel, { phone }, code, { text: pairingText(code), subject: "Your MiliPay terminal code" }))) {
+    throw new ApiError(PAIR_NOT_SENT, 503, "CODE_NOT_SENT");
+  }
+  return hmac(`pos-pair:${rowId}:${code}`);
+}
+
+async function startPairing(admin: SupabaseClient, terminalId: string, merchantId: string, serial: string, phone: string, channelValue: unknown) {
+  const channel = pairChannel(channelValue);
+  await admin
+    .from("pos_pairing_codes")
+    .update({ cancelled_at: new Date().toISOString() })
+    .eq("terminal_id", terminalId)
+    .is("consumed_at", null)
+    .is("cancelled_at", null);
+  const { data: row, error } = await admin
+    .from("pos_pairing_codes")
+    .insert({ terminal_id: terminalId, merchant_id: merchantId, serial, phone, expires_at: new Date(Date.now() + PAIR_CODE_TTL_MS).toISOString() })
+    .select("id")
+    .single();
+  if (error || !row) throw new ApiError("Couldn't start setting up this terminal. Try again.", 503, "UNAVAILABLE");
+  const hash = await sendPairingCode(row.id, phone, channel);
+  await admin.from("pos_pairing_codes").update({ code_hash: hash, sent_at: new Date().toISOString() }).eq("id", row.id);
+  return json({ success: true, step: "code", pairingId: row.id, channel, sentTo: sentTo(phone) });
+}
+
+async function loadPairing(admin: SupabaseClient, id: unknown, serial: unknown) {
+  if (typeof id !== "string" || id.length === 0 || id.length > 64) throw new ApiError("Log in again.", 400, "BAD_REQUEST");
+  const { data } = await admin.from("pos_pairing_codes").select("*").eq("id", id).maybeSingle();
+  // Only this terminal (by serial) can finish its own pairing.
+  if (!data || typeof serial !== "string" || data.serial !== serial.trim().slice(0, 80)) {
+    throw new ApiError("Log in again.", 404, "NOT_FOUND");
+  }
+  if (data.consumed_at || data.cancelled_at) throw new ApiError("This code is no longer valid. Log in again.", 410, "CODE_CLOSED");
+  if (new Date(data.expires_at).getTime() <= Date.now()) throw new ApiError("That code has expired. Log in again.", 410, "CODE_CLOSED");
+  return data as Record<string, any>;
+}
+
+async function pairVerify(admin: SupabaseClient, req: Request) {
+  const b = await body(req);
+  await rateLimit(admin, `pos:pair-verify:${callerAddress(req)}`, 30, 3600);
+  const row = await loadPairing(admin, b.pairingId, b.serial);
+  const code = typeof b.code === "string" ? b.code.trim() : "";
+  if (!/^\d{6}$/.test(code)) throw new ApiError("Enter all 6 digits of the code.", 400, "BAD_CODE");
+  if (!row.code_hash || !sameHash(row.code_hash, await hmac(`pos-pair:${row.id}:${code}`))) {
+    const attempts = (Number(row.attempts) || 0) + 1;
+    await admin
+      .from("pos_pairing_codes")
+      .update({ attempts, ...(attempts >= PAIR_MAX_ATTEMPTS ? { cancelled_at: new Date().toISOString() } : {}) })
+      .eq("id", row.id);
+    if (attempts >= PAIR_MAX_ATTEMPTS) throw new ApiError("Too many wrong codes. Log in again.", 410, "CODE_CLOSED");
+    throw new ApiError("That code isn't right. Check it and try again.", 400, "CODE_INCORRECT", { attemptsLeft: PAIR_MAX_ATTEMPTS - attempts });
+  }
+  // Used once, first: a second request with the same code gets nothing.
+  const { data: claimed } = await admin
+    .from("pos_pairing_codes")
+    .update({ consumed_at: new Date().toISOString() })
+    .eq("id", row.id)
+    .is("consumed_at", null)
+    .select("id")
+    .maybeSingle();
+  if (!claimed) throw new ApiError("This code was already used. Log in again.", 410, "CODE_CLOSED");
+
+  const { data: m } = await admin.from("merchants").select(MERCHANT_COLS).eq("id", row.merchant_id).maybeSingle();
+  const { data: t } = await admin.from("pos_terminals").select("id, merchant_id, is_active").eq("id", row.terminal_id).maybeSingle();
+  if (!m || m.status !== "active" || !t || t.merchant_id !== m.id || !t.is_active) {
+    throw new ApiError("This terminal can't be set up for this account right now. Call 0700 MILIPAY.", 403, "TERMINAL_NOT_REGISTERED");
+  }
+  return pair(admin, t.id, m);
+}
+
+async function pairResend(admin: SupabaseClient, req: Request) {
+  const b = await body(req);
+  await rateLimit(admin, `pos:pair-resend:${callerAddress(req)}`, 20, 3600);
+  const row = await loadPairing(admin, b.pairingId, b.serial);
+  const resends = Number(row.resends) || 0;
+  if (resends >= PAIR_MAX_RESENDS) throw new ApiError("You've asked for a new code too many times. Log in again.", 429, "RESEND_LIMIT");
+  if (row.sent_at && Date.now() - new Date(row.sent_at).getTime() < PAIR_RESEND_GAP_MS) {
+    throw new ApiError("Wait a few seconds before asking for another code.", 429, "RESEND_TOO_SOON");
+  }
+  const channel = pairChannel(b.channel);
+  const hash = await sendPairingCode(row.id, row.phone, channel);
+  await admin
+    .from("pos_pairing_codes")
+    .update({ code_hash: hash, sent_at: new Date().toISOString(), resends: resends + 1, expires_at: new Date(Date.now() + PAIR_CODE_TTL_MS).toISOString() })
+    .eq("id", row.id);
+  return json({ success: true, channel, sentTo: sentTo(row.phone) });
+}
+
+/** Issue the device token: this terminal is now paired with this merchant. */
+async function pair(admin: SupabaseClient, terminalId: string, m: Record<string, any>) {
+  const t = { id: terminalId };
   // A new device token each login; the old one stops working.
   const raw = Array.from(crypto.getRandomValues(new Uint8Array(32)), (x) => x.toString(16).padStart(2, "0")).join("");
   await admin
     .from("pos_terminals")
-    .update({ terminal_api_key_hash: await hmac(`pos-device:${t.id}:${raw}`), paired_at: new Date().toISOString() })
+    .update({ terminal_api_key_hash: await hmac(`pos-device:${t.id}:${raw}`), paired_at: new Date().toISOString(), paired_merchant_id: m.id })
     .eq("id", t.id);
 
   // The owner is the first supervisor. Created once, at the first login.
@@ -469,6 +593,8 @@ const routes = handler(async (req) => {
   const admin = adminClient();
 
   if (route === "/login" && req.method === "POST") return login(admin, req);
+  if (route === "/login/verify" && req.method === "POST") return pairVerify(admin, req);
+  if (route === "/login/resend" && req.method === "POST") return pairResend(admin, req);
 
   const { terminal, merchant } = await requireTerminal(admin, req);
   switch (`${req.method} ${route}`) {

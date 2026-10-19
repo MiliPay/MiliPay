@@ -126,9 +126,28 @@ earlier.
   (items 7–8) unchanged: the founder is still deciding. Switches, per
   project: `TERMII_VOICE=on` once Termii activates voice for the account;
   `TERMII_WHATSAPP=on` with a WhatsApp sender; `RESEND_API_KEY` +
-  `EMAIL_FROM` for email. Migration `20261020090000_code_channels.sql` and
-  all functions: development only so far. Still to do: POS new-terminal
-  code (item 12) and the merchant portal's second step (item 13).
+  `EMAIL_FROM` for email.
+- **POS: a new terminal needs the merchant's code** (item 12). `pos`
+  `/login` answers `{ step: "code" }` when the terminal isn't paired with
+  this merchant (`pos_terminals.paired_merchant_id`: new, or moved from
+  another merchant); `/login/verify` and `/login/resend` finish it, bound to
+  the terminal's serial. Terminals already paired were carried over.
+  Migration `20261020100000_pos_pairing_code.sql`; `pos-app` sign-in has the
+  code screen ("Call me instead" too). Tests in `tests/pos.test.ts`.
+- **Merchant portal: a second step after the password** (item 13), code by
+  SMS, call or email to the account's own phone or sign-in email
+  (`merchant-code` function, `MerchantSecondStep` in the merchant portal).
+  **Enforced by the database**: restrictive policies on `merchants`,
+  `transactions` and `pos_terminals` hide everything from a merchant session
+  that hasn't passed (`merchant_second_step_ok`, bound to the JWT's
+  `session_id`); checked on development with a temporary merchant (0 rows
+  before, 1 after, 0 from another session). Merchants without the role in
+  their token got it. Migration `20261020110000_merchant_second_step.sql`.
+- All three code migrations and the functions are on **development only**.
+  Before staging or live: apply `20261020090000`, `20261020100000` and
+  `20261020110000` (live: through its SQL editor), deploy every function,
+  and ship the apps and portals with them (the merchant portal and POS app
+  must go out together with their functions).
 - **Termii status is real now** (Settings › Integrations): key accepted,
   balance, sender ID approved, plus "Text me a test" to your own phone.
   `TERMII_BASE_URL` is each account's own API host from the Termii

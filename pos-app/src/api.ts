@@ -35,9 +35,15 @@ export class PosError extends Error {
   }
 }
 
+export type Signed = { token: string; setupGrant: string; owner: { id: string; name: string } };
+/** A terminal not yet paired with this merchant: a code went to the merchant's phone. */
+export type NeedsCode = { step: "code"; pairingId: string; sentTo: string };
+
 export interface PosApi {
   demo: boolean;
-  login(phone: string, password: string, serial: string): Promise<{ token: string; setupGrant: string; owner: { id: string; name: string } }>;
+  login(phone: string, password: string, serial: string): Promise<Signed | NeedsCode>;
+  verifyPairing(pairingId: string, code: string, serial: string): Promise<Signed>;
+  resendPairing(pairingId: string, serial: string, channel: "sms" | "call"): Promise<{ sentTo: string }>;
   setPin(token: string, setupGrant: string, pin: string): Promise<Shift>;
   me(token: string): Promise<Me>;
   unlock(token: string, cashierId: string, pin: string): Promise<Shift>;
@@ -75,6 +81,8 @@ function live(base: string): PosApi {
   return {
     demo: false,
     login: (phone, password, serial) => call("/login", { body: { phone, password, serial } }),
+    verifyPairing: (pairingId, code, serial) => call("/login/verify", { body: { pairingId, code, serial } }),
+    resendPairing: (pairingId, serial, channel) => call("/login/resend", { body: { pairingId, serial, channel } }),
     setPin: (token, setupGrant, pin) => call("/set-pin", { token, body: { setupGrant, pin } }),
     me: (token) => call("/me", { token }),
     unlock: (token, cashierId, pin) => call("/unlock", { token, body: { cashierId, pin } }),
@@ -130,6 +138,12 @@ function demo(): PosApi {
       if (!/^[789][01]\d{8}$/.test(phone.replace(/\D/g, "").replace(/^0/, ""))) throw new PosError("Enter the 10 digits after +234.", 400, "BAD_PHONE");
       if (password === "wrong") throw new PosError("That phone number and password don't match.", 401, "BAD_LOGIN");
       return { token: "demo-terminal", setupGrant: "demo-grant", owner: { id: "c1", name: "Tunde" } };
+    },
+    async verifyPairing() {
+      return { token: "demo-terminal", setupGrant: "demo-grant", owner: { id: "c1", name: "Tunde" } };
+    },
+    async resendPairing() {
+      return { sentTo: "+234 803 123 4567" };
     },
     async setPin(_t, _g, pin) {
       await wait(1000);
