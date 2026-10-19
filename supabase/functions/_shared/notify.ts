@@ -6,7 +6,16 @@
  * channel succeeded so the customer row can record it for support.
  */
 
-const TERMII_SEND_URL = "https://api.ng.termii.com/api/sms/send";
+/**
+ * Each Termii account has its own API host, shown on the Termii dashboard
+ * (e.g. https://v3.api.termii.com). Set it as TERMII_BASE_URL; the old shared
+ * host is the fallback for accounts that still use it.
+ */
+export function termiiBaseUrl(raw: string | undefined = Deno.env.get("TERMII_BASE_URL")): string {
+  const value = (raw ?? "").trim().replace(/\/+$/, "");
+  if (!value) return "https://api.ng.termii.com";
+  return /^https?:\/\//i.test(value) ? value : `https://${value}`;
+}
 
 export type Channel = "whatsapp" | "sms" | "console";
 
@@ -50,8 +59,11 @@ export function termiiMsisdn(phone: string): string {
   return digits;
 }
 
+/** How a message leaves Termii: a text, a WhatsApp message, or a voice call reading it out. */
+export type TermiiRoute = Channel | "voice";
+
 async function sendViaTermii(
-  channel: Channel,
+  channel: TermiiRoute,
   phone: string,
   message: string,
 ): Promise<{ ok: boolean; detail: string }> {
@@ -65,7 +77,7 @@ async function sendViaTermii(
     : (Deno.env.get("TERMII_SMS_SENDER") ?? "MiliPay");
 
   try {
-    const response = await fetch(TERMII_SEND_URL, {
+    const response = await fetch(`${termiiBaseUrl()}/api/sms/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -73,8 +85,10 @@ async function sendViaTermii(
         from: senderId,
         sms: message,
         type: "plain",
-        // Termii routes WhatsApp through the same endpoint by channel name.
-        channel: channel === "whatsapp" ? "whatsapp" : "dnd",
+        // Termii routes WhatsApp and voice through the same endpoint by
+        // channel name; "dnd" is the transactional SMS route, which reaches
+        // numbers on Do-Not-Disturb.
+        channel: channel === "whatsapp" ? "whatsapp" : channel === "voice" ? "voice" : "dnd",
         api_key: apiKey,
       }),
     });
@@ -96,18 +110,131 @@ async function sendViaTermii(
   }
 }
 
+// ── Termii health (Settings › Integrations) ───────────────────────────────
+
+export type TermiiState =
+  | "off"             // no key
+  | "unreachable"     // network error or wrong host
+  | "key_rejected"    // Termii refused the key
+  | "sender_missing"  // no sender ID with our name on the account
+  | "sender_pending"  // registered, not yet approved
+  | "sender_blocked"
+  | "no_balance"
+  | "ok";
+
+export interface TermiiHealth {
+  state: TermiiState;
+  balance: number | null;
+  currency: string | null;
+  sender: string;
+  senderStatus: string | null;
+}
+
 /**
- * Try each configured channel in order and stop at the first success.
+ * What the balance and sender-ID answers mean. Pure, so it can be tested:
+ * `balance` and `senders` are the parsed bodies (null when the call failed),
+ * `balanceStatus` the HTTP status of the balance call (0 for no answer).
+ */
+export function classifyTermii(input: {
+  hasKey: boolean;
+  balanceStatus: number;
+  balance: { balance?: unknown; currency?: unknown } | null;
+  senders: { content?: { sender_id?: string; status?: string }[] } | null;
+  sender: string;
+}): TermiiHealth {
+  const base = { balance: null, currency: null, sender: input.sender, senderStatus: null };
+  if (!input.hasKey) return { state: "off", ...base };
+  if (input.balanceStatus === 0) return { state: "unreachable", ...base };
+  if (input.balanceStatus === 401 || input.balanceStatus === 403 || input.balanceStatus === 404 || !input.balance || input.balance.balance === undefined) {
+    return { state: input.balanceStatus === 404 ? "unreachable" : "key_rejected", ...base };
+  }
+  const balance = Number(input.balance.balance);
+  const currency = typeof input.balance.currency === "string" ? input.balance.currency : null;
+  const mine = (input.senders?.content ?? []).find((s) => (s.sender_id ?? "").toLowerCase() === input.sender.toLowerCase());
+  const senderStatus = mine?.status?.toLowerCase() ?? null;
+  const known = { balance: Number.isFinite(balance) ? balance : null, currency, sender: input.sender, senderStatus };
+  if (!mine) return { state: "sender_missing", ...known };
+  if (senderStatus === "pending") return { state: "sender_pending", ...known };
+  if (senderStatus === "blocked") return { state: "sender_blocked", ...known };
+  if (!(balance > 0)) return { state: "no_balance", ...known };
+  return { state: "ok", ...known };
+}
+
+/** Asks Termii for the balance and the SMS sender ID's status. Never returns the key. */
+export async function termiiHealth(): Promise<TermiiHealth> {
+  const apiKey = Deno.env.get("TERMII_API_KEY") ?? "";
+  const sender = Deno.env.get("TERMII_SMS_SENDER") ?? "MiliPay";
+  const host = termiiBaseUrl();
+  const key = encodeURIComponent(apiKey);
+  let balanceStatus = 0;
+  let balance = null;
+  let senders = null;
+  if (apiKey) {
+    try {
+      const r = await fetch(`${host}/api/get-balance?api_key=${key}`);
+      balanceStatus = r.status;
+      balance = await r.json().catch(() => null);
+    } catch {
+      balanceStatus = 0;
+    }
+    try {
+      const r = await fetch(`${host}/api/sender-id?api_key=${key}&name=${encodeURIComponent(sender)}`);
+      senders = r.ok ? await r.json().catch(() => null) : null;
+    } catch {
+      senders = null;
+    }
+  }
+  return classifyTermii({ hasKey: Boolean(apiKey), balanceStatus, balance, senders, sender });
+}
+
+/**
+ * One test SMS through Termii only (never the console fallback), so a
+ * success here means a real text left Termii. Returns Termii's own words
+ * on failure, which never contain the key.
+ */
+export async function sendTermiiTest(phone: string, message: string): Promise<{ ok: boolean; detail: string }> {
+  return await sendViaTermii("sms", phone, message);
+}
+
+/** One message over one Termii route, no fallback. For code-channels.ts. */
+export function sendTermii(route: "sms" | "voice" | "whatsapp", phone: string, message: string): Promise<{ ok: boolean; detail: string }> {
+  return sendViaTermii(route, phone, message);
+}
+
+/** The testing-only console channel is switched on (PASSWORD_DELIVERY_CHANNELS has "console"). */
+export function consoleDeliveryAllowed(): boolean {
+  return configuredChannels().includes("console");
+}
+
+/**
+ * A temporary password or one-time password the person isn't there to ask
+ * for (new staff, approved customer, new merchant, reset by an admin).
  *
  * Never throws: a failed dispatch must not roll back an approval that has
  * already minted an auth identity. The caller records the outcome and the
  * administrator can re-send.
  */
-export function dispatchCredential(
+export async function dispatchCredential(
   phone: string,
   message: string,
 ): Promise<DispatchResult> {
-  return dispatchVia(configuredChannels(), phone, message);
+  // A temporary password goes by SMS, and by WhatsApp too once it is
+  // switched on (TERMII_WHATSAPP=on): both, so it arrives whichever the
+  // person uses. The console channel is only a fallback where it is on.
+  const routes: Channel[] = ["sms", ...((Deno.env.get("TERMII_WHATSAPP") ?? "").trim().toLowerCase() === "on" ? ["whatsapp" as const] : [])];
+  const attempts: DispatchResult["attempts"] = [];
+  let first: Channel | null = null;
+  for (const channel of routes) {
+    const result = await sendViaTermii(channel, phone, message);
+    attempts.push({ channel, ...result });
+    if (result.ok && !first) first = channel;
+    if (!result.ok) console.warn(`[notify] ${channel} dispatch failed: ${result.detail}`);
+  }
+  if (!first && configuredChannels().includes("console")) {
+    attempts.push({ channel: "console", ...sendToConsole(phone, message) });
+    first = "console";
+  }
+  return { delivered: first !== null, channel: first, attempts };
 }
 
 /**

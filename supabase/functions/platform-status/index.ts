@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { adminClient, handler, json, requireCaller, requireStaffRole } from "../_shared/auth.ts";
 import { classifyGatewayUrl, classifyMonoKey, monoPaymentsSecret, resolveFulfilmentMode } from "../_shared/environment.ts";
 import { verificationMode } from "../_shared/identity.ts";
+import { sendTermiiTest, termiiHealth } from "../_shared/notify.ts";
+import { termiiCard } from "./termii.ts";
 
 /**
  * Settings › Integrations (design handoff): for each provider, whether it is
@@ -64,6 +66,19 @@ serve(handler(async (req) => {
   const admin = adminClient();
   await requireStaffRole(admin, caller, ["admin", "super_admin"]);
 
+  const body = await req.json().catch(() => ({}));
+  if (body?.action === "test_termii") {
+    // Only ever to the signed-in admin's own phone on their staff record.
+    const { data: me } = await admin.from("staff_profiles").select("phone, full_name").eq("id", caller.id).maybeSingle();
+    const phone = String(me?.phone ?? "");
+    if (!/^(\+234|0)[789][01]\d{8}$/.test(phone)) {
+      return json({ success: false, error: "Add your phone number in My profile first; the test goes there." }, 400);
+    }
+    const r = await sendTermiiTest(phone, `MiliPay test: Termii is sending messages for ${String(me?.full_name ?? "MiliPay")}. No action needed.`);
+    console.log(`[platform-status] Termii test to ${phone.slice(0, 4)}•••${phone.slice(-3)}: ${r.ok ? "sent" : r.detail}`);
+    return json({ success: true, sent: r.ok, detail: r.ok ? `Sent to ${phone.slice(0, 4)} ••• ${phone.slice(-4)}` : r.detail });
+  }
+
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   const { data: txs } = await admin
     .from("transactions")
@@ -102,15 +117,7 @@ serve(handler(async (req) => {
       metric: mono.key ? `${monoPaid.toLocaleString("en-NG")} paid of ${monoRows.length.toLocaleString("en-NG")} in 24h` : "No keys in server config",
     },
     providerCard("VTPass", "Airtime, data, bills", "zap", has("VTPASS_API_KEY") && has("VTPASS_SECRET_KEY") && has("VTPASS_BASE_URL"), vtpassLive, rows.filter((r) => r.provider === "vtpass")),
-    {
-      name: "Termii",
-      use: "SMS and WhatsApp codes",
-      icon: "message-square",
-      status: has("TERMII_API_KEY") ? "Set up" : "Not set up",
-      tone: has("TERMII_API_KEY") ? "ok" : "muted",
-      metric: has("TERMII_API_KEY") ? "Sends sign-in codes and staff logins" : "Codes print to the server log only",
-      mode: has("TERMII_API_KEY") ? "LIVE" : "OFF",
-    },
+    termiiCard(await termiiHealth()),
     {
       name: "Smile ID",
       use: "Selfie and NIN check (self sign-up)",

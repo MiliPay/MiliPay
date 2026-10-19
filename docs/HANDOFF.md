@@ -110,6 +110,29 @@ earlier.
   and the admin, agent and support portals were deployed with it on
   2026-10-19. Tests: `tests/staff-profile-changes.test.ts`; the rules were
   also run on the development database in a rolled-back transaction.
+- **One-time codes: the person picks how** (2026-10-20, agreed with the
+  founder item by item). SMS is the default (remembered on the phone); a
+  call reads the code out; email goes only to an address the customer has
+  proved (`customers.email_verified_at`, set by Me › Contact details and
+  cleared by any other email change); WhatsApp appears when it's set up.
+  Shared rules: `supabase/functions/_shared/code-channels.ts`
+  (`sign_in`/`password_reset` any way; `prove_phone`/`consent` phone ways
+  only). Sign-in by email answers the same whether or not the account has
+  one. `login-code` action `channels` tells the apps what to offer.
+  Where: sign-in, sign-up, password reset, contact change (now **asks for
+  the PIN first**), the agent's phone check and Tier 2 upgrade. **Admins
+  registering a customer must now check the phone too** (Contact step).
+  Temporary passwords go by SMS, plus WhatsApp once on. Support resends
+  (items 7–8) unchanged: the founder is still deciding. Switches, per
+  project: `TERMII_VOICE=on` once Termii activates voice for the account;
+  `TERMII_WHATSAPP=on` with a WhatsApp sender; `RESEND_API_KEY` +
+  `EMAIL_FROM` for email. Migration `20261020090000_code_channels.sql` and
+  all functions: development only so far. Still to do: POS new-terminal
+  code (item 12) and the merchant portal's second step (item 13).
+- **Termii status is real now** (Settings › Integrations): key accepted,
+  balance, sender ID approved, plus "Text me a test" to your own phone.
+  `TERMII_BASE_URL` is each account's own API host from the Termii
+  dashboard (the old shared host is the fallback).
 - Removed the July 2026 planning draft from the repo root
   (`milipay_doc.txt` and its `.docx`); the current company documents are
   in `Claude outputs/`.

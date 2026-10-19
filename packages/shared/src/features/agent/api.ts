@@ -1,4 +1,5 @@
 import { supabase } from "@milipay/shared/lib/supabase";
+import type { CodeChannel } from "@milipay/shared/features/codeChannels";
 import type { Tone } from "@milipay/shared/components/ui/StatusBadge";
 
 /**
@@ -114,16 +115,19 @@ async function upgrade<T>(body: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
-export const sendUpgradeCode = (customerId: string) =>
-  upgrade<{ requestId: string; sentTo: string }>({ action: "request", customerId });
-export const resendUpgradeCode = (requestId: string) => upgrade<{ sentTo: string }>({ action: "resend", requestId });
+export const sendUpgradeCode = (customerId: string, channel: CodeChannel = "sms") =>
+  upgrade<{ requestId: string; sentTo: string }>({ action: "request", customerId, channel });
+export const resendUpgradeCode = (requestId: string, channel: CodeChannel = "sms") =>
+  upgrade<{ sentTo: string }>({ action: "resend", requestId, channel });
 export const verifyUpgradeCode = (requestId: string, code: string) => upgrade<{ success: true }>({ action: "verify", requestId, code });
 export const completeUpgrade = (requestId: string, palmVeinTemplate: string, quality: number) =>
   upgrade<{ customerId: string; tier: 2; maxSingle: number; maxDaily: number }>({ action: "complete", requestId, palmVeinTemplate, quality });
 
-/** Register customer, step 1: text a code to the customer's phone. */
-export const sendPhoneCheck = (phone: string) => upgrade<{ checkId: string }>({ action: "phone_request", phone });
-export const resendPhoneCheck = (checkId: string) => upgrade<{ success: true }>({ action: "phone_resend", checkId });
+/** Register customer, step 1: send a code to the customer's phone, the way they choose (SMS, call, WhatsApp). */
+export const sendPhoneCheck = (phone: string, channel: CodeChannel = "sms") =>
+  upgrade<{ checkId: string }>({ action: "phone_request", phone, channel });
+export const resendPhoneCheck = (checkId: string, channel: CodeChannel = "sms") =>
+  upgrade<{ success: true }>({ action: "phone_resend", checkId, channel });
 export const verifyPhoneCheck = (checkId: string, code: string) => upgrade<{ success: true }>({ action: "phone_verify", checkId, code });
 
 /** "1234 567 8901": the NIN as the design shows it (4-3-4). */

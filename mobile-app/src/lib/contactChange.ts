@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import type { CodeChannel } from './codeChannelView';
 
 /**
  * Thin client for the `contact-change` Edge Function: changing email or phone
@@ -40,15 +41,28 @@ const message = (body: Record<string, any>, fallback: string) =>
 
 export type StartResult =
   | { ok: true; requestId: string; steps: ContactStep[] }
-  | { ok: false; message: string };
+  /** `pinWrong`: ask for the PIN again; nothing was sent. */
+  | { ok: false; message: string; pinWrong?: boolean };
 
-/** Send a code to each new address. Only the fields that changed are passed. */
-export async function startContactChange(change: { email?: string; phone?: string }): Promise<StartResult> {
-  const body = await call({ action: 'request', ...change });
+/**
+ * Send a code to each new address. Only the fields that changed are passed.
+ * The PIN is checked first (since 2026-10-20); `phoneVia` is how the new
+ * number's code comes: SMS (the default), a call or WhatsApp.
+ */
+export async function startContactChange(
+  change: { email?: string; phone?: string },
+  pin: string,
+  phoneVia: CodeChannel = 'sms',
+): Promise<StartResult> {
+  const body = await call({ action: 'request', ...change, pin, phoneVia });
   if (body.success === true && typeof body.requestId === 'string' && Array.isArray(body.steps)) {
     return { ok: true, requestId: body.requestId, steps: body.steps };
   }
-  return { ok: false, message: message(body, "We couldn't send your code. Please try again.") };
+  return {
+    ok: false,
+    message: message(body, "We couldn't send your code. Please try again."),
+    pinWrong: body.code === 'PIN_INCORRECT' || body.code === 'PIN_LOCKED' || body.code === 'PIN_REQUIRED',
+  };
 }
 
 export type VerifyResult =
@@ -73,8 +87,9 @@ export async function verifyContactCode(requestId: string, channel: ContactChann
 export async function resendContactCode(
   requestId: string,
   channel: ContactChannel,
+  phoneVia: CodeChannel = 'sms',
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  const body = await call({ action: 'resend', requestId, channel });
+  const body = await call({ action: 'resend', requestId, channel, phoneVia });
   if (body.success === true) return { ok: true };
   return { ok: false, message: message(body, "We couldn't send a new code. Please try again.") };
 }

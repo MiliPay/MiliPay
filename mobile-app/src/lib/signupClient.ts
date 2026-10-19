@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import type { CodeChannel } from './codeChannelView';
 import { supabase } from './supabase';
 
 /**
@@ -87,14 +88,14 @@ function asView(body: Record<string, any>): SignupView {
   return body as unknown as SignupView;
 }
 
-export async function startSignup(phone: string): Promise<{ ok: true; sessionId: string; sentTo: string } | Failure> {
-  const body = await call({ action: 'start', phone });
+export async function startSignup(phone: string, channel: CodeChannel = 'sms'): Promise<{ ok: true; sessionId: string; sentTo: string } | Failure> {
+  const body = await call({ action: 'start', phone, channel });
   if (body.success === true && typeof body.sessionId === 'string') return { ok: true, sessionId: body.sessionId, sentTo: body.sentTo };
   return fail(body, "We couldn't send your code. Please try again.");
 }
 
-export async function resendSignupCode(sessionId: string): Promise<{ ok: true } | Failure> {
-  const body = await call({ action: 'resend', sessionId });
+export async function resendSignupCode(sessionId: string, channel: CodeChannel = 'sms'): Promise<{ ok: true } | Failure> {
+  const body = await call({ action: 'resend', sessionId, channel });
   return body.success === true ? { ok: true } : fail(body, "We couldn't send a new code. Please try again.");
 }
 

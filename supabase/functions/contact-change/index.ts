@@ -1,7 +1,9 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { ApiError, adminClient, handler, json, requireCaller } from "../_shared/auth.ts";
-import { dispatchCredential } from "../_shared/notify.ts";
+import { consoleDeliveryAllowed } from "../_shared/notify.ts";
+import { CHANNEL_UNAVAILABLE, pickChannel, sendCodeVia, type CodeChannel } from "../_shared/code-channels.ts";
+import { pinRefusal } from "../_shared/login-code.ts";
 import {
   CODE_TTL_MS,
   MAX_ATTEMPTS,
@@ -25,8 +27,12 @@ import {
 /**
  * Changing a customer's email or phone number, by a code sent to the new one.
  *
- *   request  validate, send a 6-digit code to each new address, return the steps
- *   resend   a fresh code for one step (at most 3, 30 s apart)
+ *   request  the customer's PIN first (someone holding an unlocked phone
+ *            can't move the account to their own number), then validate and
+ *            send a 6-digit code to each new address: email to the new
+ *            email; SMS (the default), call or WhatsApp to the new number
+ *   resend   a fresh code for one step, by the same or another phone
+ *            channel (at most 3, 30 s apart)
  *   verify   check one code; when the last one is right, save the change —
  *            in Supabase Auth (a verified phone becomes the sign-in number)
  *            and on the customer's row
@@ -121,14 +127,35 @@ async function sendEmailCode(to: string, code: string): Promise<boolean> {
   return false;
 }
 
-async function sendPhoneCode(localPhone: string, code: string): Promise<boolean> {
-  const result = await dispatchCredential(localPhone, smsMessage(code));
-  if (!result.delivered) console.error("[contact-change] SMS not sent", result.attempts);
-  return result.delivered;
+/** How the code reaches the new number: phone channels only, since it proves the number. */
+function phoneVia(value: unknown): CodeChannel {
+  const via = pickChannel(value, "prove_phone", Deno.env, consoleDeliveryAllowed());
+  if (!via) throw new ApiError(CHANNEL_UNAVAILABLE, 400, "CHANNEL_UNAVAILABLE");
+  return via;
 }
 
-function deliver(channel: Channel, to: string, code: string): Promise<boolean> {
-  return channel === "email" ? sendEmailCode(to, code) : sendPhoneCode(to, code);
+async function sendPhoneCode(localPhone: string, code: string, via: CodeChannel): Promise<boolean> {
+  return await sendCodeVia(via, { phone: localPhone }, code, { text: smsMessage(code), subject: emailSubject() });
+}
+
+function deliver(channel: Channel, to: string, code: string, via: CodeChannel): Promise<boolean> {
+  return channel === "email" ? sendEmailCode(to, code) : sendPhoneCode(to, code, via);
+}
+
+/** The PIN, with the same 5-try lock as payments. Throws unless it is right. */
+async function requirePin(admin: SupabaseClient, userId: string, value: unknown) {
+  const pin = typeof value === "string" ? value : "";
+  if (!/^\d{4}$/.test(pin)) throw new ApiError("Enter your 4-digit PIN to change your contact details.", 400, "PIN_REQUIRED");
+  const { data: result, error } = await admin.rpc("verify_customer_pin", { p_user_id: userId, p_pin: pin });
+  if (error) {
+    console.error("[contact-change] PIN check failed", error);
+    throw new ApiError("Could not check your PIN. Please try again.", 503, "UNAVAILABLE");
+  }
+  if (!result?.valid) {
+    throw new ApiError(pinRefusal(result ?? {}), result?.code === "PIN_LOCKED" ? 423 : 400, result?.code ?? "PIN_INCORRECT", {
+      attemptsRemaining: result?.attemptsRemaining,
+    });
+  }
 }
 
 const NOT_SENT: Record<Channel, string> = {
@@ -183,6 +210,8 @@ async function request(admin: SupabaseClient, userId: string, body: Record<strin
   if (customer.status && customer.status !== "active") {
     throw new ApiError(`Your account is currently ${customer.status}.`, 403, "ACCOUNT_NOT_ACTIVE");
   }
+  await requirePin(admin, userId, body.pin);
+  const via = phoneVia(body.phoneVia);
 
   const checked = validateContactChange(
     { email: typeof body.email === "string" ? body.email : null, phone: typeof body.phone === "string" ? body.phone : null },
@@ -244,7 +273,7 @@ async function request(admin: SupabaseClient, userId: string, body: Record<strin
     const code = newCode();
     patch[`${channel}_code_hash`] = await codeHash(created.id, channel, code);
     patch[`${channel}_sent_at`] = new Date().toISOString();
-    if (!(await deliver(channel, to, code))) {
+    if (!(await deliver(channel, to, code, via))) {
       await admin.from(TABLE).update({ cancelled_at: new Date().toISOString() }).eq("id", created.id);
       throw new ApiError(NOT_SENT[channel], 503, "CODE_NOT_SENT", { channel });
     }
@@ -280,8 +309,9 @@ async function resend(admin: SupabaseClient, userId: string, body: Record<string
     throw new ApiError("Wait a few seconds before asking for another code.", 429, "RESEND_TOO_SOON");
   }
 
+  const via = phoneVia(body.phoneVia);
   const code = newCode();
-  if (!(await deliver(channel, to, code))) throw new ApiError(NOT_SENT[channel], 503, "CODE_NOT_SENT", { channel });
+  if (!(await deliver(channel, to, code, via))) throw new ApiError(NOT_SENT[channel], 503, "CODE_NOT_SENT", { channel });
   await admin
     .from(TABLE)
     .update({
@@ -318,7 +348,11 @@ async function apply(admin: SupabaseClient, userId: string, row: RequestRow) {
   }
 
   const customerPatch: Record<string, unknown> = {};
-  if (row.new_email) customerPatch.email = row.new_email;
+  // Proved by the code just checked: email sign-in and reset codes may go here.
+  if (row.new_email) {
+    customerPatch.email = row.new_email;
+    customerPatch.email_verified_at = new Date().toISOString();
+  }
   if (row.new_phone) customerPatch.phone = row.new_phone;
   const { error: customerError } = await admin.from("customers").update(customerPatch).eq("auth_user_id", userId);
   if (customerError) {

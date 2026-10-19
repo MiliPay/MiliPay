@@ -90,10 +90,10 @@ export interface PhoneCheckState extends UpgradeCodeState {
  * must be this agent's, for this phone, confirmed, unused and recent.
  */
 export function phoneCheckRefusal(r: PhoneCheckState | null, agentId: string, phone: string, now: Date): string | null {
-  if (!r || r.agent_id !== agentId) return "Check the customer's phone with an SMS code first.";
+  if (!r || r.agent_id !== agentId) return "Check the customer's phone with a code first.";
   if (localPhone(r.phone) !== localPhone(phone)) return "The phone number changed after it was checked. Check it again.";
   if (r.consumed_at) return "That phone check was already used. Check the phone again.";
-  if (r.cancelled_at || !r.code_verified_at) return "Check the customer's phone with an SMS code first.";
+  if (r.cancelled_at || !r.code_verified_at) return "Check the customer's phone with a code first.";
   if (now.getTime() - new Date(r.code_verified_at).getTime() > PHONE_CHECK_WINDOW_MS) {
     return "The phone check is over an hour old. Check the phone again.";
   }

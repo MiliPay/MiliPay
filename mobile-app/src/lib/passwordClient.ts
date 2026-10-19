@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import type { CodeChannel } from './codeChannelView';
 
 /**
  * Thin client for the `password` Edge Function (Me › Security › Change
@@ -35,14 +36,14 @@ export async function changePassword(current: string, password: string): Promise
   return body.success === true ? { ok: true } : failure(body, "Couldn't change your password. Please try again.");
 }
 
-export async function requestReset(phone: string): Promise<Result<{ requestId: string; sentTo: string }>> {
-  const body = await call({ action: 'reset_request', phone });
+export async function requestReset(phone: string, channel: CodeChannel = 'sms'): Promise<Result<{ requestId: string; sentTo: string }>> {
+  const body = await call({ action: 'reset_request', phone, channel });
   if (body.success === true) return { ok: true, requestId: body.requestId, sentTo: body.sentTo };
   return failure(body, "We couldn't send a code. Please try again.");
 }
 
-export async function resendReset(requestId: string): Promise<Result> {
-  const body = await call({ action: 'reset_resend', requestId });
+export async function resendReset(requestId: string, channel: CodeChannel = 'sms'): Promise<Result> {
+  const body = await call({ action: 'reset_resend', requestId, channel });
   return body.success === true ? { ok: true } : failure(body, "We couldn't send a new code. Please try again.");
 }
 

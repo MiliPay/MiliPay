@@ -37,6 +37,7 @@ import {
   saveTierLimits,
   saveVtuFees,
   signupError,
+  testTermii,
   tierError,
   type FeeDraft,
   type Integration,
@@ -517,6 +518,32 @@ const INTEGRATION_ICON: Record<string, LucideIcon> = {
   banknote: Banknote,
 };
 
+/** Sends one real SMS through Termii to your own phone (from My profile). */
+function TermiiTest() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const run = async () => {
+    setBusy(true);
+    setResult(null);
+    try {
+      const r = await testTermii();
+      setResult({ ok: r.sent, text: r.sent ? `${r.detail}. Check your phone.` : `Termii said: ${r.detail}` });
+    } catch (e) {
+      setResult({ ok: false, text: e instanceof Error ? e.message : "The test message wasn't sent." });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2.5 border-t border-line2 pt-2.5">
+      <button type="button" onClick={() => void run()} disabled={busy} className="h-8 rounded-[9px] border border-line px-3 text-xs font-semibold disabled:opacity-60">
+        {busy ? "Sending…" : "Text me a test"}
+      </button>
+      {result && <div className={clsx("min-w-0 flex-1 text-xs", result.ok ? "text-brand-text" : "text-fail")}>{result.text}</div>}
+    </div>
+  );
+}
+
 function Integrations() {
   const [list, setList] = useState<Integration[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -548,6 +575,7 @@ function Integrations() {
                 <div>{g.metric}</div>
                 <div className="font-mono">{g.mode}</div>
               </div>
+              {g.name === "Termii" && g.mode !== "OFF" && <TermiiTest />}
             </div>
           );
         })}

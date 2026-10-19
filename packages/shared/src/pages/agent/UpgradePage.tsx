@@ -12,6 +12,7 @@ import {
   verifyUpgradeCode,
   QUALITY_MIN,
 } from "@milipay/shared/features/agent/api";
+import { ChannelPicker, useChannels } from "@milipay/shared/features/codeChannels";
 import { formatNaira } from "@milipay/shared/lib/utils/format";
 import { CaptureTile, Empty, ErrorLine, Page, PageHeader, Panel, type Captured } from "./parts";
 
@@ -55,6 +56,8 @@ export default function UpgradePage() {
   const [code, setCode] = useState("");
   const [palm, setPalm] = useState<Captured | null>(null);
   const [busy, setBusy] = useState(false);
+  // How the customer gets the consent code: SMS, a call or WhatsApp (never email).
+  const channels = useChannels("consent");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
@@ -98,7 +101,7 @@ export default function UpgradePage() {
 
   const sendCode = () =>
     run(async () => {
-      const r = await sendUpgradeCode(picked!.id);
+      const r = await sendUpgradeCode(picked!.id, channels.channel);
       setRequestId(r.requestId);
       setSentTo(r.sentTo);
       setCode("");
@@ -178,6 +181,7 @@ export default function UpgradePage() {
                 ))}
               </div>
             )}
+            <ChannelPicker offered={channels.offered} value={channels.channel} onChange={channels.setChannel} label="How should they get the code?" disabled={busy} />
             <button type="button" disabled={!picked || busy} onClick={sendCode} className="h-12 rounded-[12px] bg-brand text-[15px] font-bold text-brand-ink disabled:opacity-45">
               {busy ? "Sending…" : "Text the customer a code"}
             </button>
@@ -202,7 +206,7 @@ export default function UpgradePage() {
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => run(async () => setSentTo((await resendUpgradeCode(requestId!)).sentTo))}
+                onClick={() => run(async () => setSentTo((await resendUpgradeCode(requestId!, channels.channel)).sentTo))}
                 className="h-12 rounded-[12px] border border-line px-4 text-sm font-semibold text-fg disabled:opacity-45"
               >
                 Send a new code

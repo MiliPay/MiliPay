@@ -10,6 +10,8 @@ import { brandFixed } from '../../theme/tokens';
 import { useAuthStore } from '../../store/useStore';
 import { changePasswordRules, changePasswordStrength, resetPhoneDisplay } from '../../lib/onboardingView';
 import { changePassword, requestReset, resendReset, resetPassword, verifyReset } from '../../lib/passwordClient';
+import { CodeChannelPicker, useCodeChannel } from '../../components/CodeChannelPicker';
+import { sentLine, type CodeChannel } from '../../lib/codeChannelView';
 
 type Step = 'form' | 'phone' | 'otp';
 
@@ -37,6 +39,10 @@ export default function ChangePasswordScreen({ navigation }: any) {
   const [phone, setPhone] = useState(resetPhoneDisplay(user?.phone ?? ''));
   const [otp, setOtp] = useState('');
   const [resent, setResent] = useState(false);
+  // SMS (the default), a call, WhatsApp, or the account's verified email.
+  const { offered, channel, pick } = useCodeChannel('password_reset');
+  const [sentVia, setSentVia] = useState<CodeChannel>('sms');
+  const [sentWhere, setSentWhere] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [shake, setShake] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -53,9 +59,11 @@ export default function ChangePasswordScreen({ navigation }: any) {
   const title = step === 'phone' ? 'Forgot your password?' : step === 'otp' ? 'Enter the code' : verified ? 'Set a new password' : 'Change your password';
   const sub =
     step === 'phone'
-      ? "Enter the phone number on your account. We'll send a 6-digit code by SMS."
+      ? "Enter the phone number on your account. We'll send a 6-digit code the way you choose."
       : step === 'otp'
-      ? `We sent a 6-digit code to ${sentTo}.`
+      ? sentVia === 'sms'
+        ? `We sent a 6-digit code to ${sentTo}.`
+        : sentLine(sentVia, sentWhere ?? sentTo)
       : verified
       ? "Your number is verified, so you don't need your current password."
       : 'You use it to log in on a new phone. Your PIN and palm stay the same.';
@@ -78,10 +86,12 @@ export default function ChangePasswordScreen({ navigation }: any) {
     if (!phoneOk) return setError('Enter the 10 digits after +234.');
     setBusy(true);
     setError('');
-    const r = await requestReset(phoneDigits);
+    const r = await requestReset(phoneDigits, channel);
     setBusy(false);
     if (!r.ok) return setError(r.message);
     setRequestId(r.requestId);
+    setSentVia(channel);
+    setSentWhere(r.sentTo || null);
     setOtp('');
     setResent(false);
     setStep('otp');
@@ -213,6 +223,7 @@ export default function ChangePasswordScreen({ navigation }: any) {
               <Text accessibilityLiveRegion="polite" style={{ marginTop: 4, minHeight: 18, color: c.fail, fontSize: 13, fontFamily: 'Inter_400Regular' }}>
                 {error}
               </Text>
+              <CodeChannelPicker offered={offered} value={channel} onChange={pick} disabled={busy} />
             </View>
           ) : null}
 
@@ -239,8 +250,9 @@ export default function ChangePasswordScreen({ navigation }: any) {
                 <Tap
                   onPress={async () => {
                     if (!requestId) return;
-                    const r = await resendReset(requestId);
+                    const r = await resendReset(requestId, channel);
                     if (!r.ok) return setError(r.message);
+                    setSentVia(channel);
                     setOtp('');
                     setError('');
                     setResent(true);

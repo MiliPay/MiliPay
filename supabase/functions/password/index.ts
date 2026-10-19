@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { ApiError, adminClient, handler, json, requireCaller } from "../_shared/auth.ts";
-import { dispatchSms } from "../_shared/notify.ts";
+import { consoleDeliveryAllowed } from "../_shared/notify.ts";
+import { CHANNEL_UNAVAILABLE, pickChannel, sendCodeVia, type CodeChannel } from "../_shared/code-channels.ts";
 import { codeFrom } from "../_shared/contact-change.ts";
 import { loginPhone, sentTo } from "../_shared/login-code.ts";
 
@@ -11,9 +12,10 @@ import { loginPhone, sentTo } from "../_shared/login-code.ts";
  *
  *   change         current + new password. The current one is checked with
  *                  Supabase Auth itself; a wrong one changes nothing.
- *   reset_request  "Forgot your current password?": a 6-digit code by SMS to
- *                  the number on this account (no other number)
- *   reset_resend   a fresh code (3 at most, 30 s apart)
+ *   reset_request  "Forgot your current password?": a 6-digit code to the
+ *                  number on this account (no other number) by SMS (the
+ *                  default), call or WhatsApp, or to its verified email
+ *   reset_resend   a fresh code, same or another channel (3 at most, 30 s apart)
  *   reset_verify   the code → a short-lived reset token
  *   reset          reset token + new password
  *
@@ -102,19 +104,34 @@ async function change(admin: SupabaseClient, userId: string, email: string | nul
   return json({ success: true });
 }
 
-async function accountPhone(admin: SupabaseClient, userId: string): Promise<{ phone: string; customerId: string } | null> {
-  const { data } = await admin.from("customers").select("id, phone").eq("auth_user_id", userId).maybeSingle();
-  return data?.phone ? { phone: String(data.phone), customerId: String(data.id) } : null;
+async function accountPhone(
+  admin: SupabaseClient,
+  userId: string,
+): Promise<{ phone: string; customerId: string; email: string | null } | null> {
+  const { data } = await admin.from("customers").select("id, phone, email, email_verified_at").eq("auth_user_id", userId).maybeSingle();
+  if (!data?.phone) return null;
+  // Email codes go only to an address the customer has proved is theirs.
+  const email = data.email && data.email_verified_at ? String(data.email) : null;
+  return { phone: String(data.phone), customerId: String(data.id), email };
 }
 
-async function sendCode(phone: string, code: string): Promise<boolean> {
-  const result = await dispatchSms(
-    phone,
-    `Your MiliPay password reset code is ${code}. It expires in 10 minutes. If you didn't ask for it, ignore this message.`,
-  );
-  if (!result.delivered) console.error("[password] SMS not sent", result.attempts);
-  return result.delivered;
+function channelOf(value: unknown): CodeChannel {
+  const channel = pickChannel(value, "password_reset", Deno.env, consoleDeliveryAllowed());
+  if (!channel) throw new ApiError(CHANNEL_UNAVAILABLE, 400, "CHANNEL_UNAVAILABLE");
+  return channel;
 }
+
+const NO_VERIFIED_EMAIL = "Your account has no verified email yet. Add one in Me › Contact details, or choose another way.";
+const NOT_SENT = "We couldn't send a code that way right now. Please try again shortly, or choose another way.";
+
+async function sendCode(channel: CodeChannel, to: { phone: string; email: string | null }, code: string): Promise<boolean> {
+  const text = `Your MiliPay password reset code is ${code}. It expires in 10 minutes. If you didn't ask for it, ignore this message.`;
+  return await sendCodeVia(channel, to, code, { text, subject: "Your MiliPay password reset code" });
+}
+
+/** "+234 803 …" or the verified email, for "We sent a code to …". */
+const sentToFor = (channel: CodeChannel, to: { phone: string; email: string | null }) =>
+  channel === "email" && to.email ? to.email : sentTo(to.phone);
 
 async function loadReset(admin: SupabaseClient, userId: string, id: unknown) {
   if (typeof id !== "string" || id.length === 0 || id.length > 64) throw new ApiError("Ask for a new code.", 400, "BAD_REQUEST");
@@ -131,6 +148,8 @@ async function resetRequest(admin: SupabaseClient, userId: string, body: Record<
   const account = await accountPhone(admin, userId);
   if (!account) throw new ApiError("Your profile could not be found.", 404, "NOT_FOUND");
   if (account.phone !== phone) throw new ApiError("That's not the number on your account.", 400, "WRONG_PHONE");
+  const channel = channelOf(body.channel);
+  if (channel === "email" && !account.email) throw new ApiError(NO_VERIFIED_EMAIL, 400, "NO_VERIFIED_EMAIL");
 
   await admin.from(TABLE).update({ cancelled_at: new Date().toISOString() }).eq("auth_user_id", userId).is("used_at", null).is("cancelled_at", null);
   const { data: created, error } = await admin
@@ -140,12 +159,12 @@ async function resetRequest(admin: SupabaseClient, userId: string, body: Record<
     .single();
   if (error || !created) throw new ApiError("Could not send a code. Please try again.", 503, "UNAVAILABLE");
   const code = codeFrom(crypto.getRandomValues(new Uint32Array(1))[0]);
-  if (!(await sendCode(phone, code))) {
+  if (!(await sendCode(channel, account, code))) {
     await admin.from(TABLE).update({ cancelled_at: new Date().toISOString() }).eq("id", created.id);
-    throw new ApiError("We couldn't send a code right now. Please try again shortly.", 503, "CODE_NOT_SENT");
+    throw new ApiError(NOT_SENT, 503, "CODE_NOT_SENT");
   }
   await admin.from(TABLE).update({ code_hash: await hmac(`reset:${created.id}:${code}`), sent_at: new Date().toISOString() }).eq("id", created.id);
-  return json({ success: true, requestId: created.id, sentTo: sentTo(phone) });
+  return json({ success: true, requestId: created.id, channel, sentTo: sentToFor(channel, account) });
 }
 
 async function resetResend(admin: SupabaseClient, userId: string, body: Record<string, unknown>) {
@@ -156,8 +175,12 @@ async function resetResend(admin: SupabaseClient, userId: string, body: Record<s
   if (row.sent_at && Date.now() - new Date(row.sent_at).getTime() < RESEND_GAP_MS) {
     throw new ApiError("Wait a few seconds before asking for another code.", 429, "RESEND_TOO_SOON");
   }
+  const channel = channelOf(body.channel);
+  const account = await accountPhone(admin, userId);
+  if (!account) throw new ApiError("Your profile could not be found.", 404, "NOT_FOUND");
+  if (channel === "email" && !account.email) throw new ApiError(NO_VERIFIED_EMAIL, 400, "NO_VERIFIED_EMAIL");
   const code = codeFrom(crypto.getRandomValues(new Uint32Array(1))[0]);
-  if (!(await sendCode(row.phone, code))) throw new ApiError("We couldn't send a code right now. Please try again shortly.", 503, "CODE_NOT_SENT");
+  if (!(await sendCode(channel, { phone: row.phone, email: account.email }, code))) throw new ApiError(NOT_SENT, 503, "CODE_NOT_SENT");
   await admin
     .from(TABLE)
     .update({
@@ -167,7 +190,7 @@ async function resetResend(admin: SupabaseClient, userId: string, body: Record<s
       expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString(),
     })
     .eq("id", row.id);
-  return json({ success: true });
+  return json({ success: true, channel, sentTo: sentToFor(channel, { phone: row.phone, email: account.email }) });
 }
 
 async function resetVerify(admin: SupabaseClient, userId: string, body: Record<string, unknown>) {

@@ -293,3 +293,84 @@ describe("the rules", () => {
     expect(notice).not.toMatch(/\d{4,}/);
   });
 });
+
+describe("choosing how the code comes (2026-10-20)", () => {
+  let emails: { to: string; code: string }[];
+  beforeEach(() => {
+    ENV.RESEND_API_KEY = "resend-fixture"; // secret-scan: allow — fake fixture, not a credential
+    ENV.EMAIL_FROM = "MiliPay <codes@milipay.test>";
+    emails = [];
+    const termii = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input) === "https://api.resend.com/emails") {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        emails.push({ to: body.to[0], code: String(body.text).match(/\b(\d{6})\b/)![1] });
+        return new Response(JSON.stringify({ id: "em_1" }), { status: 200 });
+      }
+      return termii(input, init);
+    }) as typeof fetch;
+  });
+
+  it("lists the ways a code can come, email never for proving a phone", async () => {
+    const res = await call({ action: "channels" });
+    expect(res.body.channels.sign_in).toEqual(["sms", "email"]);
+    expect(res.body.channels.prove_phone).toEqual(["sms"]);
+    ENV.TERMII_VOICE = "on";
+    expect((await call({ action: "channels" })).body.channels.prove_phone).toEqual(["sms", "call"]);
+  });
+
+  it("emails the code only to a verified email, and answers the same either way", async () => {
+    // cust-new has no verified email: nothing is sent, and nothing says so.
+    const none = await call({ action: "request", phone: "08012345678", channel: "email" });
+    expect(none.status).toBe(200);
+    expect(none.body.sentTo).toBe("your verified email, if this account has one");
+    expect(emails).toEqual([]);
+
+    const c = db.table("customers").find((x) => x.id === "cust-new")!;
+    c.email = "ada@example.com";
+    c.email_verified_at = "2026-10-01T10:00:00Z";
+    const some = await call({ action: "request", phone: "08012345678", channel: "email" });
+    expect(some.body.sentTo).toBe(none.body.sentTo);
+    expect(emails.map((e) => e.to)).toEqual(["ada@example.com"]);
+    const done = await call({ action: "verify", requestId: some.body.requestId, code: emails[0].code });
+    expect(done.body.step).toBe("session");
+  });
+
+  it("an unverified email gets nothing, even if one is on file", async () => {
+    const c = db.table("customers").find((x) => x.id === "cust-new")!;
+    c.email = "ada@example.com";
+    await call({ action: "request", phone: "08012345678", channel: "email" });
+    expect(emails).toEqual([]);
+  });
+
+  it("calls with the code read out when asked, and refuses a way that isn't on", async () => {
+    expect((await call({ action: "request", phone: "08012345678", channel: "call" })).body.code).toBe("CHANNEL_UNAVAILABLE");
+    ENV.TERMII_VOICE = "on";
+    sent = [];
+    const fetchBefore = globalThis.fetch;
+    const routes: string[] = [];
+    globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).startsWith("https://api.ng.termii.com/")) {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        routes.push(body.channel);
+        expect(String(body.sms)).toMatch(/code is (\d ){5}\d\. Again/);
+        return new Response(JSON.stringify({ message_id: "v_1" }), { status: 200 });
+      }
+      return fetchBefore(input, init);
+    }) as typeof fetch;
+    const res = await call({ action: "request", phone: "08012345678", channel: "call" });
+    expect(res.status).toBe(200);
+    expect(routes).toEqual(["voice"]);
+  });
+
+  it("a resend can switch to another way", async () => {
+    const started = await call({ action: "request", phone: "08012345678" });
+    const c = db.table("customers").find((x) => x.id === "cust-new")!;
+    c.email = "ada@example.com";
+    c.email_verified_at = "2026-10-01T10:00:00Z";
+    db.table("login_codes")[0].sent_at = new Date(Date.now() - 60_000).toISOString();
+    const again = await call({ action: "resend", requestId: started.body.requestId, channel: "email" });
+    expect(again.status).toBe(200);
+    expect(emails).toHaveLength(1);
+  });
+});

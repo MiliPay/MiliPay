@@ -24,10 +24,10 @@ describe("phone check rules", () => {
 
   it("only this agent's confirmed, unused, recent check for this phone counts", () => {
     expect(phoneCheckRefusal(row, "agent-1", "+2348031234567", now)).toBeNull();
-    expect(phoneCheckRefusal(null, "agent-1", "08031234567", now)).toMatch(/SMS code first/);
-    expect(phoneCheckRefusal(row, "agent-2", "08031234567", now)).toMatch(/SMS code first/);
+    expect(phoneCheckRefusal(null, "agent-1", "08031234567", now)).toMatch(/with a code first/);
+    expect(phoneCheckRefusal(row, "agent-2", "08031234567", now)).toMatch(/with a code first/);
     expect(phoneCheckRefusal(row, "agent-1", "08039999999", now)).toMatch(/changed/);
-    expect(phoneCheckRefusal({ ...row, code_verified_at: null }, "agent-1", "08031234567", now)).toMatch(/SMS code first/);
+    expect(phoneCheckRefusal({ ...row, code_verified_at: null }, "agent-1", "08031234567", now)).toMatch(/with a code first/);
     expect(phoneCheckRefusal({ ...row, consumed_at: "2026-10-17T09:58:00Z" }, "agent-1", "08031234567", now)).toMatch(/already used/);
     const late = new Date(Date.parse(row.code_verified_at) + PHONE_CHECK_WINDOW_MS + 1);
     expect(phoneCheckRefusal(row, "agent-1", "08031234567", late)).toMatch(/hour old/);
@@ -197,9 +197,21 @@ describe("agent registration functions", () => {
     expect(db.table("agent_phone_checks")[0].consumed_at).toBeTruthy();
   });
 
-  it("admins enrolling in person don't need the phone check", async () => {
-    const res = await call(enrol, enrolment({ phone: "08061112222", nin: "12345678902" }), "tok-admin");
+  it("admins need the phone check too (since 2026-10-20), and can do it themselves", async () => {
+    const without = await call(enrol, enrolment({ phone: "08061112222", nin: "12345678902" }), "tok-admin");
+    expect(without.body.code).toBe("PHONE_NOT_CHECKED");
+
+    const req = await call(upgrade, { action: "phone_request", phone: "08061112222" }, "tok-admin");
+    expect(req.status).toBe(200);
+    expect((await call(upgrade, { action: "phone_verify", checkId: req.body.checkId, code: lastCode() }, "tok-admin")).status).toBe(200);
+    const res = await call(enrol, enrolment({ phone: "08061112222", nin: "12345678902", phoneCheckId: req.body.checkId }), "tok-admin");
     expect(res.status).toBe(200);
+  });
+
+  it("the phone check never goes by email", async () => {
+    const res = await call(upgrade, { action: "phone_request", phone: "08061112223", channel: "email" });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("CHANNEL_UNAVAILABLE");
   });
 
   it("a merchant's terminal comes from the agent's own stock, or is assigned later", async () => {

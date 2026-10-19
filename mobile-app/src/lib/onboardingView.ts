@@ -1,3 +1,4 @@
+import { sentLine, type CodeChannel } from './codeChannelView';
 /**
  * The sign-in and first-setup screens' rules and words (design handoff,
  * screens 3 and 4), apart from the screens. Pure, so the test suite runs
@@ -25,11 +26,11 @@ export function maskedPhone(phone: string): string {
 }
 
 /** Step 1's words: the phone, then the code. */
-export function stepOneCopy(codeSent: boolean, sentTo: string | null) {
+export function stepOneCopy(codeSent: boolean, sentTo: string | null, channel: CodeChannel = 'sms') {
   return codeSent
     ? {
         title: 'Enter the code',
-        sub: `We sent a 6-digit code by SMS to ${sentTo ?? 'your phone'}.`,
+        sub: channel === 'sms' ? `We sent a 6-digit code by SMS to ${sentTo ?? 'your phone'}.` : sentLine(channel, sentTo),
       }
     : {
         title: 'Log in to MiliPay',

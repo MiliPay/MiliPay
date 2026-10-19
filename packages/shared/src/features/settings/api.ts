@@ -87,6 +87,13 @@ export async function fetchIntegrations(): Promise<Integration[]> {
   return data.integrations as Integration[];
 }
 
+/** Settings › Integrations: one real SMS from Termii to the signed-in admin's own phone. */
+export async function testTermii(): Promise<{ sent: boolean; detail: string }> {
+  const { data, error } = await supabase.functions.invoke("platform-status", { body: { action: "test_termii" } });
+  if (error || !data?.success) throw new Error(await functionError(error, "The test message wasn't sent."));
+  return { sent: Boolean(data.sent), detail: String(data.detail ?? "") };
+}
+
 /** Where the Register merchant form starts its fee. */
 export async function fetchDefaultMerchantFee(): Promise<number | null> {
   const { data, error } = await supabase.rpc("default_merchant_fee");

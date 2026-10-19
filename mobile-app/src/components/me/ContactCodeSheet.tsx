@@ -14,6 +14,7 @@ import {
   verifyContactCode,
   type ContactStep,
 } from '../../lib/contactChange';
+import type { CodeChannel } from '../../lib/codeChannelView';
 
 /**
  * "Confirm your new email / number" (design handoff, screen 10): six boxes
@@ -24,6 +25,7 @@ import {
 export function ContactCodeSheet({
   requestId,
   steps,
+  phoneVia = 'sms',
   onDone,
   onClose,
   onRestart,
@@ -31,6 +33,8 @@ export function ContactCodeSheet({
   /** Null hides the sheet. */
   requestId: string | null;
   steps: ContactStep[];
+  /** How the new number's code comes (picked with the PIN); a resend uses it too. */
+  phoneVia?: CodeChannel;
   /** Every code was right and the server saved the change. */
   onDone: (saved: { email: string | null; phone: string | null }) => void;
   /** Closed without finishing: nothing is saved. */
@@ -87,7 +91,7 @@ export function ContactCodeSheet({
 
   const resend = async () => {
     if (!requestId || !step || resent) return;
-    const result = await resendContactCode(requestId, step.channel);
+    const result = await resendContactCode(requestId, step.channel, phoneVia);
     if (result.ok) {
       setResent(true);
       setCode('');

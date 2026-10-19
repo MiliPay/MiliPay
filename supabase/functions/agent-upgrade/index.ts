@@ -2,7 +2,8 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { ApiError, adminClient, handler, json, requireCaller, requireStaffRole, type Caller } from "../_shared/auth.ts";
 import { recordAudit } from "../_shared/audit.ts";
-import { dispatchSms } from "../_shared/notify.ts";
+import { consoleDeliveryAllowed } from "../_shared/notify.ts";
+import { CHANNEL_UNAVAILABLE, pickChannel, sendCodeVia, type CodeChannel, type CodePurpose } from "../_shared/code-channels.ts";
 import { codeFrom } from "../_shared/contact-change.ts";
 import {
   CODE_TTL_MS,
@@ -22,8 +23,9 @@ import {
  * Upgrade to Tier 2 (agent portal). An agent, signed in past their second
  * factor, moves a Tier 1 self sign-up to Tier 2 by capturing their palm:
  *
- *   request   customerId -> a 6-digit code by SMS to the customer's phone
- *   resend    a fresh code (at most 3, 30 s apart)
+ *   request   customerId + channel -> a 6-digit code to the customer's phone
+ *             by SMS (the default), call or WhatsApp
+ *   resend    a fresh code, same or another channel (at most 3, 30 s apart)
  *   verify    the code the customer reads out; 5 wrong tries closes it
  *   complete  the palm capture (within 15 minutes of the code) -> Tier 2,
  *             upgraded_by = the agent. Audited.
@@ -103,18 +105,28 @@ async function loadRow(admin: SupabaseClient, caller: Caller, requestId: unknown
   return data as CodeRow;
 }
 
-async function sendCode(admin: SupabaseClient, caller: Caller, row: { id: string; phone: string }) {
+/** The customer picks: SMS (the default), call or WhatsApp. Never email: the code proves the phone. */
+function channelOf(value: unknown, purpose: CodePurpose): CodeChannel {
+  const channel = pickChannel(value, purpose, Deno.env, consoleDeliveryAllowed());
+  if (!channel) throw new ApiError(CHANNEL_UNAVAILABLE, 400, "CHANNEL_UNAVAILABLE");
+  return channel;
+}
+
+async function sendCode(admin: SupabaseClient, caller: Caller, row: { id: string; phone: string }, via: CodeChannel) {
   const code = newCode();
-  const result = await dispatchSms(row.phone, upgradeSms(code, await agentName(admin, caller)));
-  if (!result.delivered) {
-    console.error("[agent-upgrade] SMS not sent", result.attempts);
-    throw new ApiError("We couldn't text the customer right now. Please try again shortly.", 503, "CODE_NOT_SENT");
+  const sent = await sendCodeVia(via, { phone: row.phone }, code, {
+    text: upgradeSms(code, await agentName(admin, caller)),
+    subject: "Your MiliPay upgrade code",
+  });
+  if (!sent) {
+    throw new ApiError("We couldn't send the customer a code that way right now. Try again shortly, or choose another way.", 503, "CODE_NOT_SENT");
   }
   return codeHash(row.id, code);
 }
 
 async function request(admin: SupabaseClient, caller: Caller, body: Record<string, unknown>) {
   await rateLimit(admin, `agent-upgrade:agent:${caller.id}`, 30, 60 * 60);
+  const via = channelOf(body.channel, "consent");
   const customer = await loadCustomer(admin, body.customerId);
   const refusal = upgradeRefusal(customer as any);
   if (refusal) throw new ApiError(refusal.error, refusal.status, refusal.code);
@@ -140,7 +152,7 @@ async function request(admin: SupabaseClient, caller: Caller, body: Record<strin
   }
   let hash: string;
   try {
-    hash = await sendCode(admin, caller, { id: created.id, phone: customer!.phone });
+    hash = await sendCode(admin, caller, { id: created.id, phone: customer!.phone }, via);
   } catch (err) {
     await admin.from(TABLE).update({ cancelled_at: new Date().toISOString() }).eq("id", created.id);
     throw err;
@@ -158,7 +170,7 @@ async function resend(admin: SupabaseClient, caller: Caller, body: Record<string
   if (row.sent_at && Date.now() - new Date(row.sent_at).getTime() < RESEND_GAP_MS) {
     throw new ApiError("Wait a few seconds before sending another code.", 429, "RESEND_TOO_SOON");
   }
-  const hash = await sendCode(admin, caller, row);
+  const hash = await sendCode(admin, caller, row, channelOf(body.channel, "consent"));
   await admin
     .from(TABLE)
     .update({ code_hash: hash, sent_at: new Date().toISOString(), resends: (row.resends ?? 0) + 1, expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString() })
@@ -299,12 +311,11 @@ async function loadPhoneCheck(admin: SupabaseClient, caller: Caller, checkId: un
   return data as CodeRow;
 }
 
-async function sendPhoneCode(rowId: string, phone: string): Promise<string> {
+async function sendPhoneCode(rowId: string, phone: string, via: CodeChannel): Promise<string> {
   const code = newCode();
-  const result = await dispatchSms(phone, phoneCheckSms(code));
-  if (!result.delivered) {
-    console.error("[agent-upgrade] phone check SMS not sent", result.attempts);
-    throw new ApiError("We couldn't text that number right now. Check it and try again.", 503, "CODE_NOT_SENT");
+  const sent = await sendCodeVia(via, { phone }, code, { text: phoneCheckSms(code), subject: "Your MiliPay code" });
+  if (!sent) {
+    throw new ApiError("We couldn't send a code to that number that way right now. Check it, or choose another way.", 503, "CODE_NOT_SENT");
   }
   return codeHash(rowId, code, "phone-check");
 }
@@ -312,6 +323,7 @@ async function sendPhoneCode(rowId: string, phone: string): Promise<string> {
 async function phoneRequest(admin: SupabaseClient, caller: Caller, body: Record<string, unknown>) {
   const phone = localPhone(body.phone);
   if (!phone) throw new ApiError("Enter the customer's 11-digit phone number.", 400, "BAD_PHONE");
+  const via = channelOf(body.channel, "prove_phone");
   await rateLimit(admin, `agent-phone:agent:${caller.id}`, 40, 60 * 60);
   await rateLimit(admin, `agent-phone:phone:${phone}`, 5, 60 * 60);
 
@@ -334,7 +346,7 @@ async function phoneRequest(admin: SupabaseClient, caller: Caller, body: Record<
   }
   let hash: string;
   try {
-    hash = await sendPhoneCode(created.id, phone);
+    hash = await sendPhoneCode(created.id, phone, via);
   } catch (err) {
     await admin.from(PHONE_TABLE).update({ cancelled_at: new Date().toISOString() }).eq("id", created.id);
     throw err;
@@ -352,7 +364,7 @@ async function phoneResend(admin: SupabaseClient, caller: Caller, body: Record<s
   if (row.sent_at && Date.now() - new Date(row.sent_at).getTime() < RESEND_GAP_MS) {
     throw new ApiError("Wait a few seconds before sending another code.", 429, "RESEND_TOO_SOON");
   }
-  const hash = await sendPhoneCode(row.id, row.phone);
+  const hash = await sendPhoneCode(row.id, row.phone, channelOf(body.channel, "prove_phone"));
   await admin
     .from(PHONE_TABLE)
     .update({ code_hash: hash, sent_at: new Date().toISOString(), resends: (row.resends ?? 0) + 1, expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString() })

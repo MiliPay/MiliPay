@@ -185,18 +185,16 @@ serve(handler(async (req) => {
     );
   }
 
-  // An agent can only enrol a phone the customer proved they hold: the code
-  // texted to it was read back to the agent. Administrators enrolling in
-  // person are exempt.
+  // Nobody can enrol a phone the customer hasn't proved they hold: the code
+  // sent to it was read back to whoever is enrolling them. Agents and
+  // administrators alike (administrators were exempt until 2026-10-20).
   let phoneCheck: PhoneCheckState & { id: string } | null = null;
-  if (!isAdmin) {
-    if (draft.phoneCheckId) {
-      const { data } = await admin.from("agent_phone_checks").select("*").eq("id", draft.phoneCheckId).maybeSingle();
-      phoneCheck = data as typeof phoneCheck;
-    }
-    const refusal = phoneCheckRefusal(phoneCheck, caller.id, draft.phone, new Date());
-    if (refusal) throw new ApiError(refusal, 400, "PHONE_NOT_CHECKED");
+  if (draft.phoneCheckId) {
+    const { data } = await admin.from("agent_phone_checks").select("*").eq("id", draft.phoneCheckId).maybeSingle();
+    phoneCheck = data as typeof phoneCheck;
   }
+  const refusal = phoneCheckRefusal(phoneCheck, caller.id, draft.phone, new Date());
+  if (refusal) throw new ApiError(refusal, 400, "PHONE_NOT_CHECKED");
 
   // Re-verify server-side. The client's claim that the NIN passed is not
   // evidence; in simulated mode this is deterministic and costs nothing.

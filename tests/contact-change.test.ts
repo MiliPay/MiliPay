@@ -36,6 +36,7 @@ let handler: Handler;
 let db: FakeSupabase;
 let sent: { channel: "email" | "sms"; to: string; code: string }[];
 let failSms = false;
+let termiiRoutes: string[] = [];
 const realFetch = globalThis.fetch;
 
 beforeAll(async () => {
@@ -58,9 +59,14 @@ beforeEach(() => {
   db.users.set("tok-1", { id: "user-1", email: "samuel@example.com" });
   db.users.set("tok-2", { id: "user-2", email: "taken@example.com" });
   db.rpcAnswers.set("consume_rate_limit", () => true);
+  // The customer's PIN is 1234; asking for a change needs it (since 2026-10-20).
+  db.rpcAnswers.set("verify_customer_pin", (args: any) =>
+    args.p_pin === "1234" ? { valid: true } : { valid: false, code: "PIN_INCORRECT", attemptsRemaining: 4 },
+  );
   (globalThis as any).__fakeSupabase = db;
 
   sent = [];
+  termiiRoutes = [];
   failSms = false;
   globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
@@ -71,7 +77,10 @@ beforeEach(() => {
     }
     if (url.startsWith("https://api.ng.termii.com/")) {
       if (failSms) return new Response(JSON.stringify({ message: "down" }), { status: 500 });
-      sent.push({ channel: "sms", to: body.to, code: String(body.sms).match(/\b(\d{6})\b/)![1] });
+      termiiRoutes.push(body.channel);
+      // A voice call reads the code with spaces between the digits.
+      const digits = String(body.sms).replace(/(\d) (?=\d)/g, "$1");
+      sent.push({ channel: "sms", to: body.to, code: digits.match(/\b(\d{6})\b/)![1] });
       return new Response(JSON.stringify({ message_id: "sms_1" }), { status: 200 });
     }
     throw new Error(`unexpected outbound call to ${url}`);
@@ -86,6 +95,8 @@ afterEach(() => {
 });
 
 async function call(body: Record<string, unknown>, token = "tok-1") {
+  // Every request carries the right PIN unless a test says otherwise.
+  if (body.action === "request" && !("pin" in body)) body = { ...body, pin: "1234" };
   const res = await handler(
     new Request("https://project.supabase.test/functions/v1/contact-change", {
       method: "POST",
@@ -235,5 +246,43 @@ describe("the rules on their own", () => {
     const r = validateContactChange({ email: "samuel@example.com", phone: "08031234567" }, { email: "Samuel@Example.com", phone: "08012345678" });
     expect(r).toEqual({ ok: true, change: { email: null, phone: "08031234567" } });
     expect(channelsFor({ email: null, phone: "08031234567" })).toEqual(["phone"]);
+  });
+});
+
+describe("the PIN, and how the code reaches the new number (2026-10-20)", () => {
+  it("asks for the PIN before anything is sent, and a wrong PIN sends nothing", async () => {
+    const none = await call({ action: "request", phone: "0803 123 4567", pin: "" });
+    expect(none.status).toBe(400);
+    expect(none.body.code).toBe("PIN_REQUIRED");
+    const wrong = await call({ action: "request", phone: "0803 123 4567", pin: "9999" });
+    expect(wrong.status).toBe(400);
+    expect(wrong.body.code).toBe("PIN_INCORRECT");
+    expect(sent).toEqual([]);
+    expect(db.table("contact_change_requests")).toEqual([]);
+  });
+
+  it("sends the new number's code by SMS by default, or by a voice call when asked", async () => {
+    await call({ action: "request", phone: "0803 123 4567" });
+    expect(termiiRoutes).toEqual(["dnd"]);
+    termiiRoutes = [];
+    ENV.TERMII_VOICE = "on";
+    await call({ action: "request", phone: "0803 123 4567", phoneVia: "call" });
+    expect(termiiRoutes).toEqual(["voice"]);
+  });
+
+  it("never sends the phone's code by email, and refuses a way that isn't switched on", async () => {
+    const email = await call({ action: "request", phone: "0803 123 4567", phoneVia: "email" });
+    expect(email.status).toBe(400);
+    expect(email.body.code).toBe("CHANNEL_UNAVAILABLE");
+    const whatsapp = await call({ action: "request", phone: "0803 123 4567", phoneVia: "whatsapp" });
+    expect(whatsapp.body.code).toBe("CHANNEL_UNAVAILABLE");
+    expect(sent).toEqual([]);
+  });
+
+  it("marks a changed email as verified, so codes may go there later", async () => {
+    const started = await call({ action: "request", email: "samuel.new@example.com" });
+    await call({ action: "verify", requestId: started.body.requestId, channel: "email", code: lastCode("email") });
+    expect(customer().email).toBe("samuel.new@example.com");
+    expect(customer().email_verified_at).toBeTruthy();
   });
 });

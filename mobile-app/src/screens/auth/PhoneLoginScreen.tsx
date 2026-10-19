@@ -10,14 +10,20 @@ import { useThemeColors } from '../../theme/useThemeColors';
 import { useAuthStore } from '../../store/useStore';
 import { LOGIN_PIN_COPY, fmtPhone, phoneDigits, stepOneButton, stepOneCopy } from '../../lib/onboardingView';
 import { requestLoginCode, resendLoginCode, submitLoginPin, verifyLoginCode } from '../../lib/loginCode';
+import { CodeChannelPicker, useCodeChannel } from '../../components/CodeChannelPicker';
+import type { CodeChannel } from '../../lib/codeChannelView';
 
 type Stage = 'phone' | 'code' | 'pin';
 
 const RESEND_GAP_MS = 30_000;
+/** When "Try another way" appears on the code screen. */
+const OTHER_WAY_AFTER_MS = 60_000;
 
 /**
  * "Log in to MiliPay" (design handoff, screen 3, step 1): the phone number the
- * customer gave their agent, then the 6-digit code sent to it by SMS.
+ * customer gave their agent, then the 6-digit code sent to it the way they pick: SMS (the default),
+ * a call, email or WhatsApp, as the server allows. After a minute the code
+ * screen offers "Try another way".
  *
  * A first sign-in goes straight on to creating a password. An account that
  * is already set up also asks for its PIN here, so a code on its own — say,
@@ -38,6 +44,10 @@ export default function PhoneLoginScreen({ navigation, route }: any) {
   const [resent, setResent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const { offered, channel, pick } = useCodeChannel('sign_in');
+  const [sentVia, setSentVia] = useState<CodeChannel>('sms');
+  const [otherWay, setOtherWay] = useState(false);
+  const [canOtherWay, setCanOtherWay] = useState(false);
   const [shake, setShake] = useState(0);
   const verifying = useRef(false);
 
@@ -59,11 +69,13 @@ export default function PhoneLoginScreen({ navigation, route }: any) {
   const sendCode = async () => {
     if (phone.length !== 11) return setError('Enter the 11-digit number you registered with.');
     setBusy(true);
-    const result = await requestLoginCode(phone);
+    const result = await requestLoginCode(phone, channel);
     setBusy(false);
     if (!result.ok) return fail(result.message);
     setRequestId(result.requestId);
     setSentTo(result.sentTo || null);
+    setSentVia(channel);
+    setOtherWay(false);
     setSentAt(Date.now());
     setCode('');
     setError('');
@@ -100,14 +112,25 @@ export default function PhoneLoginScreen({ navigation, route }: any) {
     if (!requestId || busy) return;
     if (Date.now() - sentAt < RESEND_GAP_MS) return setError('Wait a few seconds before asking for another code.');
     setBusy(true);
-    const result = await resendLoginCode(requestId);
+    const result = await resendLoginCode(requestId, channel);
     setBusy(false);
     if (!result.ok) return result.closed ? restart(result.message) : setError(result.message);
+    setSentTo(result.sentTo || sentTo);
+    setSentVia(channel);
+    setOtherWay(false);
     setSentAt(Date.now());
     setCode('');
     setError('');
     setResent(true);
   };
+
+  // "Try another way" after a minute without the code, while there is one.
+  useEffect(() => {
+    setCanOtherWay(false);
+    if (stage !== 'code' || offered.length < 2) return;
+    const t = setTimeout(() => setCanOtherWay(true), OTHER_WAY_AFTER_MS);
+    return () => clearTimeout(t);
+  }, [stage, sentAt, offered.length]);
 
   useEffect(() => {
     if (!resent) return;
@@ -142,7 +165,7 @@ export default function PhoneLoginScreen({ navigation, route }: any) {
     setError('');
   };
 
-  const copy = stage === 'pin' ? LOGIN_PIN_COPY : stepOneCopy(stage === 'code', sentTo);
+  const copy = stage === 'pin' ? LOGIN_PIN_COPY : stepOneCopy(stage === 'code', sentTo, sentVia);
   const ready = stage === 'code' ? code.length === 6 : phone.length === 11;
 
   return (
@@ -199,6 +222,7 @@ export default function PhoneLoginScreen({ navigation, route }: any) {
                   />
                 </View>
               </View>
+              <CodeChannelPicker offered={offered} value={channel} onChange={pick} disabled={busy} />
               <View style={{ flexDirection: 'row', gap: 10, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: c.chip }}>
                 <View style={{ paddingTop: 1 }}>
                   <CircleHelp color={c.muted} size={16} />
@@ -225,6 +249,17 @@ export default function PhoneLoginScreen({ navigation, route }: any) {
                   <Text style={{ color: c.brandText, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>{resent ? 'Code sent' : 'Resend code'}</Text>
                 </Tap>
               </View>
+              {canOtherWay && !otherWay && (
+                <Tap onPress={() => setOtherWay(true)} accessibilityRole="button" hitSlop={8} style={{ alignSelf: 'center' }}>
+                  <Text style={{ color: c.brandText, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>Didn't get it? Try another way</Text>
+                </Tap>
+              )}
+              {otherWay && (
+                <View style={{ gap: 10 }}>
+                  <CodeChannelPicker offered={offered} value={channel} onChange={pick} label="Send a new code by" disabled={busy} />
+                  <Button label="Send new code" onPress={resend} disabled={busy} />
+                </View>
+              )}
             </>
           )}
           <View style={{ flex: 1 }} />

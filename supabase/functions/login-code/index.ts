@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { ApiError, adminClient, handler, json } from "../_shared/auth.ts";
-import { dispatchSms } from "../_shared/notify.ts";
+import { consoleDeliveryAllowed } from "../_shared/notify.ts";
+import { CHANNEL_UNAVAILABLE, channelMenu, pickChannel, sendCodeVia, type CodeChannel } from "../_shared/code-channels.ts";
 import { codeFrom } from "../_shared/contact-change.ts";
 import {
   CODE_TTL_MS,
@@ -21,9 +22,11 @@ import {
 /**
  * Signing in with an SMS code (design handoff: "I've enrolled, log me in").
  *
- *   request  phone -> a 6-digit code by SMS to that number, if it belongs to
- *            a verified customer
- *   resend   a fresh code (at most 3, 30 s apart)
+ *   channels which ways a code can come right now (for the app's chooser)
+ *   request  phone + channel -> a 6-digit code to that number by SMS (the
+ *            default), call or WhatsApp, or to the account's verified email,
+ *            if the number belongs to a verified customer
+ *   resend   a fresh code, by the same or another channel (at most 3, 30 s apart)
  *   verify   check the code. First sign-in: a session is issued. An account
  *            that is already set up answers { step: "pin" } instead
  *   pin      the PIN, checked with the same 5-try lock as payments; then a
@@ -36,6 +39,10 @@ import {
  * The session: Supabase Auth issues it, not this function. A one-time
  * sign-in token is generated for the customer's own identity (no email is
  * sent) and handed back; the app exchanges it with supabase.auth.verifyOtp.
+ *
+ * Email is answered the same way whether or not the account has a verified
+ * email ("if this account has one"), so the screen never tells a stranger
+ * anything about someone else's account.
  */
 
 const TABLE = "login_codes";
@@ -97,13 +104,35 @@ function sameHash(a: string, b: string): boolean {
   return diff === 0;
 }
 
-const NOT_SENT = "We couldn't send a code to that number right now. Please try again shortly.";
+const NOT_SENT = "We couldn't send a code that way right now. Please try again shortly, or choose another way.";
+const EMAIL_SENT_TO = "your verified email, if this account has one";
 
-async function sendCode(phone: string, code: string): Promise<boolean> {
-  const result = await dispatchSms(phone, loginSms(code));
-  if (!result.delivered) console.error("[login-code] SMS not sent", result.attempts);
-  return result.delivered;
+function channelOf(value: unknown): CodeChannel {
+  const channel = pickChannel(value, "sign_in", Deno.env, consoleDeliveryAllowed());
+  if (!channel) throw new ApiError(CHANNEL_UNAVAILABLE, 400, "CHANNEL_UNAVAILABLE");
+  return channel;
 }
+
+/** The customer's email, only once they have proved it (Me › Contact details). */
+async function verifiedEmail(admin: SupabaseClient, customerId: string): Promise<string | null> {
+  const { data } = await admin.from("customers").select("email, email_verified_at").eq("id", customerId).maybeSingle();
+  return data?.email && data?.email_verified_at ? String(data.email) : null;
+}
+
+/**
+ * Sends the code. For email with no verified address nothing is sent, and
+ * the answer is the same as when it is: true ("handled").
+ */
+async function sendCode(admin: SupabaseClient, channel: CodeChannel, customerId: string, phone: string, code: string): Promise<boolean> {
+  if (channel === "email") {
+    const email = await verifiedEmail(admin, customerId);
+    if (!email) return true;
+    return sendCodeVia("email", { email }, code, { text: loginSms(code), subject: "Your MiliPay login code" });
+  }
+  return sendCodeVia(channel, { phone }, code, { text: loginSms(code), subject: "Your MiliPay login code" });
+}
+
+const sentToFor = (channel: CodeChannel, phone: string) => (channel === "email" ? EMAIL_SENT_TO : sentTo(phone));
 
 async function loadRow(admin: SupabaseClient, requestId: unknown): Promise<CodeRow> {
   // A random uuid the caller was given for this code; any other string is
@@ -121,6 +150,7 @@ async function loadRow(admin: SupabaseClient, requestId: unknown): Promise<CodeR
 async function request(admin: SupabaseClient, address: string, body: Record<string, unknown>) {
   const phone = loginPhone(body.phone);
   if (!phone) throw new ApiError("Enter the 11-digit number you registered with.", 400, "BAD_PHONE");
+  const channel = channelOf(body.channel);
 
   await rateLimit(admin, `login-code:address:${address}`, 20, 60 * 60);
   await rateLimit(admin, `login-code:phone:${phone}`, 5, 60 * 60);
@@ -166,13 +196,13 @@ async function request(admin: SupabaseClient, address: string, body: Record<stri
 
   const code = newCode();
   const hash = await codeHash(created.id, code);
-  if (!(await sendCode(phone, code))) {
+  if (!(await sendCode(admin, channel, customer!.id, phone, code))) {
     await admin.from(TABLE).update({ cancelled_at: new Date().toISOString() }).eq("id", created.id);
     throw new ApiError(NOT_SENT, 503, "CODE_NOT_SENT");
   }
   await admin.from(TABLE).update({ code_hash: hash, sent_at: new Date().toISOString() }).eq("id", created.id);
 
-  return json({ success: true, requestId: created.id, sentTo: sentTo(phone) });
+  return json({ success: true, requestId: created.id, channel, sentTo: sentToFor(channel, phone) });
 }
 
 async function resend(admin: SupabaseClient, address: string, body: Record<string, unknown>) {
@@ -190,8 +220,9 @@ async function resend(admin: SupabaseClient, address: string, body: Record<strin
     throw new ApiError("Wait a few seconds before asking for another code.", 429, "RESEND_TOO_SOON");
   }
 
+  const channel = channelOf(body.channel);
   const code = newCode();
-  if (!(await sendCode(row.phone, code))) throw new ApiError(NOT_SENT, 503, "CODE_NOT_SENT");
+  if (!(await sendCode(admin, channel, row.customer_id, row.phone, code))) throw new ApiError(NOT_SENT, 503, "CODE_NOT_SENT");
   await admin
     .from(TABLE)
     .update({
@@ -202,7 +233,7 @@ async function resend(admin: SupabaseClient, address: string, body: Record<strin
     })
     .eq("id", row.id);
 
-  return json({ success: true });
+  return json({ success: true, channel, sentTo: sentToFor(channel, row.phone) });
 }
 
 /** Hand back a one-time sign-in token for the customer's own identity. */
@@ -301,6 +332,7 @@ serve(handler(async (req) => {
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const action = typeof body?.action === "string" ? body.action : "";
 
+  if (action === "channels") return json({ success: true, channels: channelMenu(Deno.env, consoleDeliveryAllowed()) });
   if (action === "request") return request(admin, address, body);
   if (action === "resend") return resend(admin, address, body);
   if (action === "verify") return verify(admin, address, body);

@@ -28,6 +28,8 @@ import { useThemeColors } from '../../theme/useThemeColors';
 import { brandFixed } from '../../theme/tokens';
 import { useAuthStore } from '../../store/useStore';
 import { fmtPhone, phoneDigits } from '../../lib/onboardingView';
+import { CodeChannelPicker, useCodeChannel } from '../../components/CodeChannelPicker';
+import { sentLine, type CodeChannel } from '../../lib/codeChannelView';
 import {
   PHONE_RE,
   SELFIE_TIPS,
@@ -92,6 +94,9 @@ export default function SignupScreen({ navigation, route }: any) {
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [resent, setResent] = useState(false);
+  // How the phone's code comes: SMS (the default), a call or WhatsApp. Never email.
+  const { offered, channel, pick } = useCodeChannel('prove_phone');
+  const [sentVia, setSentVia] = useState<CodeChannel>('sms');
   const [nin, setNin] = useState('');
   const [dob, setDob] = useState<Dob | null>(null);
   const [consent, setConsent] = useState(false);
@@ -178,10 +183,11 @@ export default function SignupScreen({ navigation, route }: any) {
   const sendCode = async () => {
     if (!PHONE_RE.test(phone) || busy) return;
     setBusy(true);
-    const r = await startSignup(phone);
+    const r = await startSignup(phone, channel);
     setBusy(false);
     if (!r.ok) return fail(r.message, r.loginInstead);
     setSessionId(r.sessionId);
+    setSentVia(channel);
     setCode('');
     go('code');
   };
@@ -207,8 +213,9 @@ export default function SignupScreen({ navigation, route }: any) {
 
   const resend = async () => {
     if (!sessionId || busy) return;
-    const r = await resendSignupCode(sessionId);
+    const r = await resendSignupCode(sessionId, channel);
     if (!r.ok) return setError(r.message);
+    setSentVia(channel);
     setCode('');
     clearError();
     setResent(true);
@@ -351,6 +358,7 @@ export default function SignupScreen({ navigation, route }: any) {
                 />
               </View>
             </View>
+            <CodeChannelPicker offered={offered} value={channel} onChange={pick} disabled={busy} />
             <View style={{ flex: 1 }} />
             <Button label="Send code" disabled={!PHONE_RE.test(phone)} onPress={sendCode} />
           </>
@@ -359,7 +367,14 @@ export default function SignupScreen({ navigation, route }: any) {
       case 'code':
         return (
           <>
-            <OnbTitle title="Enter the code" sub={`We sent a 6-digit code by SMS to +234 ${fmtPhone(phone).replace(/^0/, '')}.`} />
+            <OnbTitle
+              title="Enter the code"
+              sub={
+                sentVia === 'sms'
+                  ? `We sent a 6-digit code by SMS to +234 ${fmtPhone(phone).replace(/^0/, '')}.`
+                  : sentLine(sentVia, `+234 ${fmtPhone(phone).replace(/^0/, '')}`)
+              }
+            />
             {errorBox}
             <CodeBoxes value={code} onChange={onCode} error={!!error} shakeKey={shake} />
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -370,6 +385,7 @@ export default function SignupScreen({ navigation, route }: any) {
                 <Text style={{ color: c.brandText, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>{resent ? 'Code sent' : 'Resend code'}</Text>
               </Tap>
             </View>
+            <CodeChannelPicker offered={offered} value={channel} onChange={pick} label="Resend by" disabled={busy} />
           </>
         );
 

@@ -6,6 +6,7 @@ import { StepProgress } from "@milipay/shared/components/ui/StepProgress";
 import { AGENT_ROUTES } from "@milipay/shared/components/layout/AgentLayout";
 import { registerCustomer, verifyCustomerIdentity } from "@milipay/shared/features/customers/api";
 import { QUALITY_MIN, formatNin, resendPhoneCheck, sendPhoneCheck, verifyPhoneCheck } from "@milipay/shared/features/agent/api";
+import { ChannelPicker, useChannels } from "@milipay/shared/features/codeChannels";
 import { NIGERIAN_STATES } from "@milipay/shared/lib/constants";
 import { formatNaira } from "@milipay/shared/lib/utils/format";
 import { EMPTY_CUSTOMER_DRAFT, type CustomerDraft } from "@milipay/shared/types";
@@ -41,6 +42,8 @@ export default function AgentRegisterCustomerPage() {
   const [palm, setPalm] = useState<Captured | null>(null);
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
+  // The customer says how they'd like the phone's code: SMS, a call or WhatsApp.
+  const channels = useChannels("prove_phone");
   const [err, setErr] = useState("");
   const [sent, setSent] = useState(false);
 
@@ -164,15 +167,16 @@ export default function AgentRegisterCustomerPage() {
                 setCheckId(null);
                 setPhoneOk(false);
               }}
-              hint="We text them a code. They read it to you, so we know the phone is theirs."
+              hint="We send them a code by SMS, a call or WhatsApp, as they prefer. They read it to you, so we know the phone is theirs."
             />
+            {!phoneOk && <ChannelPicker offered={channels.offered} value={channels.channel} onChange={channels.setChannel} label="How should they get the code?" disabled={busy} />}
             {!checkId ? (
               <button
                 type="button"
                 disabled={!PHONE_RE.test(d.phone) || busy}
                 onClick={() =>
                   run(async () => {
-                    setCheckId((await sendPhoneCheck(d.phone)).checkId);
+                    setCheckId((await sendPhoneCheck(d.phone, channels.channel)).checkId);
                     setCode("");
                   })
                 }
@@ -199,7 +203,7 @@ export default function AgentRegisterCustomerPage() {
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => run(async () => void (await resendPhoneCheck(checkId)))}
+                    onClick={() => run(async () => void (await resendPhoneCheck(checkId, channels.channel)))}
                     className="h-12 rounded-[12px] border border-line px-4 text-sm font-semibold text-fg disabled:opacity-45"
                   >
                     Send a new code

@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { ApiError, adminClient, handler, json } from "../_shared/auth.ts";
-import { dispatchSms } from "../_shared/notify.ts";
+import { consoleDeliveryAllowed } from "../_shared/notify.ts";
+import { CHANNEL_UNAVAILABLE, pickChannel, sendCodeVia, type CodeChannel } from "../_shared/code-channels.ts";
 import { codeFrom } from "../_shared/contact-change.ts";
 import { loginPhone, sentTo } from "../_shared/login-code.ts";
 import {
@@ -25,8 +26,10 @@ import {
  * Self sign-up (Tier 1). Callers are not signed in, so this runs without a
  * JWT; every step after the phone code needs the session's resume token.
  *
- *   start          phone → a 6-digit code by SMS (refused if the number is taken)
- *   resend         a fresh code (3 at most, 30 s apart)
+ *   start          phone + channel → a 6-digit code by SMS (the default), call
+ *                  or WhatsApp; never email, since it proves the phone
+ *                  (refused if the number is taken)
+ *   resend         a fresh code, same or another phone channel (3 at most, 30 s apart)
  *   verify_phone   the code → a resume token (kept by the app for "Save & exit")
  *   status         where this sign-up stands (resume, "Is this you?" details)
  *   nin            NIN + date of birth + consent; refused if the NIN is taken
@@ -128,14 +131,19 @@ async function ninHolder(admin: SupabaseClient, nin: string): Promise<string | n
   return (data?.id as string | undefined) ?? null;
 }
 
-async function sendCode(phone: string, code: string): Promise<boolean> {
-  const message = `Your MiliPay sign-up code is ${code}. It expires in 10 minutes. MiliPay will never call or text to ask for it.`;
-  const result = await dispatchSms(phone, message);
-  if (!result.delivered) console.error("[signup] SMS not sent", result.attempts);
-  return result.delivered;
+/** Phone channels only: the code proves the person holds this number. */
+function channelOf(value: unknown): CodeChannel {
+  const channel = pickChannel(value, "prove_phone", Deno.env, consoleDeliveryAllowed());
+  if (!channel) throw new ApiError(CHANNEL_UNAVAILABLE, 400, "CHANNEL_UNAVAILABLE");
+  return channel;
 }
 
-const NOT_SENT = "We couldn't send a code to that number right now. Please try again shortly.";
+async function sendCode(channel: CodeChannel, phone: string, code: string): Promise<boolean> {
+  const message = `Your MiliPay sign-up code is ${code}. It expires in 10 minutes. MiliPay will never call or text to ask for it.`;
+  return await sendCodeVia(channel, { phone }, code, { text: message, subject: "Your MiliPay sign-up code" });
+}
+
+const NOT_SENT = "We couldn't send a code that way right now. Please try again shortly, or choose another way.";
 
 /**
  * The rules Settings › Self sign-up controls (platform_settings). Read once
@@ -232,6 +240,7 @@ function view(s: Session) {
 async function start(admin: SupabaseClient, address: string, body: Record<string, unknown>) {
   const phone = loginPhone(body.phone);
   if (!phone) throw new ApiError("Enter the 11-digit number you want to use.", 400, "BAD_PHONE");
+  const channel = channelOf(body.channel);
   await rateLimit(admin, `signup:address:${address}`, 20, 60 * 60);
   await rateLimit(admin, `signup:phone:${phone}`, 5, 60 * 60);
   if (await phoneTaken(admin, phone)) throw new ApiError(PHONE_TAKEN, 409, "PHONE_TAKEN");
@@ -252,7 +261,7 @@ async function start(admin: SupabaseClient, address: string, body: Record<string
     throw new ApiError("Could not start sign-up. Please try again.", 503, "UNAVAILABLE");
   }
   const code = codeFrom(crypto.getRandomValues(new Uint32Array(1))[0]);
-  if (!(await sendCode(phone, code))) {
+  if (!(await sendCode(channel, phone, code))) {
     await update(admin, created.id, { step: "abandoned" });
     throw new ApiError(NOT_SENT, 503, "CODE_NOT_SENT");
   }
@@ -261,7 +270,7 @@ async function start(admin: SupabaseClient, address: string, body: Record<string
     code_sent_at: new Date().toISOString(),
     code_expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString(),
   });
-  return json({ success: true, sessionId: created.id, sentTo: sentTo(phone) });
+  return json({ success: true, sessionId: created.id, channel, sentTo: sentTo(phone) });
 }
 
 async function resend(admin: SupabaseClient, address: string, body: Record<string, unknown>) {
@@ -273,8 +282,9 @@ async function resend(admin: SupabaseClient, address: string, body: Record<strin
   if (s.code_sent_at && Date.now() - new Date(s.code_sent_at).getTime() < RESEND_GAP_MS) {
     throw new ApiError("Wait a few seconds before asking for another code.", 429, "RESEND_TOO_SOON");
   }
+  const channel = channelOf(body.channel);
   const code = codeFrom(crypto.getRandomValues(new Uint32Array(1))[0]);
-  if (!(await sendCode(s.phone, code))) throw new ApiError(NOT_SENT, 503, "CODE_NOT_SENT");
+  if (!(await sendCode(channel, s.phone, code))) throw new ApiError(NOT_SENT, 503, "CODE_NOT_SENT");
   await update(admin, s.id, {
     code_hash: await hmac(`signup-code:${s.id}:${code}`),
     code_sent_at: new Date().toISOString(),

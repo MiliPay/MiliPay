@@ -12,12 +12,14 @@ import { NIGERIAN_STATES } from "@milipay/shared/lib/constants";
 import { validateCustomerDraft } from "@milipay/shared/lib/utils/validation";
 import { EMPTY_CUSTOMER_DRAFT, type CustomerDraft, type CustomerRegistrationResult } from "@milipay/shared/types";
 import { ChoiceChips, DoneCard, Field, FormError, InfoBox, ReviewRows, SelectField, StepNav } from "../register/formParts";
+import { PhoneCheckBox } from "@milipay/shared/components/ui/PhoneCheckBox";
 
 /**
  * Register customer (design handoff, admin "Register customer"): identity
  * with a NIMC check, contact, palm and face from the enrolment device,
  * review. Shared by the admin and agent portals. enrol-customer re-runs the
- * NIN check on submit, so a pass here is not a free pass.
+ * NIN check on submit, so a pass here is not a free pass. The phone must be
+ * checked with a code the customer reads back (since 2026-10-20).
  */
 
 const STEPS = [
@@ -80,6 +82,7 @@ export default function RegisterCustomerPage() {
     // "unavailable" is the provider being down, not a rejection: the
     // enrolment goes on and the reviewer sees it unverified.
     if (s === 0 && v?.status !== "verified" && v?.status !== "unavailable") return "Verify the NIN before continuing.";
+    if (s === 1 && !d.phoneCheckId) return "Check the customer's phone with a code before continuing.";
     return "";
   };
 
@@ -205,13 +208,14 @@ export default function RegisterCustomerPage() {
                 mono
                 inputMode="tel"
                 value={d.phone}
-                onChange={(e) => set({ phone: digits(11)(e.target.value) })}
+                onChange={(e) => set({ phone: digits(11)(e.target.value), phoneCheckId: undefined })}
                 hint="Their sign-in codes go here."
               />
               <Field label="Email (optional)" placeholder="name@example.com" type="email" value={d.email} onChange={(e) => set({ email: e.target.value })} />
               <Field full label="Residential address" placeholder="Street, area, LGA" value={d.address} onChange={(e) => set({ address: e.target.value })} />
             </div>
             <SelectField label="State" value={d.state} onChange={(state) => set({ state })} placeholder="Select a state" options={NIGERIAN_STATES} />
+            <PhoneCheckBox phone={d.phone} confirmedId={d.phoneCheckId ?? null} onConfirmed={(id) => set({ phoneCheckId: id ?? undefined })} />
           </>
         )}
 

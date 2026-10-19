@@ -6,6 +6,8 @@ import * as Haptics from 'expo-haptics';
 
 import { HeartbeatLoader, PressScale, ScreenHeader } from '../../components/ds';
 import { ContactCodeSheet } from '../../components/me/ContactCodeSheet';
+import { ContactPinSheet } from '../../components/me/ContactPinSheet';
+import type { CodeChannel } from '../../lib/codeChannelView';
 import { useAuthStore } from '../../store/useStore';
 import { useThemeColors } from '../../theme/useThemeColors';
 import { brandFixed } from '../../theme/tokens';
@@ -21,6 +23,9 @@ const PHONE_RE = /^0[789][01]\d{8}$/;
  * sent to it; nothing — not even the name — is saved until every code is
  * right, and closing the code sheet discards the change. A verified phone
  * becomes the number the customer signs in with. The NIN is read-only.
+ *
+ * Before any code is sent, the customer confirms with their PIN, and picks
+ * how a new number's code comes (SMS, a call or WhatsApp).
  */
 export default function ProfileSettingsScreen({ navigation }: any) {
   const c = useThemeColors();
@@ -42,7 +47,8 @@ export default function ProfileSettingsScreen({ navigation }: any) {
   const [phone, setPhone] = useState(curPhone);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [request, setRequest] = useState<{ id: string; steps: ContactStep[] } | null>(null);
+  const [request, setRequest] = useState<{ id: string; steps: ContactStep[]; phoneVia: CodeChannel } | null>(null);
+  const [pinOpen, setPinOpen] = useState(false);
 
   const emailChanged = email.trim().toLowerCase() !== curEmail;
   const phoneChanged = phone !== curPhone;
@@ -79,18 +85,29 @@ export default function ProfileSettingsScreen({ navigation }: any) {
       return;
     }
 
-    setLoading(true);
-    const started = await startContactChange({
-      ...(emailChanged ? { email: email.trim().toLowerCase() } : {}),
-      ...(phoneChanged ? { phone } : {}),
-    });
-    setLoading(false);
+    // The PIN comes first; the sheet then starts the change.
+    setPinOpen(true);
+  };
+
+  /** From the PIN sheet: an error to show there, or null once the codes are on their way. */
+  const startChange = async (pin: string, phoneVia: CodeChannel): Promise<string | null> => {
+    const started = await startContactChange(
+      {
+        ...(emailChanged ? { email: email.trim().toLowerCase() } : {}),
+        ...(phoneChanged ? { phone } : {}),
+      },
+      pin,
+      phoneVia,
+    );
+    if (!started.ok && started.pinWrong) return started.message;
+    setPinOpen(false);
     if (!started.ok) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       setError(started.message);
-      return;
+      return null;
     }
-    setRequest({ id: started.requestId, steps: started.steps });
+    setRequest({ id: started.requestId, steps: started.steps, phoneVia });
+    return null;
   };
 
   const finish = async (saved: { email: string | null; phone: string | null }) => {
@@ -271,9 +288,11 @@ export default function ProfileSettingsScreen({ navigation }: any) {
         </ScrollView>
       </KeyboardAvoidingView>
 
+      <ContactPinSheet visible={pinOpen} phoneChanging={phoneChanged} onSubmit={startChange} onClose={() => setPinOpen(false)} />
       <ContactCodeSheet
         requestId={request?.id ?? null}
         steps={request?.steps ?? []}
+        phoneVia={request?.phoneVia ?? 'sms'}
         onDone={(saved) => void finish(saved)}
         onClose={discard}
         onRestart={(message) => {

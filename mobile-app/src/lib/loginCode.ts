@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import type { CodeChannel } from './codeChannelView';
 
 /**
  * Thin client for the `login-code` Edge Function: signing in with an SMS code
@@ -35,17 +36,21 @@ export type Failure = { ok: false; message: string; closed?: boolean };
 
 export async function requestLoginCode(
   phone: string,
+  channel: CodeChannel = 'sms',
 ): Promise<{ ok: true; requestId: string; sentTo: string } | Failure> {
-  const body = await call({ action: 'request', phone });
+  const body = await call({ action: 'request', phone, channel });
   if (body.success === true && typeof body.requestId === 'string') {
     return { ok: true, requestId: body.requestId, sentTo: String(body.sentTo ?? '') };
   }
   return { ok: false, message: message(body, "We couldn't send your code. Please try again.") };
 }
 
-export async function resendLoginCode(requestId: string): Promise<{ ok: true } | Failure> {
-  const body = await call({ action: 'resend', requestId });
-  if (body.success === true) return { ok: true };
+export async function resendLoginCode(
+  requestId: string,
+  channel: CodeChannel = 'sms',
+): Promise<{ ok: true; sentTo: string } | Failure> {
+  const body = await call({ action: 'resend', requestId, channel });
+  if (body.success === true) return { ok: true, sentTo: String(body.sentTo ?? '') };
   return { ok: false, message: message(body, "We couldn't send a new code. Please try again."), closed: closed(body) };
 }
 
