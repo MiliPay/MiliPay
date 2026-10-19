@@ -1,7 +1,7 @@
 # MiliPay: where the project stands
 
 Read this first when picking the project up on a new machine or in a new
-session. Last updated 2026-10-17.
+session. Last updated 2026-10-19.
 
 No secrets live in this file or anywhere in the repo. Keys are in each
 environment's own settings (Supabase secrets, local `.env` files that git
@@ -36,6 +36,9 @@ portals' hosting).
   quietly. Fixed, plus Supabase security advisor findings (`830a7beb`).
 - Admin Website pages for leads, waitlist and agent locations
   (`0f1de901`, `6b682e6b`).
+- Removed the July 2026 planning draft from the repo root
+  (`milipay_doc.txt` and its `.docx`); the current company documents are
+  in `Claude outputs/`.
 
 ## The plan we agreed: MiliPay owns everything, three environments
 
