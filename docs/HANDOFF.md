@@ -17,7 +17,7 @@ ignores).
 | Agent portal | https://milipay-agentportal.web.app |
 | Supabase (dev today, see the plan below) | project `MiliPay`, ref `hkhnduxbxfcqjgrdnqcz`, eu-central-1, on the founder's personal account |
 | Firebase hosting | project `aniyu-b841b` (shared with another product, AniYu) |
-| GitHub | https://github.com/Alashabeeb/BioPay, branch `main` |
+| GitHub | https://github.com/Alashabeeb/MiliPay, branch `main` |
 
 All migrations in `supabase/migrations` are applied to that Supabase
 project, and every function in `supabase/functions` is deployed (last
@@ -82,7 +82,7 @@ Create every account with a MiliPay company email, at least two owners, and
 two-factor sign-in for everyone.
 
 1. **GitHub:** create a MiliPay organisation, then transfer
-   `Alashabeeb/BioPay` into it (repo Settings › Transfer ownership).
+   `Alashabeeb/MiliPay` into it (repo Settings › Transfer ownership).
 2. **Supabase:** a paid organisation with **milipay-production**, and a
    free organisation with **milipay-development** and **milipay-staging**.
    Same region for all three, nearest Nigeria. Billing on a company card.
