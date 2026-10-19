@@ -366,4 +366,16 @@ GRANT EXECUTE ON FUNCTION public.delete_customer_user(UUID) TO authenticated, se
 -- ─────────────────────────────────────────────────────────────
 -- 4. The table itself. 0 rows, no foreign keys pointing at it.
 -- ─────────────────────────────────────────────────────────────
+-- On a fresh database the initial schema's linked_accounts.user_id still
+-- references public.users; the live one never did (user_id holds the auth
+-- id). Drop that key so the table can go. (Added 2026-10-19.)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint
+             WHERE conname = 'linked_accounts_user_id_fkey'
+               AND confrelid = 'public.users'::regclass) THEN
+    ALTER TABLE public.linked_accounts DROP CONSTRAINT linked_accounts_user_id_fkey;
+  END IF;
+END $$;
+
 DROP TABLE IF EXISTS public.users;

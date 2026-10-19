@@ -5,6 +5,10 @@
 .env.*.local
 !.env.example
 !.env*.example
+# Public per-environment settings for the web apps (Supabase URL, anon key).
+!env/.env.development
+!env/.env.staging
+!env/.env.production
 
 # Dependencies
 node_modules/

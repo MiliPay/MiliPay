@@ -15,17 +15,68 @@ ignores).
 | Support portal | https://milipay-serviceportal.web.app |
 | Admin portal (incl. Website › Leads, Waitlist, Agent locations) | https://milipay-adminportal.web.app |
 | Agent portal | https://milipay-agentportal.web.app |
-| Supabase (dev today, see the plan below) | project `MiliPay`, ref `hkhnduxbxfcqjgrdnqcz`, eu-central-1, on the founder's personal account |
+| Supabase, what the live sites use until production moves to Nigeria | project `MiliPay`, ref `hkhnduxbxfcqjgrdnqcz`, eu-central-1, on the founder's personal account |
+| Supabase development | `milipay-development`, ref `govynvmsdaeoxpktgjpn`, eu-west-1, organisation "MiliPay Dev" (free) |
+| Supabase staging | `milipay-staging`, ref `klehplljqlxvfevvmwkp`, eu-west-1, organisation "MiliPay Dev" (free) |
 | Firebase hosting | project `aniyu-b841b` (shared with another product, AniYu) |
 | GitHub | https://github.com/MiliPay/MiliPay (organisation `MiliPay`), branch `main` |
 | Expo | organisation `milipayltd`, project `biopay` |
 | Firebase (MiliPay, empty for now) | project `milipay-f2459` |
 
-All migrations in `supabase/migrations` are applied to that Supabase
-project, and every function in `supabase/functions` is deployed (last
-deploy 2026-10-17: `pos`, `process-payment`, `agent-upgrade`,
-`enrol-customer`, `onboard-merchant`, plus the admin, support and agent
-portals' hosting).
+All migrations in `supabase/migrations` are applied to all three Supabase
+projects, and every function in `supabase/functions` is deployed to all
+three (original project: last deploy 2026-10-17; development and staging:
+everything on 2026-10-19).
+
+## Development and staging (set up 2026-10-19)
+
+- **Which build talks to which project.** Web apps read
+  `env/.env.<mode>` (shared `envDir` in each `vite.config.ts`):
+  `npm run dev` → development, `npm run build:staging` → staging,
+  `npm run build` → the original project (what Firebase serves). The mobile
+  app takes `EXPO_PUBLIC_SUPABASE_URL/ANON_KEY` from its EAS profile
+  (`development` → development, `preview` → staging, `production` → falls
+  back to the original project). Only public values live in those files.
+- **Migrations now rebuild a database from scratch.** They never had: the
+  original project had been partly set up by hand. Fixed on 2026-10-19 in
+  three already-applied files (the original project never re-runs them):
+  `transactions` is a plain table keyed on `id`; the prototype `merchants`
+  table is replaced; the old `linked_accounts` → `users` key is dropped
+  before `users` goes. The first migration also creates `rls_auto_enable` +
+  the `ensure_rls` event trigger (row security on for every new table),
+  which Supabase only adds when a project is created with automatic RLS.
+  Development and staging were compared after the push: same 45 tables (all
+  RLS on), 78 policies, 133 functions, columns, 4 cron jobs, realtime tables.
+- **Apply migrations** with the CLI, no database password needed:
+  `npx.cmd -y supabase@2.121.0 link --project-ref <ref>` then
+  `npx.cmd -y supabase@2.121.0 db push --linked`. Before the first push to a
+  new project, store its own address in Vault, or the VTU sweep cron calls
+  the original project:
+  `select vault.create_secret('https://<ref>.supabase.co/functions/v1', 'functions_base_url', '');`
+  (`link` rewrites the tracked `supabase/.temp` files; restore them with
+  `git checkout -- supabase/.temp` before committing.)
+- **Function settings already set** on both (sandbox, nothing secret):
+  `MILIPAY_ENVIRONMENT=sandbox`, `VTU_FULFILMENT_MODE=disabled`,
+  `VTPASS_BASE_URL` (sandbox), `MONO_BASE_URL`, `MONO_PAYMENT_MODE=directpay`,
+  `IDENTITY_VERIFICATION_MODE=simulated`, `SMILE_ENVIRONMENT=sandbox`,
+  `ALLOW_SIMULATED_BIOMETRICS=true` (no scanner yet, no real customers),
+  Termii sender names, `VTPASS_WALLET_FLOOR`. `PASSWORD_DELIVERY_CHANNELS`
+  is `whatsapp,sms,console` in development (one-time passwords land in the
+  function log when Termii isn't set) and `whatsapp,sms` in staging.
+- **Waiting on the founder, per project** (Supabase › Edge Functions ›
+  Secrets; test/sandbox keys only): `MONO_SECRET_KEY`,
+  `MONO_PAYMENTS_SECRET_KEY`, `MONO_PUBLIC_KEY`, `MONO_WEBHOOK_SECRET` (add
+  the webhook `https://<ref>.supabase.co/functions/v1/mono-webhook` on
+  Mono's test Payments app; it shows the secret), `VTPASS_API_KEY`,
+  `VTPASS_SECRET_KEY`, `VTPASS_PUBLIC_KEY`, `TERMII_API_KEY`,
+  `SMILE_PARTNER_ID`, `SMILE_API_KEY`, `RESEND_API_KEY` + `EMAIL_FROM`.
+  Once the VTPass sandbox keys are in, set `VTU_FULFILMENT_MODE=live` to run
+  purchases end to end against the sandboxes. `PALM_MATCH_URL` waits for
+  the matcher service. Also: Authentication › Sign In / Providers, turn off
+  "Allow new users to sign up" (staff and customers are created by the
+  server, never by public sign-up).
+- **No staff accounts yet**, so nobody can sign in to the portals against
+  development or staging. Next step: create a super admin in each.
 
 ## Recently finished
 
@@ -104,10 +155,9 @@ two-factor sign-in for everyone.
 
 1. ~~GitHub~~ done 2026-10-19: org `MiliPay`, repo
    https://github.com/MiliPay/MiliPay.
-2. **Supabase:** a free organisation ("MiliPay Dev") with
-   **milipay-development** and **milipay-staging**, both in London
-   (eu-west-2). Production is on hold: see "Production must be hosted in
-   Nigeria" above.
+2. ~~Supabase dev and staging~~ done 2026-10-19 (see "Development and
+   staging" above; their sandbox keys are still to enter). Production is on
+   hold: see "Production must be hosted in Nigeria" above.
 3. ~~Firebase~~ done 2026-10-19: project `milipay-f2459` under the
    company Google account. Nothing is hosted there yet.
 4. ~~Expo~~ done 2026-10-19: organisation `milipayltd`, project `biopay`
@@ -124,11 +174,13 @@ two-factor sign-in for everyone.
 
 ### Then Claude does
 
-1. Apply all migrations to development and staging, check them, then
-   production.
-2. Deploy every Edge Function to all three.
-3. Point each app and portal at the right environment per build. (The
-   repo already points at the MiliPay GitHub remote.)
+1. ~~Apply all migrations to development and staging~~ done 2026-10-19;
+   production when it exists.
+2. ~~Deploy every Edge Function to development and staging~~ done
+   2026-10-19; production when it exists.
+3. ~~Point each app and portal at the right environment per build~~ done
+   2026-10-19 (`env/`, `eas.json`); production gets its own values when it
+   moves.
 4. Move hosting to MiliPay Firebase (`milipay-f2459`; `.firebaserc` still
    says `aniyu-b841b` until then) and set up the Firebase push key in Expo.
 5. Add GitHub Actions: staging on merge, production on approval.
@@ -250,8 +302,13 @@ From `agent-portal/design_handoff_agent`; plan in
   `npx.cmd -y supabase@2.121.0 login`, then deploy with
   `npx -y supabase@2.121.0 functions deploy <name> --project-ref <ref> --use-api`
   (no Docker needed). Older CLIs such as 2.48.3 refuse this repo's
-  `config.toml` ("'auth' has invalid keys: phone"). Migrations have been
-  applied through Claude's Supabase connector.
+  `config.toml` ("'auth' has invalid keys: phone"). Migrations go in with
+  `db push --linked` (see "Development and staging"). Claude's Supabase
+  connector can be granted one organisation at a time; it's on "MiliPay
+  Dev" since 2026-10-19.
+- **Dependencies:** run `npm.cmd install` at the root and
+  `npm.cmd --prefix mobile-app install` before the tests; 12 test files
+  need the mobile app's packages.
 - **New tables need `GRANT ... TO service_role`** explicitly in this
   project, or Edge Functions are refused. See
   `supabase/migrations/20261014101000_service_role_grants.sql`.

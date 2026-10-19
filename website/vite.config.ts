@@ -4,6 +4,8 @@ import path from "path";
 
 export default defineConfig({
   plugins: [react()],
+  // Shared per-environment settings: env/.env.<development|staging|production>.
+  envDir: path.resolve(__dirname, "../env"),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

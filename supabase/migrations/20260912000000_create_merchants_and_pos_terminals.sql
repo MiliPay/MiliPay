@@ -1,6 +1,20 @@
 -- Migration: 20260912000000_create_merchants_and_pos_terminals.sql
 -- Description: Create enterprise merchants and pos_terminals tables with RLS and Mono settlement rails.
 
+-- 0. On a fresh database the initial schema's prototype merchants table
+--    (location, terminal_id; no status) is still here and would make the
+--    CREATE below a no-op. Replace it. (Added 2026-10-19 so the migrations
+--    rebuild a database from scratch; the live database never had it.)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'public' AND table_name = 'merchants' AND column_name = 'location')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'public' AND table_name = 'merchants' AND column_name = 'status') THEN
+    DROP TABLE public.merchants CASCADE;
+  END IF;
+END $$;
+
 -- 1. Create merchants table
 CREATE TABLE IF NOT EXISTS public.merchants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

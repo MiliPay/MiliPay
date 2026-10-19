@@ -54,6 +54,10 @@ const RULES = [
 const ALLOWED_SUBSTRINGS = [
   // Supabase anon key for project hkhnduxbxfcqjgrdnqcz (role: "anon").
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhraG5kdXhieGZjcWpncmRucWN6Iiwicm9sZSI6ImFub24i',
+  // milipay-development, govynvmsdaeoxpktgjpn (role: "anon").
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdvdnludm1zZGFlb3hwa3RnanBuIiwicm9sZSI6ImFub24i',
+  // milipay-staging, klehplljqlxvfevvmwkp (role: "anon").
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtsZWhwbGxqcWx4dmZldnZtd2twIiwicm9sZSI6ImFub24i',
 ];
 
 // Paths that are documentation of the shape of a secret, not a secret.
