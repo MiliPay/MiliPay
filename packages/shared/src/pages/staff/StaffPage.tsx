@@ -10,6 +10,7 @@ import { STAFF_ROLES, roleMeta } from "@milipay/shared/features/staff/roles";
 import { ROUTES } from "@milipay/shared/lib/constants";
 import { initials, timeAgo } from "@milipay/shared/lib/utils/format";
 import { CreateStaffModal } from "./CreateStaffModal";
+import { ProfileChangesPanel } from "./ProfileChangesPanel";
 
 /**
  * Staff (design handoff, admin "Staff"): everyone who can use the admin,
@@ -67,6 +68,8 @@ export default function StaffPage() {
           Invite staff
         </button>
       </div>
+
+      <ProfileChangesPanel onDecided={() => void load()} />
 
       <div className="overflow-hidden rounded-card border border-line bg-panel shadow-card">
         <div className="flex flex-wrap items-center gap-2.5 border-b border-line px-4 py-3">

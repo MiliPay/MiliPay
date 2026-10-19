@@ -90,7 +90,7 @@ export default function DashboardLayout() {
     {
       title: "Team",
       items: [
-        { label: "Staff", icon: Shield, to: ROUTES.staff },
+        { label: "Staff", icon: Shield, to: ROUTES.staff, badge: counts.profileChanges, badgeTone: "warn" },
         { label: "Support", icon: LifeBuoy, to: ROUTES.support, badge: counts.openTickets, badgeTone: "info" },
       ],
     },

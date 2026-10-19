@@ -101,7 +101,7 @@ export function ReasonDialog({
           </div>
           <div className="flex-1">
             <div className="text-lg font-bold">{title}</div>
-            <div className="mt-1 leading-normal text-muted">{body}</div>
+            <div className="mt-1 whitespace-pre-line leading-normal text-muted">{body}</div>
           </div>
         </div>
 

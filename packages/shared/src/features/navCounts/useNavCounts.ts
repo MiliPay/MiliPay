@@ -18,6 +18,8 @@ export interface AdminNavCounts {
   newLeads: number | null;
   /** Denied sign-ins and actions today: the dot on the top-bar bell. */
   deniedToday: number | null;
+  /** Staff profile changes this person may approve. */
+  profileChanges: number | null;
 }
 
 const EMPTY: AdminNavCounts = {
@@ -28,6 +30,7 @@ const EMPTY: AdminNavCounts = {
   openTickets: null,
   newLeads: null,
   deniedToday: null,
+  profileChanges: null,
 };
 
 /** A terminal with no heartbeat for this long is offline. */
@@ -53,12 +56,17 @@ export function newLeadsOf(r: { data?: unknown; error?: unknown } | null): numbe
   return d.newMerchantLeads + d.newAgentApplications;
 }
 
+/** The Staff badge from staff_profile_change_queue; blank when it failed. */
+export function profileChangesOf(r: { data?: unknown; error?: unknown } | null): number | null {
+  return r && !r.error && Array.isArray(r.data) ? r.data.length : null;
+}
+
 export async function fetchAdminNavCounts(): Promise<AdminNavCounts> {
   const offlineSince = new Date(Date.now() - OFFLINE_AFTER_MS).toISOString();
   // Midnight in Lagos (UTC+1 all year) as an instant.
   const lagos = new Date(Date.now() + 3_600_000);
   const lagosMidnight = new Date(Date.UTC(lagos.getUTCFullYear(), lagos.getUTCMonth(), lagos.getUTCDate()) - 3_600_000).toISOString();
-  const [ops, pendingCustomers, reviews, offlineTerminals, openTickets, deniedToday, website] = await Promise.all([
+  const [ops, pendingCustomers, reviews, offlineTerminals, openTickets, deniedToday, website, profileQueue] = await Promise.all([
     settle(supabase.rpc("vtu_operations_snapshot", { p_hours: 24 })),
     countOf(supabase.from("customers").select("id", { count: "exact", head: true }).eq("status", "pending")),
     settle(fetchSignupReviews()),
@@ -75,6 +83,7 @@ export async function fetchAdminNavCounts(): Promise<AdminNavCounts> {
       supabase.from("audit_events").select("id", { count: "exact", head: true }).eq("result", "denied").gte("occurred_at", lagosMidnight),
     ),
     settle(supabase.rpc("admin_website_summary")),
+    settle(supabase.rpc("staff_profile_change_queue")),
   ]);
   const queues = (ops as { data?: { queues?: { pending?: number; quarantined?: number } } } | null)?.data?.queues;
   return {
@@ -85,6 +94,7 @@ export async function fetchAdminNavCounts(): Promise<AdminNavCounts> {
     openTickets,
     newLeads: newLeadsOf(website),
     deniedToday,
+    profileChanges: profileChangesOf(profileQueue),
   };
 }
 

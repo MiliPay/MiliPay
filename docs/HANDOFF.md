@@ -75,8 +75,14 @@ everything on 2026-10-19).
   the matcher service. Also: Authentication › Sign In / Providers, turn off
   "Allow new users to sign up" (staff and customers are created by the
   server, never by public sign-up).
-- **No staff accounts yet**, so nobody can sign in to the portals against
-  development or staging. Next step: create a super admin in each.
+- **Staff accounts:** development has the founder as super admin
+  (habeebullah.abdulhakeem@milipayz.com). Staging has none yet. To add a
+  super admin by hand: create the user in Authentication › Users (Auto
+  Confirm), then insert their `staff_profiles` row with role `super_admin`
+  and set `raw_app_meta_data.role` on the auth user to match.
+- **Development secrets:** only `TERMII_API_KEY` is a real key so far.
+  `MONO_SECRET_KEY` and `EMAIL_FROM` also hold values the founder may not
+  have meant to set (check). Staging has no provider keys yet.
 
 ## Recently finished
 
@@ -89,6 +95,19 @@ everything on 2026-10-19).
   quietly. Fixed, plus Supabase security advisor findings (`830a7beb`).
 - Admin Website pages for leads, waitlist and agent locations
   (`0f1de901`, `6b682e6b`).
+- **Staff edit their own profile** (2026-10-19): name, phone and state in
+  every staff portal (admin: My profile; agent and support: Settings, also
+  reached from "My profile"); the email is shown locked and nothing can
+  change it. Password changes apply at once. A super admin's own changes
+  apply at once; an admin's need a super admin; an agent's or support's need
+  an admin or a super admin; nobody decides their own. Approvals are on
+  Admin › Staff ("Profile changes waiting for you", with a Staff badge);
+  approve and reject both ask to confirm, reject needs a reason, all of it
+  is audited. Migration `20261019090000_staff_profile_changes.sql` is on
+  development and staging only: **apply it to the live project before
+  deploying the portals there**, or My profile and Settings fail to load.
+  Tests: `tests/staff-profile-changes.test.ts`; the rules were also run on
+  the development database in a rolled-back transaction.
 - Removed the July 2026 planning draft from the repo root
   (`milipay_doc.txt` and its `.docx`); the current company documents are
   in `Claude outputs/`.

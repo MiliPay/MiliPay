@@ -8,6 +8,7 @@ import { Pill, TONE_CLASSES } from "@milipay/shared/components/ui/StatusBadge";
 import { useToast } from "@milipay/shared/components/ui/Toast";
 import { useAuth } from "@milipay/shared/features/auth/AuthContext";
 import { fetchStaffDetail, signOutOtherSessions, staffAction, type StaffDetail } from "@milipay/shared/features/staff/api";
+import { PasswordCard, ProfileDetailsCard } from "@milipay/shared/features/staff/MyProfileCards";
 import { PERMISSIONS, STAFF_ROLES, assignableRoles, canManage, deviceLabel, isPhoneUa, roleMeta } from "@milipay/shared/features/staff/roles";
 import { ROUTES } from "@milipay/shared/lib/constants";
 import { initials, timeAgo } from "@milipay/shared/lib/utils/format";
@@ -19,7 +20,7 @@ import { staffStatus } from "./StaffPage";
  * who they are, what their role allows, where they're signed in, and what
  * they've done. Change role, Reset 2FA, Reset password and Suspend go through
  * staff-admin with a reason; on your own profile you can sign out your other
- * sessions.
+ * sessions, edit your details (with approval by role) and change your password.
  */
 
 type DialogConfig = Omit<ReasonDialogProps, "open" | "onClose">;
@@ -225,6 +226,13 @@ export default function StaffDetailsPage() {
           ))}
         </div>
       </div>
+
+      {p.self && (
+        <div className="grid items-start gap-3.5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+          <ProfileDetailsCard onChanged={() => void load()} />
+          <PasswordCard />
+        </div>
+      )}
 
       <div className="grid items-start gap-3.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
         <div className="flex flex-col gap-3.5">

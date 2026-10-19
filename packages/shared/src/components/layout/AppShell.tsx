@@ -279,6 +279,14 @@ export function AppShell({ portal, nav, header, presenceColor, mainScroll = true
                   </div>
                 </div>
                 <div className="mb-1 h-px bg-line" />
+                <MenuItem
+                  icon={User}
+                  label="My profile"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    navigate("/settings");
+                  }}
+                />
               </>
             ) : (
               <>
@@ -287,7 +295,13 @@ export function AppShell({ portal, nav, header, presenceColor, mainScroll = true
                   label="My profile"
                   onClick={() => {
                     setMenuOpen(false);
-                    if (user) navigate(ROUTES.staffDetails.replace(":id", user.id));
+                    // The admin console shows it on the staff page; the agent
+                    // portal has no staff pages, so it lives in Settings there.
+                    if (portal === "admin") {
+                      if (user) navigate(ROUTES.staffDetails.replace(":id", user.id));
+                    } else {
+                      navigate("/settings");
+                    }
                   }}
                 />
                 <MenuItem icon={theme === "dark" ? Sun : Moon} label="Switch theme" onClick={toggleTheme} />
