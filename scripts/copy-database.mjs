@@ -91,6 +91,31 @@ async function main() {
   const onlyTarget = tgtTables.filter((t) => !srcTables.has(t));
   const onlySource = [...srcTables].filter((t) => !tgtTables.includes(t));
 
+  // The two schemas must agree before any row moves: list every column the
+  // target is stricter about (NOT NULL where the source allows empty) or
+  // types differently, all at once, then stop. Read-only on both sides.
+  const differences = [];
+  for (const table of [...AUTH_TABLES, ...both]) {
+    const [schema, name] = table.split(".");
+    const sql = `select column_name, data_type, udt_name, is_nullable from information_schema.columns
+                  where table_schema = $1 and table_name = $2`;
+    const src = new Map((await source.query(sql, [schema, name])).rows.map((r) => [r.column_name, r]));
+    for (const t of (await target.query(sql, [schema, name])).rows) {
+      const s = src.get(t.column_name);
+      if (!s) continue;
+      if (t.is_nullable === "NO" && s.is_nullable === "YES") {
+        const { rows } = await source.query(`select count(*)::int as n from ${q(table)} where "${t.column_name}" is null`);
+        if (rows[0].n > 0) differences.push(`${table}.${t.column_name}: required in the target, empty in ${rows[0].n} source row(s)`);
+      }
+      if (t.udt_name !== s.udt_name) differences.push(`${table}.${t.column_name}: type ${s.udt_name} in the source, ${t.udt_name} in the target`);
+    }
+  }
+  if (differences.length) {
+    console.log("The databases disagree on these columns (nothing was copied):");
+    for (const d of differences) console.log(`  - ${d}`);
+    throw new Error(`${differences.length} column difference(s) to resolve first; send this list to Claude.`);
+  }
+
   // Start the target clean: its rows are test data or migration defaults.
   if (tgtTables.length) await target.query(`truncate ${tgtTables.map(q).join(", ")} cascade`);
   await target.query("delete from auth.mfa_factors");

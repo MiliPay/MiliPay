@@ -15,7 +15,8 @@ ignores).
 | Support portal | https://milipay-serviceportal.web.app |
 | Admin portal (incl. Website › Leads, Waitlist, Agent locations) | https://milipay-adminportal.web.app |
 | Agent portal | https://milipay-agentportal.web.app |
-| Supabase, what the live sites use until production moves to Nigeria | project `MiliPay`, ref `hkhnduxbxfcqjgrdnqcz`, eu-central-1, on the founder's personal account |
+| Supabase, what the live sites and tester/store app builds use (until the Nigeria production database) | `milipay-staging`, ref `klehplljqlxvfevvmwkp` (since 2026-10-20) |
+| Supabase, the original project (retiring; the founder deletes it) | project `MiliPay`, ref `hkhnduxbxfcqjgrdnqcz`, eu-central-1, founder's personal account; its data was copied into staging on 2026-10-20 |
 | Supabase development | `milipay-development`, ref `govynvmsdaeoxpktgjpn`, eu-west-1, organisation "MiliPay Dev" (free) |
 | Supabase staging | `milipay-staging`, ref `klehplljqlxvfevvmwkp`, eu-west-1, organisation "MiliPay Dev" (free) |
 | Firebase hosting | project `aniyu-b841b` (shared with another product, AniYu) |
@@ -45,14 +46,22 @@ earlier.
   - The original Frankfurt project's data moves into staging; the founder
     deletes that project once nothing uses it. Only public values live in
     the env files and `eas.json`.
-  - **Status 2026-10-20:** settings already point deployed builds at
-    staging, and staging has every migration and function. **Don't deploy
-    the portals until the data copy is committed**, or the live sites show
-    an empty database. The copy: `scripts/copy-database.ps1` (founder runs
-    it; rehearsal first, then `-Commit`); it copies all `public` tables plus
-    auth users, identities and authenticators, keeps the target's Vault and
-    function secrets. Staging's function secrets are sandbox: before real
-    payments run there, the founder enters the live keys.
+  - **Done 2026-10-20:** the original project's data was copied into
+    staging (`scripts/copy-database.ps1`, run by the founder: rehearsal,
+    then `-Commit`; all 49 tables and 5 sign-in accounts matched; the
+    unused leftover table `complaints` stayed behind), and the admin,
+    agent and support portals and the website were deployed on staging.
+    Everyone signs in again once (sessions don't move); passwords are the
+    same. Migration `20261020120000_transactions_match_live.sql` made
+    `transactions.user_id` and `account_used` optional, as the original
+    project had them.
+  - **Still pointing at the original project:** app builds made before
+    2026-10-20, and anything registered with a provider using the original
+    project's function addresses (Mono webhook, Smile ID callback). Point
+    those at `https://klehplljqlxvfevvmwkp.supabase.co/functions/v1/...`
+    before deleting it. GitHub's `SUPABASE_URL` secret (CI schema check)
+    likewise. Staging's function secrets are sandbox: the founder enters
+    live keys there before real payments run.
 - **Migrations now rebuild a database from scratch.** They never had: the
   original project had been partly set up by hand. Fixed on 2026-10-19 in
   three already-applied files (the original project never re-runs them):
