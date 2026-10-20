@@ -25,6 +25,8 @@
     "@rollup/rollup-win32-x64-msvc": "^4.62.5"
   },
   "devDependencies": {
+    "pg": "^8.23.1",
+    "pg-copy-streams": "^6.0.6",
     "pgsql-parser": "^13.19.1",
     "vitest": "^2.1.9"
   }

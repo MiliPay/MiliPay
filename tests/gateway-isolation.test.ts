@@ -456,9 +456,11 @@ describe("sandbox test values cannot reach a production bundle", () => {
     expect(eas.build.production.env.EXPO_PUBLIC_MILIPAY_ENVIRONMENT).toBe("production");
     expect(eas.build.development.env.EXPO_PUBLIC_MILIPAY_ENVIRONMENT).toBe("sandbox");
     expect(eas.build.preview.env.EXPO_PUBLIC_MILIPAY_ENVIRONMENT).toBe("sandbox");
-    // A standalone APK against the development project, for testing on a phone.
-    expect(eas.build.testing.env.EXPO_PUBLIC_MILIPAY_ENVIRONMENT).toBe("sandbox");
-    expect(eas.build.testing.env.EXPO_PUBLIC_SUPABASE_URL).toBe("https://govynvmsdaeoxpktgjpn.supabase.co");
+    // The founder's rule (2026-10-20): development builds -> development;
+    // APKs / closed testing and store releases -> staging until production exists.
+    expect(eas.build.development.env.EXPO_PUBLIC_SUPABASE_URL).toBe("https://govynvmsdaeoxpktgjpn.supabase.co");
+    expect(eas.build.preview.env.EXPO_PUBLIC_SUPABASE_URL).toBe("https://klehplljqlxvfevvmwkp.supabase.co");
+    expect(eas.build.production.env.EXPO_PUBLIC_SUPABASE_URL).toBe("https://klehplljqlxvfevvmwkp.supabase.co");
   });
 });
 

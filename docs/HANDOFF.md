@@ -32,13 +32,27 @@ earlier.
 
 ## Development and staging (set up 2026-10-19)
 
-- **Which build talks to which project.** Web apps read
-  `env/.env.<mode>` (shared `envDir` in each `vite.config.ts`):
-  `npm run dev` → development, `npm run build:staging` → staging,
-  `npm run build` → the original project (what Firebase serves). The mobile
-  app takes `EXPO_PUBLIC_SUPABASE_URL/ANON_KEY` from its EAS profile
-  (`development` → development, `preview` → staging, `production` → falls
-  back to the original project). Only public values live in those files.
+- **Which build talks to which database (the founder's rule, 2026-10-20).**
+  - **Portals and the website: two databases.** `npm run dev` →
+    development; `npm run build` (what Firebase serves) → **staging**, which
+    acts as production until the Nigeria production database exists, then
+    the portals move to it. Web apps read `env/.env.<mode>` (shared `envDir`
+    in each `vite.config.ts`).
+  - **Mobile app: three.** EAS `development` → development; `preview` (APK,
+    Google Play closed testing, TestFlight) → staging; `production` (store
+    release) → production, which is **staging** until production exists.
+    The app takes `EXPO_PUBLIC_SUPABASE_URL/ANON_KEY` from its EAS profile.
+  - The original Frankfurt project's data moves into staging; the founder
+    deletes that project once nothing uses it. Only public values live in
+    the env files and `eas.json`.
+  - **Status 2026-10-20:** settings already point deployed builds at
+    staging, and staging has every migration and function. **Don't deploy
+    the portals until the data copy is committed**, or the live sites show
+    an empty database. The copy: `scripts/copy-database.ps1` (founder runs
+    it; rehearsal first, then `-Commit`); it copies all `public` tables plus
+    auth users, identities and authenticators, keeps the target's Vault and
+    function secrets. Staging's function secrets are sandbox: before real
+    payments run there, the founder enters the live keys.
 - **Migrations now rebuild a database from scratch.** They never had: the
   original project had been partly set up by hand. Fixed on 2026-10-19 in
   three already-applied files (the original project never re-runs them):
